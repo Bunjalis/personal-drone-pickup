@@ -1,0 +1,34 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from interfaces/msg/ELRSCommand.msg
+// generated code does not contain a copyright notice
+
+
+module interfaces {
+  module msg {
+    struct ELRSCommand {
+      boolean armed;
+
+      float channel_0;
+
+      float channel_1;
+
+      float channel_2;
+
+      float channel_3;
+
+      float channel_4;
+
+      float channel_5;
+
+      float channel_6;
+
+      float channel_7;
+
+      float channel_8;
+
+      float channel_9;
+
+      float channel_10;
+    };
+  };
+};

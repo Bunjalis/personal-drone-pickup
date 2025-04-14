@@ -1,0 +1,3 @@
+[console_scripts]
+elrs_interface = drone_communication.elrs_interface:main
+video_interface = drone_communication.video_interface:main

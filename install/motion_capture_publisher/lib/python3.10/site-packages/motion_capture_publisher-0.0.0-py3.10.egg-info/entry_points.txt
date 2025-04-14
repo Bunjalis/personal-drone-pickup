@@ -1,0 +1,2 @@
+[console_scripts]
+motion_capture_publisher_node = motion_capture_publisher.motion_capture_publisher_node:main

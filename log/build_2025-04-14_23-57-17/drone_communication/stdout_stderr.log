@@ -1,0 +1,29 @@
+/home/mitchell/.local/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+  warnings.warn(msg)
+running egg_info
+writing ../../build/drone_communication/drone_communication.egg-info/PKG-INFO
+writing dependency_links to ../../build/drone_communication/drone_communication.egg-info/dependency_links.txt
+writing entry points to ../../build/drone_communication/drone_communication.egg-info/entry_points.txt
+writing requirements to ../../build/drone_communication/drone_communication.egg-info/requires.txt
+writing top-level names to ../../build/drone_communication/drone_communication.egg-info/top_level.txt
+reading manifest file '../../build/drone_communication/drone_communication.egg-info/SOURCES.txt'
+writing manifest file '../../build/drone_communication/drone_communication.egg-info/SOURCES.txt'
+running build
+running build_py
+copying drone_communication/elrs_interface.py -> /home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/build/lib/drone_communication
+copying drone_communication/video_interface.py -> /home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/build/lib/drone_communication
+running install
+running install_lib
+copying /home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/build/lib/drone_communication/elrs_interface.py -> /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/python3.10/site-packages/drone_communication
+byte-compiling /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/python3.10/site-packages/drone_communication/elrs_interface.py to elrs_interface.cpython-310.pyc
+running install_data
+copying resource/drone_communication -> /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/share/ament_index/resource_index/packages
+copying package.xml -> /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/share/drone_communication
+copying launch/quad_launch.py -> /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/share/drone_communication/launch
+running install_egg_info
+removing '/home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/python3.10/site-packages/drone_communication-0.0.0-py3.10.egg-info' (and everything under it)
+Copying ../../build/drone_communication/drone_communication.egg-info to /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/python3.10/site-packages/drone_communication-0.0.0-py3.10.egg-info
+running install_scripts
+Installing elrs_interface script to /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/drone_communication
+Installing video_interface script to /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/drone_communication
+writing list of installed files to '/home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/install.log'

@@ -1,0 +1,31 @@
+[0.617s] Invoking command in '/home/mitchell/Documents/PhD/drone_cage_control/src/drone_communication': PYTHONPATH=/home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/drone_communication build --build-base /home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/build install --record /home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/install.log --single-version-externally-managed install_data
+[0.702s] /home/mitchell/.local/lib/python3.10/site-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
+[0.703s]   warnings.warn(msg)
+[0.771s] running egg_info
+[0.782s] writing ../../build/drone_communication/drone_communication.egg-info/PKG-INFO
+[0.782s] writing dependency_links to ../../build/drone_communication/drone_communication.egg-info/dependency_links.txt
+[0.782s] writing entry points to ../../build/drone_communication/drone_communication.egg-info/entry_points.txt
+[0.782s] writing requirements to ../../build/drone_communication/drone_communication.egg-info/requires.txt
+[0.782s] writing top-level names to ../../build/drone_communication/drone_communication.egg-info/top_level.txt
+[0.805s] reading manifest file '../../build/drone_communication/drone_communication.egg-info/SOURCES.txt'
+[0.806s] writing manifest file '../../build/drone_communication/drone_communication.egg-info/SOURCES.txt'
+[0.806s] running build
+[0.806s] running build_py
+[0.806s] copying drone_communication/elrs_interface.py -> /home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/build/lib/drone_communication
+[0.806s] copying drone_communication/video_interface.py -> /home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/build/lib/drone_communication
+[0.806s] running install
+[0.808s] running install_lib
+[0.820s] copying /home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/build/lib/drone_communication/elrs_interface.py -> /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/python3.10/site-packages/drone_communication
+[0.820s] byte-compiling /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/python3.10/site-packages/drone_communication/elrs_interface.py to elrs_interface.cpython-310.pyc
+[0.821s] running install_data
+[0.821s] copying resource/drone_communication -> /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/share/ament_index/resource_index/packages
+[0.821s] copying package.xml -> /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/share/drone_communication
+[0.821s] copying launch/quad_launch.py -> /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/share/drone_communication/launch
+[0.821s] running install_egg_info
+[0.833s] removing '/home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/python3.10/site-packages/drone_communication-0.0.0-py3.10.egg-info' (and everything under it)
+[0.833s] Copying ../../build/drone_communication/drone_communication.egg-info to /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/python3.10/site-packages/drone_communication-0.0.0-py3.10.egg-info
+[0.833s] running install_scripts
+[0.922s] Installing elrs_interface script to /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/drone_communication
+[0.922s] Installing video_interface script to /home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/drone_communication
+[0.923s] writing list of installed files to '/home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/install.log'
+[0.936s] Invoked command in '/home/mitchell/Documents/PhD/drone_cage_control/src/drone_communication' returned '0': PYTHONPATH=/home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/mitchell/Documents/PhD/drone_cage_control/install/drone_communication/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/drone_communication build --build-base /home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/build install --record /home/mitchell/Documents/PhD/drone_cage_control/build/drone_communication/install.log --single-version-externally-managed install_data
