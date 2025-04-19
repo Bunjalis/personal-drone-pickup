@@ -12,13 +12,7 @@ from enum import IntEnum
 import numpy as np
 from datetime import datetime
 
-from interfaces.msg import MotionCaptureState, ELRSCommand
-
-
-
-#TODO: Add saftey feature that if armed and no new message for 0.5 seconds, disarm
-#TODO: Test and make sure max range/values are correct
-
+from interfaces.msg import MotionCaptureState, ELRSCommand, Telemetry  # Import the Telemetry message
 
 CRSF_SYNC = 0xC8
 
@@ -99,9 +93,10 @@ def channelsCrsfToChannelsPacket(channels) -> bytes:
 class ELRSInterface(Node):
     def __init__(self):
         super().__init__('elrs_interface')
-        dt = 1/333
+        dt = 1 / 333
         print("dt: ", dt)
         self.timer = self.create_timer(dt, self.publish_message)
+        self.telemetry_timer = self.create_timer(0.1, self.publish_telemetry)  # Timer for 10Hz publishing
         self.get_logger().info('ELRS Interface Node has started.')
         self.ser = serial.Serial('/dev/ttyUSB0', 921600, timeout=2)
         self.input = bytearray()
@@ -111,24 +106,28 @@ class ELRSInterface(Node):
         self.packet = np.full(16, self.idle, dtype=np.uint16)
         self.packet[4] = 0
 
-        self.battery_publisher = self.create_publisher(Float32, 'battery', 10)
-        # Subscribe to the controller_commands topic
-        self.subscription_floats = self.create_subscription(ELRSCommand,'ELRSCommand', self.controller_commands_callback, 10)
+        self.battery_voltage = 0.0
+        self.battery_mah_used = 0
+        self.rssi = 0
+        self.mode = "UNKNOWN"
 
+        self.telemetry_publisher = self.create_publisher(Telemetry, 'telemetry', 10)  # Telemetry publisher
+        self.subscription_floats = self.create_subscription(ELRSCommand, 'ELRSCommand', self.controller_commands_callback, 10)
 
-       
+        self.last_message_time = time.time()  # Initialize the last message timestamp
 
     def controller_commands_callback(self, msg):
+        self.last_message_time = time.time()  # Update the timestamp of the most recent message
         self.armed = bool(msg.armed)  # Ensure msg.armed is explicitly converted to a boolean
 
         self.get_logger().info(f"Armed: {self.armed}")
 
-        if self.armed == True:  
+        if self.armed:
             self.packet[0] = self.idle + int(max(-1.0, min(1.0, msg.channel_0)) * self.idle)
             self.packet[1] = self.idle + int(max(-1.0, min(1.0, msg.channel_1)) * self.idle)
             self.packet[2] = self.idle + int(max(-1.0, min(1.0, msg.channel_2)) * self.idle)
             self.packet[3] = self.idle + int(max(-1.0, min(1.0, msg.channel_3)) * self.idle)
-            self.packet[4] = 2000   
+            self.packet[4] = 2000
             self.packet[5] = self.idle + int(max(-1.0, min(1.0, msg.channel_4)) * self.idle)
             self.packet[6] = self.idle + int(max(-1.0, min(1.0, msg.channel_5)) * self.idle)
             self.packet[7] = self.idle + int(max(-1.0, min(1.0, msg.channel_6)) * self.idle)
@@ -136,12 +135,11 @@ class ELRSInterface(Node):
             self.packet[8] = self.idle + int(max(-1.0, min(1.0, msg.channel_8)) * self.idle)
             self.packet[10] = self.idle + int(max(-1.0, min(1.0, msg.channel_9)) * self.idle)
             self.packet[11] = self.idle + int(max(-1.0, min(1.0, msg.channel_10)) * self.idle)
-
         else:
             self.packet = np.full(16, self.idle, dtype=np.uint16)
             self.packet[4] = 0
 
-    def handleCrsfPacket(self,ptype, data):
+    def handleCrsfPacket(self, ptype, data):
         if ptype == PacketsTypes.RADIO_ID and data[5] == 0x10:
             #print(f"OTX sync")
             pass
@@ -158,6 +156,7 @@ class ELRSInterface(Node):
             downlink_lq = data[11]
             downlink_snr = signed_byte(data[12])
             print(f"RSSI={rssi1}/{rssi2}dBm LQ={lq:03} mode={mode} ant={antenna} snr={snr} power={power} drssi={downlink_rssi} dlq={downlink_lq} dsnr={downlink_snr}")
+            self.rssi = signed_byte(data[3])  # Update RSSI
         elif ptype == PacketsTypes.ATTITUDE:
             pitch = int.from_bytes(data[3:5], byteorder='big', signed=True) / 10000.0
             roll = int.from_bytes(data[5:7], byteorder='big', signed=True) / 10000.0
@@ -166,14 +165,13 @@ class ELRSInterface(Node):
         elif ptype == PacketsTypes.FLIGHT_MODE:
             packet = ''.join(map(chr, data[3:-2]))
             print(f"Flight Mode: {packet}")
+            self.mode = ''.join(map(chr, data[3:-2]))  # Update mode
         elif ptype == PacketsTypes.BATTERY_SENSOR:
             vbat = int.from_bytes(data[3:5], byteorder='big', signed=True) / 10.0
             curr = int.from_bytes(data[5:7], byteorder='big', signed=True) / 10.0
             mah = data[7] << 16 | data[8] << 7 | data[9]
             pct = data[10]
             print(f"Battery: {vbat:0.2f}V {curr:0.1f}A {mah}mAh {pct}%")
-            # Publish battery voltage
-            self.battery_publisher.publish(Float32(data=vbat))
         elif ptype == PacketsTypes.BARO_ALT:
             print(f"BaroAlt: ")
         elif ptype == PacketsTypes.DEVICE_INFO:
@@ -196,8 +194,23 @@ class ELRSInterface(Node):
             packet = ' '.join(map(hex, data))
             print(f"Unknown 0x{ptype:02x}: {packet}")
 
+    def publish_telemetry(self):
+        # Publish telemetry data at 10Hz
+        telemetry_msg = Telemetry()
+        telemetry_msg.battery_voltage = self.battery_voltage
+        telemetry_msg.battery_mah_used = self.battery_mah_used
+        telemetry_msg.rssi = self.rssi
+        telemetry_msg.mode = self.mode
+        self.telemetry_publisher.publish(telemetry_msg)
 
     def publish_message(self):
+        # Check if no message has been received for 0.1 seconds
+        if time.time() - self.last_message_time > 0.1:
+            if self.armed:  # Only log and disarm if currently armed
+                self.get_logger().warn("No message received for 0.1 seconds. Disarming motors.")
+            self.armed = False
+            self.packet = np.full(16, self.idle, dtype=np.uint16)
+            self.packet[4] = 0
 
         if self.ser.in_waiting > 0:
             self.input.extend(self.ser.read(self.ser.in_waiting))
