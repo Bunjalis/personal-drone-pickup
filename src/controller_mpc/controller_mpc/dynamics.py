@@ -27,16 +27,16 @@ class QuadDynamics:
         self.u = cs.vertcat(m1, m2, m3, m4)
 
         # Additional parameters
-        self.max_thrust = 0.5  # N
-        self.mass = 0.2
+        self.max_thrust = 8.54858  # N
+        self.mass = 1.04
 
-        self.c = 0.013 
-        self.length = 0.1/2
+        self.c = 0.016
+        self.length = 0.212
 
         h = np.cos(np.pi / 4) * self.length
         self.x_f = np.array([-h, -h, h, h])
-        self.y_f = np.array([h, -h, h, -h])
-        self.z_l_tau = np.array([self.c, -self.c, -self.c, self.c])
+        self.y_f = np.array([-h, h, -h, h])
+        self.z_l_tau = np.array([-self.c, self.c, self.c, -self.c])
 
         self.J = np.array([.03, .03, .06])
 
@@ -89,24 +89,41 @@ class QuadDynamics:
         return 1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
 
     def v_dynamics(self):
-        f_thrust = self.u * self.max_thrust
+        # Motor constant (k_m) for thrust calculation
+        motor_constant = 8.54858e-6  # N·s²/rad²
+        # Calculate thrust from motor speeds
+        f_thrust = motor_constant * cs.power(self.u * 1000, 2)  # Thrust for each motor
+
+        # Gravity vector
         g = cs.vertcat(0.0, 0.0, 9.81)
+
+        # Total thrust in the body z-direction
         a_thrust = cs.vertcat(0.0, 0.0, f_thrust[0] + f_thrust[1] + f_thrust[2] + f_thrust[3]) / self.mass
+
+        # Rotate thrust to the world frame and subtract gravity
         v_dynamics = self.v_dot_q(a_thrust, self.q) - g
 
         return v_dynamics
 
     def w_dynamics(self):
+        # Motor constants
+        motor_constant = 8.54858e-6  # N·s²/rad²
+        moment_constant = 0.016      # Nm·s²/rad²
 
-        f_thrust = self.u * self.max_thrust
+        # Calculate thrust and torques from motor speeds
+        f_thrust = motor_constant * cs.power(self.u * 1000, 2)  # Thrust for each motor
+        tau_yaw = moment_constant * cs.power(self.u * 1000, 2)  # Torque for each motor (yaw)
 
-        y_f = cs.MX(self.y_f)
-        x_f = cs.MX(self.x_f)
-        c_f = cs.MX(self.z_l_tau)
+        # Convert parameters to CasADi symbolic variables
+        x_f = cs.MX(self.x_f)  # x-offsets of motors for roll dynamics
+        y_f = cs.MX(self.y_f)  # y-offsets of motors for pitch dynamics
+        c_f = cs.MX(self.z_l_tau)  # yaw torque coefficients
 
+        # Calculate angular velocity dynamics
         w_dynamics = cs.vertcat(
-            (cs.mtimes(f_thrust.T, y_f) + (self.J[1] - self.J[2]) * self.r[1] * self.r[2]) / self.J[0],
-            (-cs.mtimes(f_thrust.T, x_f) + (self.J[2] - self.J[0]) * self.r[2] * self.r[0]) / self.J[1],
-            (cs.mtimes(f_thrust.T, c_f) + (self.J[0] - self.J[1]) * self.r[0] * self.r[1]) / self.J[2])
+            (cs.mtimes(f_thrust.T, x_f) + (self.J[1] - self.J[2]) * self.r[1] * self.r[2]) / self.J[0],  # Roll dynamics
+            (-cs.mtimes(f_thrust.T, y_f) + (self.J[2] - self.J[0]) * self.r[2] * self.r[0]) / self.J[1],  # Pitch dynamics
+            (cs.mtimes(tau_yaw.T, c_f) + (self.J[0] - self.J[1]) * self.r[0] * self.r[1]) / self.J[2]   # Yaw dynamics
+        )
 
         return w_dynamics

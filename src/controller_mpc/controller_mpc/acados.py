@@ -24,27 +24,27 @@ def generate_ocp_controller():
     # Define the model using quadcopter dynamics
     ocp.model = model
 
-    ocp.solver_options.N_horizon = 180
-    ocp.solver_options.tf = 3.0
+    ocp.solver_options.N_horizon = 60
+    ocp.solver_options.tf = 4.0
 
     # Define the cost function
     nx = 13  # Number of outputs
     nu = 4   # Number of inputs
     ny = nx + nu  # Number of outputs + inputs
 
-    ocp.cost.cost_type = 'NONLINEAR_LS'
-    ocp.cost.cost_type_e = 'NONLINEAR_LS'
+    ocp.cost.cost_type = 'LINEAR_LS'
+    ocp.cost.cost_type_e = 'LINEAR_LS'
 
-    Q_mat = 2 * np.diag([10, 10, 10, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05])
+    Q_mat = 2 * np.diag([10, 10, 10, 5.0, 5.0, 5.0, 5.0, 4.0, 4.0, 4.0, 8.0, 8.0, 8.0])
     R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
 
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
     ocp.cost.W_e = Q_mat
 
     ocp.cost.Vx = np.zeros((ny, nx))
-    ocp.cost.Vx[:nx, :nx] = np.eye(nx)
+    ocp.cost.Vx[:nx, :nx] = 1*np.eye(nx)
     ocp.cost.Vu = np.zeros((ny, nu))
-    ocp.cost.Vu[-4:, -4:] = np.eye(nu)
+    ocp.cost.Vu[-4:, -4:] = 3*np.eye(nu)
     ocp.cost.Vx_e = np.eye(nx)
 
 
@@ -69,7 +69,7 @@ def generate_ocp_controller():
 
     # Set constraints on u[0]
     ocp.constraints.lbu = np.array([0.0, 0.0, 0.0, 0.0])
-    ocp.constraints.ubu = np.array([0.6, 0.6, 0.6, 0.6])
+    ocp.constraints.ubu = np.array([0.8, 0.8, 0.8, 0.8])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create solver

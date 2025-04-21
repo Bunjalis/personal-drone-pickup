@@ -20,17 +20,19 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
         self.current_pose = None
 
-        self.steps = 90 * 60
-        self.dt = 1.0 / 60.0
+        self.steps = 90 * 30
+        self.dt = 1.0 / 30.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
         self.ocp = generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
-        self.x_traj = 0 + 0.0 * np.sin(1 * np.pi * 0.0 * time_space)
-        self.y_traj = 0 + 0.0 * np.sin(1 * np.pi * 0.0 * time_space)
-        self.z_traj = 2.0 + 0.5 * np.sin(1 * np.pi * 0.2 * time_space)
+        
+        # Alternate between [0, 0, 2] and [1, 1, 2] every 10 seconds
+        self.x_traj = np.where((time_space // 10) % 2 == 0, 0.0, 1.0)
+        self.y_traj = np.where((time_space // 10) % 2 == 0, 0.0, 1.0)
+        self.z_traj = 2.0 * np.ones_like(time_space)
 
         self.gui = GUI(self)
         self.armed = False
@@ -42,7 +44,6 @@ class Controller(Node):
         orientation = msg.pose.orientation
         linear_velocity = msg.twist.linear
         angular_velocity = msg.twist.angular
-
 
         self.current_pose = np.array([position.x, position.y, position.z,
                                         orientation.w, orientation.x, orientation.y, orientation.z,
@@ -61,14 +62,13 @@ class Controller(Node):
 
         if self.armed == True:
             
-            for j in range(180):
-                if self.step_counter + j < self.steps:
-                    yref = np.array([self.x_traj[self.step_counter + j], self.y_traj[self.step_counter + j], self.z_traj[self.step_counter + j], 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0.3, 0.3])
+            for j in range(60):
+                if self.step_counter + j*2 < self.steps:
+                    yref = np.array([self.x_traj[self.step_counter + j*2], self.y_traj[self.step_counter + j*2], self.z_traj[self.step_counter + j*2], 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.6, 0.6, 0.6, 0.6])
                 else:
-                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0.3, 0.3])
+                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.6, 0.6, 0.6, 0.6])
                 
                 self.ocp.set(j, "yref", yref)
-
             self.ocp.set(0, "lbx", self.current_pose)
             self.ocp.set(0, "ubx", self.current_pose)
 
