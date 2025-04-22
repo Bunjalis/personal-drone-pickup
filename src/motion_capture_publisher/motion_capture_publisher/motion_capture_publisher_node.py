@@ -68,15 +68,19 @@ class MotionCapturePublisher(Node):
 
             ang_vel_parts = [p.strip() for p in ang_vel_str.split(',')]
 
-            print(ang_vel_parts)
-            print(len(ang_vel_parts))
+            
             if len(ang_vel_parts) != 3:
                 return None
+            
+
             wx, wy, wz = map(float, ang_vel_parts)
 
-            print("here")
 
-            
+            #wx_out = f"{round(wx, 1):6.1f}"
+            #wy_out = f"{round(wy, 1):6.1f}"
+            #wz_out = f"{round(wz, 1):6.1f}"
+            #print(f"wx: {wx_out}, wy: {wy_out}, wz: {wz_out}")
+
             return ObjectData(
                 id=obj_id,
                 position=(x, y, z),

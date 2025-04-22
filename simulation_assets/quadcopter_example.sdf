@@ -80,6 +80,7 @@
       <uri>
         modelUAV.sdf
       </uri>
+      <pose>0 0 0 0 0 0</pose> <!-- Added pose with yaw of 90 degrees  1.5708 --> 
       <plugin
         filename="ignition-gazebo-multicopter-motor-model-system"
         name="gz::sim::systems::MulticopterMotorModel">

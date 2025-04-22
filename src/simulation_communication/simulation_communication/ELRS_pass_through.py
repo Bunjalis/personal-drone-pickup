@@ -6,15 +6,6 @@
 import rclpy
 from rclpy.node import Node
 from actuator_msgs.msg import Actuators
-from geometry_msgs.msg import Twist, PoseArray, Pose
-from tf_transformations import euler_from_quaternion
-from builtin_interfaces.msg import Time
-import numpy as np
-import signal
-import pandas as pd
-import time
-import math
-import matplotlib.pyplot as plt
 from interfaces.msg import MotionCaptureState, ELRSCommand, Telemetry  # Import the Telemetry message
 
 

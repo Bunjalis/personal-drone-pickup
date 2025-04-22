@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 
+import numpy as np
+
+# Patch np.float to avoid issues with deprecated alias
+if not hasattr(np, 'float'):
+    np.float = float
+
 import rclpy
 from rclpy.node import Node
 from actuator_msgs.msg import Actuators
 from geometry_msgs.msg import Twist, PoseArray, Pose
 from tf_transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_matrix
 from builtin_interfaces.msg import Time
-import numpy as np
 import signal
 import pandas as pd
 import time
@@ -55,13 +60,9 @@ class PentaVerify(Node):
         dz = current_position.z - self.last_pose.z
         linear_velocity_world = np.array([dx / dt, dy / dt, dz / dt])
 
-        # Transform linear velocity to the body frame
-        q2 = [current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w]
-        rotation_matrix = quaternion_matrix(q2)[:3, :3]  # Extract the 3x3 rotation matrix
-        linear_velocity_body = np.dot(rotation_matrix.T, linear_velocity_world)  # Transform to body frame
-
         # Calculate angular velocity
         q1 = [self.last_orientation.x, self.last_orientation.y, self.last_orientation.z, self.last_orientation.w]
+        q2 = [current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w]
         q_relative = quaternion_multiply(q2, quaternion_inverse(q1))  # Relative rotation
         angular_velocity = 2 * np.array([q_relative[0], q_relative[1], q_relative[2]]) / dt  # Angular velocity
 
@@ -77,9 +78,9 @@ class PentaVerify(Node):
         mcs.pose.orientation.w = float(current_orientation.w)
 
         mcs.twist = Twist()
-        mcs.twist.linear.x = float(linear_velocity_body[0])
-        mcs.twist.linear.y = float(linear_velocity_body[1])
-        mcs.twist.linear.z = float(linear_velocity_body[2])
+        mcs.twist.linear.x = float(linear_velocity_world[0])  # Use world frame velocity
+        mcs.twist.linear.y = float(linear_velocity_world[1])  # Use world frame velocity
+        mcs.twist.linear.z = float(linear_velocity_world[2])  # Use world frame velocity
         mcs.twist.angular.x = float(angular_velocity[0])
         mcs.twist.angular.y = float(angular_velocity[1])
         mcs.twist.angular.z = float(angular_velocity[2])

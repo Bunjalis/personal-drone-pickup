@@ -35,7 +35,7 @@ def generate_ocp_controller():
     ocp.cost.cost_type = 'LINEAR_LS'
     ocp.cost.cost_type_e = 'LINEAR_LS'
 
-    Q_mat = 2 * np.diag([10, 10, 10, 5.0, 5.0, 5.0, 5.0, 4.0, 4.0, 4.0, 8.0, 8.0, 8.0])
+    Q_mat = 2 * np.diag([10, 10, 10, 10.0, 10.0, 10.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
     R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
 
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
