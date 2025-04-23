@@ -112,7 +112,7 @@ class QuadDynamics:
 
         # Calculate thrust and torques from motor speeds
         f_thrust = motor_constant * cs.power(self.u * 1000, 2)  # Thrust for each motor
-        tau_yaw = moment_constant * cs.power(self.u * 1000, 2)  # Torque for each motor (yaw)
+        tau_yaw = moment_constant * motor_constant * cs.power(self.u * 1000, 2)  # Torque for each motor (yaw)
 
         # Convert parameters to CasADi symbolic variables
         x_f = cs.MX(self.x_f)  # x-offsets of motors for roll dynamics

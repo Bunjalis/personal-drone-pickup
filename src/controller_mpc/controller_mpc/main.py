@@ -4,6 +4,7 @@ import sys
 import numpy as np
 import copy
 import math
+import csv
 from rclpy.node import Node
 from datetime import datetime
 from scipy.spatial.transform import Rotation as R
@@ -33,8 +34,6 @@ class Controller(Node):
         # Alternate between [0, 0, 2] and [1, 1, 2] every 10 seconds
         self.x_traj = np.where((time_space // 10) % 2 == 0, 0.0, 1.0)
         self.y_traj = np.where((time_space // 10) % 2 == 0, 0.0, 1.0)
-        #self.x_traj = 0.0 * np.ones_like(time_space)
-        #self.y_traj = 1.0 * np.ones_like(time_space)
         self.z_traj = 2.0 * np.ones_like(time_space)
 
         # Define yaw trajectory (90 degrees to the left, which is -π/2 radians)
@@ -51,13 +50,17 @@ class Controller(Node):
         self.qz_traj = quaternions[:, 2]
         self.qw_traj = quaternions[:, 3]
 
-
         print(f"w {self.qw_traj[0]}, x {self.qx_traj[0]}, y {self.qy_traj[0]}, z {self.qz_traj[0]}")
 
         self.gui = GUI(self)
         self.armed = False
-        
-
+        self.executing_actions = False
+        self.executed_steps = 0
+        self.saved_states = []
+        self.saved_controls = []
+        self.recorded_states = []  # To store the recorded states
+        self.initial_solve_state = None
+        self.initial_solve_controls = None
 
     def pose_callback(self, msg: MotionCaptureState):
         position = msg.pose.position
@@ -65,16 +68,12 @@ class Controller(Node):
         linear_velocity = msg.twist.linear
         angular_velocity = msg.twist.angular
 
-
-        
-
         self.current_pose = np.array([position.x, position.y, position.z,
-                                        orientation.w, orientation.x, orientation.y, orientation.z,
-                                        linear_velocity.x, linear_velocity.y, linear_velocity.z,
-                                        angular_velocity.x, angular_velocity.y, angular_velocity.z])
+                                      orientation.w, orientation.x, orientation.y, orientation.z,
+                                      linear_velocity.x, linear_velocity.y, linear_velocity.z,
+                                      angular_velocity.x, angular_velocity.y, angular_velocity.z])
 
     def control_loop(self):
-
         msg = ELRSCommand()
         msg.armed = False
         msg.channel_0 = 0.0
@@ -82,68 +81,67 @@ class Controller(Node):
         msg.channel_2 = 0.0
         msg.channel_3 = 0.0
 
+        if self.executing_actions:
+            # Execute the saved actions for the next 60 timesteps
+            if self.executed_steps < 30:
+                u_command = self.saved_controls[self.executed_steps]
+                msg.armed = True
+                msg.channel_0 = u_command[0]
+                msg.channel_1 = u_command[1]
+                msg.channel_2 = u_command[2]
+                msg.channel_3 = u_command[3]
 
+                # Record the current state while taking the action
+                self.recorded_states.append(self.current_pose)
 
-        if self.current_pose is not None:
-            # Extract current orientation quaternion from the current pose
-            quaternion = self.current_pose[3:7]  # [qw, qx, qy, qz]
-            rpy = R.from_quat([quaternion[1], quaternion[2], quaternion[3], quaternion[0]]).as_euler('xyz', degrees=False)
-
-            # Extract current yaw
-            current_yaw = rpy[2]
-
-            # Extract desired yaw from the trajectory
-            desired_quaternion = [self.qx_traj[self.step_counter], self.qy_traj[self.step_counter], self.qz_traj[self.step_counter], self.qw_traj[self.step_counter]] if self.step_counter < self.steps else [self.qx_traj[-1], self.qy_traj[-1], self.qz_traj[-1], self.qw_traj[-1]]
-            desired_rpy = R.from_quat(desired_quaternion).as_euler('xyz', degrees=False)
-            desired_yaw = desired_rpy[2]
-
-            # Print current and desired yaw in the order qw, qx, qy, qz
-            current_quaternion_rounded = [f"{value:+.3f}" for value in [quaternion[0], quaternion[1], quaternion[2], quaternion[3]]]
-            desired_quaternion_rounded = [f"{value:+.3f}" for value in [desired_quaternion[3], desired_quaternion[0], desired_quaternion[1], desired_quaternion[2]]]
-            print(f"Current Quaternion: {current_quaternion_rounded}, Desired Quaternion: {desired_quaternion_rounded}")
-
-
-        if self.armed == True:
-
-            scale = 2
-            
+                self.executed_steps += 1
+            else:
+                # Disarm after 60 timesteps
+                self.executing_actions = False
+                self.armed = False
+                self.executed_steps = 0
+                print("Disarmed after executing actions.")
+                self.save_to_csv()
+        elif self.armed and self.current_pose is not None:
+            # Solve the OCP and save the trajectory
             for j in range(60):
-                if self.step_counter + j*scale < self.steps:
-                    yref = np.array([self.x_traj[self.step_counter + j*scale], self.y_traj[self.step_counter + j*scale], self.z_traj[self.step_counter + j*scale], self.qw_traj[self.step_counter + j*scale], self.qx_traj[self.step_counter + j*scale], self.qy_traj[self.step_counter + j*scale], self.qz_traj[self.step_counter + j*scale], 0,0,0, 0, 0, 0, 0.6, 0.6, 0.6, 0.6])
+                if self.step_counter + j < self.steps:
+                    yref = np.array([self.x_traj[self.step_counter + j], self.y_traj[self.step_counter + j],
+                                     self.z_traj[self.step_counter + j], self.qw_traj[self.step_counter + j],
+                                     self.qx_traj[self.step_counter + j], self.qy_traj[self.step_counter + j],
+                                     self.qz_traj[self.step_counter + j], 0, 0, 0, 0, 0, 0, 0.6, 0.6, 0.6, 0.6])
                 else:
-
-                    print(f"GOT THE THE END THIS IS THE FINAL YREF")
-                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0, 0, 0, 0, 0, 0.6, 0.6, 0.6, 0.6])
-                
+                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0, 0.6, 0.6, 0.6, 0.6])
                 self.ocp.set(j, "yref", yref)
             self.ocp.set(0, "lbx", self.current_pose)
             self.ocp.set(0, "ubx", self.current_pose)
-
 
             status = self.ocp.solve()
             if status != 0:
                 raise Exception(f'acados returned status {status}.')
 
-            u = self.ocp.get(0, "u")
-
-            #print(f"u: {u}")
-
-            u_command = u.tolist()
-
-
-            msg.armed = True
-            msg.channel_0 = u_command[0]
-            msg.channel_1 = u_command[1]
-            msg.channel_2 = u_command[2]
-            msg.channel_3 = u_command[3]
-
+            # Save the solved trajectory
+            self.saved_states = [self.ocp.get(i, "x") for i in range(self.ocp.N + 1)]
+            self.saved_controls = [self.ocp.get(i, "u") for i in range(self.ocp.N)]
+            # Start executing the saved actions
             self.step_counter += 1
-        
+
+
+            if self.step_counter >= 60:
+                self.executing_actions = True
         else:
-            step_counter = 0
-            u_command = [0, 0, 0, 0]
+            self.step_counter = 0
 
         self.cmd_publisher_.publish(msg)
+
+    def save_to_csv(self):
+        # Save the initial solve state, actions, and incoming state information to a CSV file
+        with open("trajectory_data.csv", "w", newline="") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(["Step", "State", "Recorded State", "Control"])
+            for i, (state, recorded_state, control) in enumerate(zip(self.saved_states[5:], self.recorded_states[5:], self.saved_controls[5:])):  # Start from the 5th step
+                writer.writerow([i] + list(state) + list(recorded_state) + list(control))
+        print("Trajectory data saved to trajectory_data.csv.")
 
 
     def signal_handler(self, sig, frame):
