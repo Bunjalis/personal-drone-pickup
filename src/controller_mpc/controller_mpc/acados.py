@@ -46,7 +46,7 @@ def generate_ocp_controller():
     ocp.cost.cost_type = 'NONLINEAR_LS'
     ocp.cost.cost_type_e = 'NONLINEAR_LS'
 
-    Q_mat = 2 * np.diag([10, 10, 10, 5.0, 5.0, 5.0, 5.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+    Q_mat = 2 * np.diag([10, 10, 10, 8, 8, 8, 8, 0.1, 0.1, 0.1, 5.0, 5.0, 5.0])
     R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
 
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
@@ -57,8 +57,6 @@ def generate_ocp_controller():
     ocp.cost.Vu = np.zeros((ny, nu))
     ocp.cost.Vu[-4:, -4:] = 1*np.eye(nu)
     ocp.cost.Vx_e = np.eye(nx)
-
-
 
     ocp.model.cost_y_expr = ca.vertcat(model.x, model.u)
     ocp.model.cost_y_expr_e = model.x
@@ -71,12 +69,25 @@ def generate_ocp_controller():
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
     ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
-    ocp.solver_options.nlp_solver_max_iter = 200
-    ocp.solver_options.qp_solver_iter_max = 100
-    ocp.solver_options.qp_solver_tol_stat = 1e-3  # Stationarity tolerance
-    ocp.solver_options.qp_solver_tol_eq = 1e-3    # Equality constraint tolerance
-    ocp.solver_options.qp_solver_tol_ineq = 1e-3  # Inequality constraint tolerance
-    ocp.solver_options.qp_solver_tol_comp = 1e-3  # Complementarity tolerance
+    
+    # Increase iterations and relax tolerances to improve convergence
+    ocp.solver_options.nlp_solver_max_iter = 500
+    ocp.solver_options.qp_solver_iter_max = 300
+    
+    # Relax QP solver tolerances
+    #ocp.solver_options.qp_solver_tol_stat = 1e-1  # Stationarity tolerance (was 1e-3)
+    #ocp.solver_options.qp_solver_tol_eq = 1e-1   # Equality constraint tolerance (was 1e-3)
+    #ocp.solver_options.qp_solver_tol_ineq = 1e-1  # Inequality constraint tolerance (was 1e-3)
+    #ocp.solver_options.qp_solver_tol_comp = 1e-1  # Complementarity tolerance (was 1e-3)
+    
+    # Relax NLP solver tolerances
+    #ocp.solver_options.nlp_solver_tol_stat = 1e-1  # Optimality/stationarity
+    #ocp.solver_options.nlp_solver_tol_eq = 1e-1    # Feasibility of equality constraints
+    #ocp.solver_options.nlp_solver_tol_ineq = 1e-1  # Feasibility of inequality constraints
+    #ocp.solver_options.nlp_solver_tol_comp = 1e-1  # Complementarity
+    
+    # Add Levenberg-Marquardt regularization to improve numerical stability
+    #ocp.solver_options.levenberg_marquardt = 1e-1
 
     # Set initial conditionx0
     x0 = np.zeros(nx)
@@ -85,9 +96,19 @@ def generate_ocp_controller():
 
     # Set constraints on u[0]
     ocp.constraints.lbu = np.array([0.0, 0.0, 0.0, 0.0])
-    ocp.constraints.ubu = np.array([0.7, 0.7, 0.7, 0.7])
+    ocp.constraints.ubu = np.array([1.0, 1.0, 1.0, 1.0])
     ocp.constraints.idxbu = np.arange(nu)
 
-    # Create solver
+    # Create OCP solver
     ocp_solver = AcadosOcpSolver(ocp)
-    return ocp_solver
+    
+    # Create simulation configuration
+    sim = AcadosSim()
+    sim.model = ocp.model
+    sim.solver_options.T = ocp.solver_options.tf / ocp.solver_options.N_horizon
+
+    # Create simulation solver
+    sim_solver = AcadosSimSolver(sim)
+
+    # Return both the OCP solver and the explicitly created simulation solver
+    return ocp_solver, sim_solver

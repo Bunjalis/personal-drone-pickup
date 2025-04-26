@@ -26,17 +26,11 @@ class QuadDynamics:
         m4 = cs.MX.sym('m4') # front left, counter-clockwise
         self.u = cs.vertcat(m1, m2, m3, m4)
 
-        # Additional parameters
-        self.max_thrust = 8.54858  # N
         self.mass = 1.04
-
-        self.c = 0.016
-        self.length = 0.212
-
-        h = np.cos(np.pi / 4) * self.length
+        h = 0.15
         self.x_f = np.array([-h, -h, h, h])
-        self.y_f = np.array([-h, h, -h, h])
-        self.z_l_tau = np.array([-self.c, self.c, self.c, -self.c])
+        self.y_f = np.array([h, -h, h, -h])
+        self.z_l_tau = np.array([-1, 1, 1, -1])
 
         self.J = np.array([.03, .03, .06])
 
@@ -108,7 +102,7 @@ class QuadDynamics:
     def w_dynamics(self):
         # Motor constants
         motor_constant = 8.54858e-6  # N·s²/rad²
-        moment_constant = 0.016      # Nm·s²/rad²
+        moment_constant = 0.016      
 
         # Calculate thrust and torques from motor speeds
         f_thrust = motor_constant * cs.power(self.u * 1000, 2)  # Thrust for each motor
@@ -122,7 +116,7 @@ class QuadDynamics:
         # Calculate angular velocity dynamics
         w_dynamics = cs.vertcat(
             (cs.mtimes(f_thrust.T, x_f) + (self.J[1] - self.J[2]) * self.r[1] * self.r[2]) / self.J[0],  # Roll dynamics
-            (-cs.mtimes(f_thrust.T, y_f) + (self.J[2] - self.J[0]) * self.r[2] * self.r[0]) / self.J[1],  # Pitch dynamics
+            (cs.mtimes(f_thrust.T, y_f) + (self.J[2] - self.J[0]) * self.r[2] * self.r[0]) / self.J[1],  # Pitch dynamics
             (cs.mtimes(tau_yaw.T, c_f) + (self.J[0] - self.J[1]) * self.r[0] * self.r[1]) / self.J[2]   # Yaw dynamics
         )
 

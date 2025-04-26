@@ -27,17 +27,23 @@ class Controller(Node):
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
-        self.ocp = generate_ocp_controller()
+        # Get both the OCP solver and the integrator
+        self.ocp, self.sim_integrator = generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         
         # Alternate between [0, 0, 2] and [1, 1, 2] every 10 seconds
-        self.x_traj = np.where((time_space // 10) % 2 == 0, 0.0, 1.0)
-        self.y_traj = np.where((time_space // 10) % 2 == 0, 0.0, 1.0)
-        self.z_traj = 2.0 * np.ones_like(time_space)
+        #self.x_traj = np.where((time_space // 10) % 2 == 0, 0.0, 1.0)
+        #self.y_traj = np.where((time_space // 2) % 2 == 0, 0.0, 1.0)
 
-        # Define yaw trajectory (90 degrees to the left, which is -π/2 radians)
-        yaw_traj = np.pi / 2 * np.zeros_like(time_space)  # Yaw remains constant at -π/2 radians
+        self.x_traj = 2.0 * np.sin(2.0 * time_space)  # Sine wave with amplitude 2.0 and frequency 0.2
+        self.y_traj = 1.5 * np.sin(1.0 * time_space)  # Sine wave with amplitude 1.5 and frequency 0.1
+        self.z_traj = 1.0 + 0.5 * np.sin(0.5 * time_space)  # Sine wave with amplitude 0.5 and frequency 0.3, offset by 1.0
+
+        # Define yaw trajectory (45 degrees to the left, which is -π/2 radians)
+        #yaw_traj = np.where((time_space // 5) % 2 == 0, 0.0, np.pi / 2)
+
+        yaw_traj = np.pi / 2 * np.sin(2 * np.pi * time_space)  # Yaw oscillates between -π/2 and π/2 with a frequency of 1 Hz
         roll_traj = np.zeros_like(time_space)  # Roll remains 0
         pitch_traj = np.zeros_like(time_space)  # Pitch remains 0
 
@@ -81,38 +87,85 @@ class Controller(Node):
         msg.channel_2 = 0.0
         msg.channel_3 = 0.0
 
-        if self.executing_actions:
-            # Execute the saved actions for the next 60 timesteps
-            if self.executed_steps < 30:
-                u_command = self.saved_controls[self.executed_steps]
-                msg.armed = True
-                msg.channel_0 = u_command[0]
-                msg.channel_1 = u_command[1]
-                msg.channel_2 = u_command[2]
-                msg.channel_3 = u_command[3]
+        if self.armed and self.current_pose is not None:
+            # For every step except the first, compare predicted and actual states
+            if self.step_counter > 0 and hasattr(self, 'last_state') and hasattr(self, 'last_control'):
+                # Integrate the previous state with the last control inputs to predict current state
 
-                # Record the current state while taking the action
-                self.recorded_states.append(self.current_pose)
 
-                self.executed_steps += 1
-            else:
-                # Disarm after 60 timesteps
-                self.executing_actions = False
-                self.armed = False
-                self.executed_steps = 0
-                print("Disarmed after executing actions.")
-                self.save_to_csv()
-        elif self.armed and self.current_pose is not None:
+
+                print(f"\nModel vs. Actual State Error (Step {self.step_counter} of {self.steps}):")
+
+
+                #print(f"Last State: {np.round(self.last_state, 3)}")
+                
+
+                self.sim_integrator.set("x", self.last_state)
+                self.sim_integrator.set("u", self.last_control)
+                
+                # Run the integrator
+                status = self.sim_integrator.solve()
+                if status != 0:
+                    print(f"Warning: Integrator returned status {status}.")
+                
+                # Get the predicted state after integration
+                predicted_state = self.sim_integrator.get("x")
+
+                # Round the predicted state to 3 decimal places
+                #predicted_state = np.round(predicted_state, 3)
+
+                print(f"Last Control: {np.round(self.last_control, 3)}")
+
+                print("ORENTATION")
+                print(f"last orientation (quaternion): {np.round(self.last_state[3:7], 3)}")
+                print(f"predicted orientation (quaternion): {np.round(predicted_state[3:7], 3)}")
+                print(f"actual orientation (quaternion): {np.round(self.current_pose[3:7], 3)}")
+
+                print("ANGULAR VELOCITY")
+                print(f"last angular_velocity: {np.round(self.last_state[10:13], 3)}")
+                print(f"predicted_angular_velocity: {np.round(predicted_state[10:13], 3)}")
+                print(f"actual_angular_velocity: {np.round(self.current_pose[10:13], 3)}")
+                
+                # Calculate the error between predicted and actual states
+                state_error = self.current_pose - predicted_state
+                
+                # Calculate relative errors for position, orientation, linear and angular velocities
+                position_error = np.linalg.norm(self.current_pose[:3] - predicted_state[:3])
+                orientation_error = np.linalg.norm(self.current_pose[3:7] - predicted_state[3:7])
+                linear_velocity_error = np.linalg.norm(self.current_pose[7:10] - predicted_state[7:10])
+                angular_velocity_error = np.linalg.norm(self.current_pose[10:13] - predicted_state[10:13])
+
+                print(f"Position Error: {position_error:.3f}")
+                print(f"Orientation Error: {orientation_error:.3f}")
+                print(f"Linear Velocity Error: {linear_velocity_error:.3f}")
+                print(f"Angular Velocity Error: {angular_velocity_error:.3f}")
+
+
             # Solve the OCP and save the trajectory
-            for j in range(60):
-                if self.step_counter + j < self.steps:
-                    yref = np.array([self.x_traj[self.step_counter + j], self.y_traj[self.step_counter + j],
-                                     self.z_traj[self.step_counter + j], self.qw_traj[self.step_counter + j],
-                                     self.qx_traj[self.step_counter + j], self.qy_traj[self.step_counter + j],
-                                     self.qz_traj[self.step_counter + j], 0, 0, 0, 0, 0, 0, 0.6, 0.6, 0.6, 0.6])
+            N = 60
+
+            skip_steps = 1
+            for j in range(N):
+                if self.step_counter + j*skip_steps < self.steps:
+                    yref = np.array([self.x_traj[self.step_counter + j*skip_steps], self.y_traj[self.step_counter + j*skip_steps],
+                                     self.z_traj[self.step_counter + j*skip_steps], self.qw_traj[self.step_counter + j*skip_steps],
+                                     self.qx_traj[self.step_counter + j*skip_steps], self.qy_traj[self.step_counter + j*skip_steps],
+                                     self.qz_traj[self.step_counter + j*skip_steps], 0, 0, 0, 0, 0, 0, 0.4, 0.4, 0.4, 0.4])
                 else:
-                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0, 0.6, 0.6, 0.6, 0.6])
+                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0, 0.4, 0.4, 0.4, 0.4])
                 self.ocp.set(j, "yref", yref)
+
+            # Set terminal reference for the final point in the prediction horizon
+            yref_N = np.array([self.x_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
+                                    self.y_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
+                                    self.z_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
+                                    self.qw_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
+                                    self.qx_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
+                                    self.qy_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
+                                    self.qz_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
+                                    0, 0, 0, 0, 0, 0])
+
+            self.ocp.set(N, "yref", yref_N)
             self.ocp.set(0, "lbx", self.current_pose)
             self.ocp.set(0, "ubx", self.current_pose)
 
@@ -120,28 +173,34 @@ class Controller(Node):
             if status != 0:
                 raise Exception(f'acados returned status {status}.')
 
-            # Save the solved trajectory
-            self.saved_states = [self.ocp.get(i, "x") for i in range(self.ocp.N + 1)]
-            self.saved_controls = [self.ocp.get(i, "u") for i in range(self.ocp.N)]
-            # Start executing the saved actions
+
+            u = self.ocp.get(0, "u")
+            msg.armed = True
+            msg.channel_0 = u[0]
+            msg.channel_1 = u[1]
+            msg.channel_2 = u[2]
+            msg.channel_3 = u[3]
+            
+            # Store current state and control for next step prediction
+            self.last_state = self.current_pose.copy()
+            self.last_control = u.copy()
+
             self.step_counter += 1
 
+            print(f"Step {self.step_counter}:")
 
-            if self.step_counter >= 60:
-                self.executing_actions = True
         else:
             self.step_counter = 0
+            # Reset stored states when disarmed
+            if hasattr(self, 'last_state'):
+                delattr(self, 'last_state')
+            if hasattr(self, 'last_control'):
+                delattr(self, 'last_control')
+            if hasattr(self, 'prediction_errors'):
+                delattr(self, 'prediction_errors')
 
         self.cmd_publisher_.publish(msg)
 
-    def save_to_csv(self):
-        # Save the initial solve state, actions, and incoming state information to a CSV file
-        with open("trajectory_data.csv", "w", newline="") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(["Step", "State", "Recorded State", "Control"])
-            for i, (state, recorded_state, control) in enumerate(zip(self.saved_states[5:], self.recorded_states[5:], self.saved_controls[5:])):  # Start from the 5th step
-                writer.writerow([i] + list(state) + list(recorded_state) + list(control))
-        print("Trajectory data saved to trajectory_data.csv.")
 
 
     def signal_handler(self, sig, frame):

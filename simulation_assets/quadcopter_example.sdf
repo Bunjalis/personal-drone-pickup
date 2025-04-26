@@ -80,7 +80,7 @@
       <uri>
         modelUAV.sdf
       </uri>
-      <pose>0 0 0 0 0 0</pose> <!-- Added pose with yaw of 90 degrees  1.5708 --> 
+      <pose>0 0 0 0 0 1.5708</pose> <!-- Added pose with yaw of 90 degrees  1.5708 --> 
       <plugin
         filename="ignition-gazebo-multicopter-motor-model-system"
         name="gz::sim::systems::MulticopterMotorModel">
@@ -88,15 +88,15 @@
         <jointName>X3/rotor_0_joint</jointName>
         <linkName>X3/rotor_0</linkName>
         <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0.0125</timeConstantUp>
-        <timeConstantDown>0.025</timeConstantDown>
+        <timeConstantUp>0.0</timeConstantUp>
+        <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>1000.0</maxRotVelocity>
         <motorConstant>8.54858e-06</motorConstant>
         <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>0</motorNumber>
-        <rotorDragCoefficient>8.06428e-05</rotorDragCoefficient>
-        <rollingMomentCoefficient>1e-06</rollingMomentCoefficient>
+        <rotorDragCoefficient>0.0</rotorDragCoefficient>
+        <rollingMomentCoefficient>0</rollingMomentCoefficient>
         <motorSpeedPubTopic>motor_speed/0</motorSpeedPubTopic>
         <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
         <motorType>velocity</motorType>
@@ -108,15 +108,15 @@
         <jointName>X3/rotor_1_joint</jointName>
         <linkName>X3/rotor_1</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0.0125</timeConstantUp>
-        <timeConstantDown>0.025</timeConstantDown>
+        <timeConstantUp>0.0</timeConstantUp>
+        <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>1000.0</maxRotVelocity>
         <motorConstant>8.54858e-06</motorConstant>
         <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>1</motorNumber>
-        <rotorDragCoefficient>8.06428e-05</rotorDragCoefficient>
-        <rollingMomentCoefficient>1e-06</rollingMomentCoefficient>
+        <rotorDragCoefficient>0.0</rotorDragCoefficient>
+        <rollingMomentCoefficient>0.0</rollingMomentCoefficient>
         <motorSpeedPubTopic>motor_speed/1</motorSpeedPubTopic>
         <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
         <motorType>velocity</motorType>
@@ -128,15 +128,15 @@
         <jointName>X3/rotor_2_joint</jointName>
         <linkName>X3/rotor_2</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0.0125</timeConstantUp>
-        <timeConstantDown>0.025</timeConstantDown>
+        <timeConstantUp>0.0</timeConstantUp>
+        <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>1000.0</maxRotVelocity>
         <motorConstant>8.54858e-06</motorConstant>
         <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>2</motorNumber>
-        <rotorDragCoefficient>8.06428e-05</rotorDragCoefficient>
-        <rollingMomentCoefficient>1e-06</rollingMomentCoefficient>
+        <rotorDragCoefficient>0.0</rotorDragCoefficient>
+        <rollingMomentCoefficient>0.0</rollingMomentCoefficient>
         <motorSpeedPubTopic>motor_speed/2</motorSpeedPubTopic>
         <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
         <motorType>velocity</motorType>
@@ -148,15 +148,15 @@
         <jointName>X3/rotor_3_joint</jointName>
         <linkName>X3/rotor_3</linkName>
         <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0.0125</timeConstantUp>
-        <timeConstantDown>0.025</timeConstantDown>
+        <timeConstantUp>0.0</timeConstantUp>
+        <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>1000.0</maxRotVelocity>
         <motorConstant>8.54858e-06</motorConstant>
         <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>3</motorNumber>
-        <rotorDragCoefficient>8.06428e-05</rotorDragCoefficient>
-        <rollingMomentCoefficient>1e-06</rollingMomentCoefficient>
+        <rotorDragCoefficient>0.0</rotorDragCoefficient>
+        <rollingMomentCoefficient>0.0</rollingMomentCoefficient>
         <motorSpeedPubTopic>motor_speed/3</motorSpeedPubTopic>
         <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
         <motorType>velocity</motorType>
