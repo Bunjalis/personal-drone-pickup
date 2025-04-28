@@ -11,12 +11,6 @@ def generate_ocp_controller():
     quad_dynamics = QuadDynamics()
     dynamics_function = quad_dynamics.quad_dynamics()
 
-    # Wrap the dynamics function to round inputs
-    def rounded_dynamics(x, u):
-        x_rounded = np.round(x, 3)
-        u_rounded = np.round(u, 3)
-        return dynamics_function(x_rounded, u_rounded)
-
     # Use the rounded dynamics in the Acados model
     optimizer = QuadDynamics()
     
@@ -46,7 +40,7 @@ def generate_ocp_controller():
     ocp.cost.cost_type = 'NONLINEAR_LS'
     ocp.cost.cost_type_e = 'NONLINEAR_LS'
 
-    Q_mat = 2 * np.diag([10, 10, 10, 8, 8, 8, 8, 0.1, 0.1, 0.1, 5.0, 5.0, 5.0])
+    Q_mat = 2 * np.diag([10, 10, 10, 8, 8, 8, 8, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0])
     R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
 
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
@@ -55,7 +49,7 @@ def generate_ocp_controller():
     ocp.cost.Vx = np.zeros((ny, nx))
     ocp.cost.Vx[:nx, :nx] = 1*np.eye(nx)
     ocp.cost.Vu = np.zeros((ny, nu))
-    ocp.cost.Vu[-4:, -4:] = 1*np.eye(nu)
+    ocp.cost.Vu[-4:, -4:] = 5*np.eye(nu)
     ocp.cost.Vx_e = np.eye(nx)
 
     ocp.model.cost_y_expr = ca.vertcat(model.x, model.u)
@@ -96,7 +90,7 @@ def generate_ocp_controller():
 
     # Set constraints on u[0]
     ocp.constraints.lbu = np.array([0.0, 0.0, 0.0, 0.0])
-    ocp.constraints.ubu = np.array([1.0, 1.0, 1.0, 1.0])
+    ocp.constraints.ubu = np.array([0.8, 0.8, 0.8, 0.8])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

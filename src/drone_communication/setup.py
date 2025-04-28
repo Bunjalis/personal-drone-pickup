@@ -25,6 +25,7 @@ setup(
         'console_scripts': [
             'elrs_interface = drone_communication.elrs_interface:main',
             'video_interface = drone_communication.video_interface:main',
+            'motion_capture_publisher_node = drone_communication.motion_capture_publisher_node:main'
         ],
     },
 )

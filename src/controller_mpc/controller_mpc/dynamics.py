@@ -26,13 +26,32 @@ class QuadDynamics:
         m4 = cs.MX.sym('m4') # front left, counter-clockwise
         self.u = cs.vertcat(m1, m2, m3, m4)
 
+        ''' simulated quadcopter parameters 
         self.mass = 1.04
-        h = 0.15
-        self.x_f = np.array([-h, -h, h, h])
-        self.y_f = np.array([h, -h, h, -h])
+        self.x_l = 0.15
+        self.y_l = 0.15
+        self.J = np.array([.03, .03, .06])
+        self.motor_constant = 8.54858e-6
+        self.moment_constant = 0.016 
+        self.max_speed = 1000  # rad/s
+        '''
+
+        #''' Simulated tiny trainer parameters
+        self.mass = 0.2
+        self.x_l = 0.054
+        self.y_l = 0.046
+        self.J = np.array([.03, .03, .06])
+        self.motor_constant = 5.326e-8
+        self.moment_constant = 0.006
+        self.max_speed = 6000  # rad/s
+        #'''
+        
+
+        self.x_f = np.array([-self.y_l, -self.y_l, self.y_l, self.y_l])
+        self.y_f = np.array([self.x_l, -self.x_l, self.x_l, -self.x_l])
         self.z_l_tau = np.array([-1, 1, 1, -1])
 
-        self.J = np.array([.03, .03, .06])
+        
 
 
     def q_to_rot_mat(self, q):
@@ -83,10 +102,7 @@ class QuadDynamics:
         return 1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
 
     def v_dynamics(self):
-        # Motor constant (k_m) for thrust calculation
-        motor_constant = 8.54858e-6  # N·s²/rad²
-        # Calculate thrust from motor speeds
-        f_thrust = motor_constant * cs.power(self.u * 1000, 2)  # Thrust for each motor
+        f_thrust = self.motor_constant * cs.power(self.u * self.max_speed, 2)  # Thrust for each motor
 
         # Gravity vector
         g = cs.vertcat(0.0, 0.0, 9.81)
@@ -97,16 +113,15 @@ class QuadDynamics:
         # Rotate thrust to the world frame and subtract gravity
         v_dynamics = self.v_dot_q(a_thrust, self.q) - g
 
+        # Floor constraint: if z <= 0, set velocity and acceleration to zero
+        z_position = self.p[2]  # z-coordinate of position
+        v_dynamics = cs.if_else(z_position <= 0, cs.vertcat(0.0, 0.0, 0.0), v_dynamics)
+
         return v_dynamics
 
     def w_dynamics(self):
-        # Motor constants
-        motor_constant = 8.54858e-6  # N·s²/rad²
-        moment_constant = 0.016      
-
-        # Calculate thrust and torques from motor speeds
-        f_thrust = motor_constant * cs.power(self.u * 1000, 2)  # Thrust for each motor
-        tau_yaw = moment_constant * motor_constant * cs.power(self.u * 1000, 2)  # Torque for each motor (yaw)
+        f_thrust = self.motor_constant * cs.power(self.u * self.max_speed, 2)  # Thrust for each motor
+        tau_yaw = self.moment_constant * self.motor_constant * cs.power(self.u * self.max_speed, 2)  # Torque for each motor (yaw)
 
         # Convert parameters to CasADi symbolic variables
         x_f = cs.MX(self.x_f)  # x-offsets of motors for roll dynamics

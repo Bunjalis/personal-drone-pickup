@@ -36,14 +36,18 @@ class Controller(Node):
         #self.x_traj = np.where((time_space // 10) % 2 == 0, 0.0, 1.0)
         #self.y_traj = np.where((time_space // 2) % 2 == 0, 0.0, 1.0)
 
-        self.x_traj = 2.0 * np.sin(2.0 * time_space)  # Sine wave with amplitude 2.0 and frequency 0.2
-        self.y_traj = 1.5 * np.sin(1.0 * time_space)  # Sine wave with amplitude 1.5 and frequency 0.1
-        self.z_traj = 1.0 + 0.5 * np.sin(0.5 * time_space)  # Sine wave with amplitude 0.5 and frequency 0.3, offset by 1.0
+        self.x_traj = np.zeros_like(time_space)
+        self.y_traj = np.zeros_like(time_space)
+
+        #self.x_traj = 2.0 * np.sin(2.0 * time_space)  # Sine wave with amplitude 2.0 and frequency 0.2
+        #self.y_traj = 1.5 * np.sin(1.0 * time_space)  # Sine wave with amplitude 1.5 and frequency 0.1
+        self.z_traj = 1.5 + 0.5 * np.sin(0.5 * time_space)  # Sine wave with amplitude 0.5 and frequency 0.3, offset by 1.0
 
         # Define yaw trajectory (45 degrees to the left, which is -π/2 radians)
         #yaw_traj = np.where((time_space // 5) % 2 == 0, 0.0, np.pi / 2)
 
-        yaw_traj = np.pi / 2 * np.sin(2 * np.pi * time_space)  # Yaw oscillates between -π/2 and π/2 with a frequency of 1 Hz
+        #yaw_traj = np.pi / 2 * np.sin(2 * np.pi * time_space)  # Yaw oscillates between -π/2 and π/2 with a frequency of 1 Hz
+        yaw_traj = np.zeros_like(time_space)
         roll_traj = np.zeros_like(time_space)  # Roll remains 0
         pitch_traj = np.zeros_like(time_space)  # Pitch remains 0
 
@@ -116,15 +120,29 @@ class Controller(Node):
 
                 print(f"Last Control: {np.round(self.last_control, 3)}")
 
-                print("ORENTATION")
-                print(f"last orientation (quaternion): {np.round(self.last_state[3:7], 3)}")
-                print(f"predicted orientation (quaternion): {np.round(predicted_state[3:7], 3)}")
-                print(f"actual orientation (quaternion): {np.round(self.current_pose[3:7], 3)}")
 
-                print("ANGULAR VELOCITY")
-                print(f"last angular_velocity: {np.round(self.last_state[10:13], 3)}")
-                print(f"predicted_angular_velocity: {np.round(predicted_state[10:13], 3)}")
-                print(f"actual_angular_velocity: {np.round(self.current_pose[10:13], 3)}")
+                print("POSITION")
+                print(f"last position: {np.round(self.last_state[:3], 3)}")
+                print(f"predicted position: {np.round(predicted_state[:3], 3)}")
+                print(f"actual position: {np.round(self.current_pose[:3], 3)}")
+
+                print("LINEAR VELOCITY")
+                print(f"last linear_velocity: {np.round(self.last_state[7:10], 3)}")
+                print(f"predicted_linear_velocity: {np.round(predicted_state[7:10], 3)}")
+                print(f"actual_linear_velocity: {np.round(self.current_pose[7:10], 3)}")
+
+
+
+
+                #print("ORENTATION")
+                #print(f"last orientation (quaternion): {np.round(self.last_state[3:7], 3)}")
+                #print(f"predicted orientation (quaternion): {np.round(predicted_state[3:7], 3)}")
+                #print(f"actual orientation (quaternion): {np.round(self.current_pose[3:7], 3)}")
+
+                #print("ANGULAR VELOCITY")
+                #print(f"last angular_velocity: {np.round(self.last_state[10:13], 3)}")
+                #print(f"predicted_angular_velocity: {np.round(predicted_state[10:13], 3)}")
+                #print(f"actual_angular_velocity: {np.round(self.current_pose[10:13], 3)}")
                 
                 # Calculate the error between predicted and actual states
                 state_error = self.current_pose - predicted_state
@@ -150,9 +168,9 @@ class Controller(Node):
                     yref = np.array([self.x_traj[self.step_counter + j*skip_steps], self.y_traj[self.step_counter + j*skip_steps],
                                      self.z_traj[self.step_counter + j*skip_steps], self.qw_traj[self.step_counter + j*skip_steps],
                                      self.qx_traj[self.step_counter + j*skip_steps], self.qy_traj[self.step_counter + j*skip_steps],
-                                     self.qz_traj[self.step_counter + j*skip_steps], 0, 0, 0, 0, 0, 0, 0.4, 0.4, 0.4, 0.4])
+                                     self.qz_traj[self.step_counter + j*skip_steps], 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0.3, 0.3])
                 else:
-                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0, 0.4, 0.4, 0.4, 0.4])
+                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0, 0.3, 0.3, 0.3, 0.3])
                 self.ocp.set(j, "yref", yref)
 
             # Set terminal reference for the final point in the prediction horizon

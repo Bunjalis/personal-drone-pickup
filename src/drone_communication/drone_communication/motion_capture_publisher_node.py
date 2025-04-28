@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Tuple, Optional
 import sys
 import time
+import numpy as np
 
 @dataclass
 class ObjectData:
@@ -32,6 +33,10 @@ class MotionCapturePublisher(Node):
         
         self.get_logger().info(f'Listening for UDP on {self.HOST}:{self.PORT}')
 
+        self.last_pose = None
+        self.last_orientation = None
+        self.last_time = None
+
     def clean_message(self, message: str) -> str:
         message = message.replace('-(', '|').replace(')-', '|')
         message = message.replace('(', '').replace(')', '')
@@ -45,7 +50,7 @@ class MotionCapturePublisher(Node):
                 return None
 
             parts = [p.strip() for p in data.split('|') if p.strip()]
-            if len(parts) != 5:
+            if len(parts) != 3:
                 return None
 
             obj_id, pos_str, rot_str, vel_str, ang_vel_str = parts
@@ -60,33 +65,53 @@ class MotionCapturePublisher(Node):
                 return None
             qx, qy, qz, qw = map(float, rot_parts)
 
-            vel_parts = [p.strip() for p in vel_str.split(',')]
-            if len(vel_parts) != 3:
+            # Ensure quaternion w is positive
+            qx, qy, qz, qw = self.normalize_quaternion_positive_w(qx, qy, qz, qw)
+
+            current_time = time.time()
+
+            if self.last_pose is None:
+                # Initialize the last pose, orientation, and time
+                self.last_pose = np.array([x, y, z])
+                self.last_orientation = np.array([qx, qy, qz, qw])
+                self.last_time = current_time
                 return None
-            vx, vy, vz = map(float, vel_parts)
 
+            # Calculate time difference (dt)
+            dt = current_time - self.last_time
 
-            ang_vel_parts = [p.strip() for p in ang_vel_str.split(',')]
-
-            
-            if len(ang_vel_parts) != 3:
+            if dt <= 0:
+                print("Time difference is non-positive, skipping packet.")
+                self.last_pose = np.array([x, y, z])
+                self.last_orientation = np.array([qx, qy, qz, qw])
+                self.last_time = current_time
                 return None
-            
 
-            wx, wy, wz = map(float, ang_vel_parts)
+            # Calculate linear velocity in the world frame
+            dx, dy, dz = x - self.last_pose[0], y - self.last_pose[1], z - self.last_pose[2]
+            linear_velocity_world = np.array([dx / dt, dy / dt, dz / dt])
 
+            # Calculate angular velocity
+            q1 = self.last_orientation
+            q2 = np.array([qx, qy, qz, qw])
+            q_relative = quaternion_multiply(q2, quaternion_inverse(q1))  # Relative rotation
+            angular_velocity = 2 * np.array([q_relative[0], q_relative[1], q_relative[2]]) / dt  # Angular velocity
+            rotation_matrix = quaternion_matrix(q2)[:3, :3]  # Extract 3x3 rotation part
 
-            #wx_out = f"{round(wx, 1):6.1f}"
-            #wy_out = f"{round(wy, 1):6.1f}"
-            #wz_out = f"{round(wz, 1):6.1f}"
-            #print(f"wx: {wx_out}, wy: {wy_out}, wz: {wz_out}")
+            # Transform velocity from world frame to body frame
+            angular_velocity_body = np.dot(rotation_matrix.T, angular_velocity)
+
+            # Update last pose, orientation, and time
+            self.last_pose = np.array([x, y, z])
+            self.last_orientation = np.array([qx, qy, qz, qw])
+            self.last_time = current_time
 
             return ObjectData(
                 id=obj_id,
                 position=(x, y, z),
                 rotation=(qw, qx, qy, qz),
-                velocity=(vx, vy, vz),
-                angular_velocity=(wx, wy, wz)
+                velocity=(linear_velocity_world[0], linear_velocity_world[1], linear_velocity_world[2]),
+                angular_velocity=(angular_velocity_body[0], angular_velocity_body[1], angular_velocity_body[2])
             )
         except Exception:
             return None

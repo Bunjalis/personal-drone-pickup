@@ -18,7 +18,9 @@ class ELRSPassThrough(Node):
 
 
     def controller_commands_callback(self, msg):
-        self.speed = [msg.channel_0*1000.0,msg.channel_1*1000.0,msg.channel_2*1000.0,msg.channel_3*1000.0]
+
+        max_rot_val = 6000.0
+        self.speed = [msg.channel_0*max_rot_val,msg.channel_1*max_rot_val,msg.channel_2*max_rot_val,msg.channel_3*max_rot_val]
         actuator_msg = Actuators()
         actuator_msg.header.stamp = self.get_clock().now().to_msg()
         actuator_msg.velocity = self.speed
