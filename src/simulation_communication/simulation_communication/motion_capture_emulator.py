@@ -79,20 +79,12 @@ class PentaVerify(Node):
         # Calculate angular velocity
         q1 = [self.last_orientation.x, self.last_orientation.y, self.last_orientation.z, self.last_orientation.w]
         q2 = [current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w]
-        
-
         q_relative = quaternion_multiply(q2, quaternion_inverse(q1))  # Relative rotation
         angular_velocity = 2 * np.array([q_relative[0], q_relative[1], q_relative[2]]) / dt  # Angular velocity
-
-        # Transform linear velocity from world frame to body frame
-        # Create quaternion for current orientation
         q_current = [current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w]
-        # Get rotation matrix from quaternion
         rotation_matrix = quaternion_matrix(q_current)[:3, :3]  # Extract 3x3 rotation part
-        # Rotate velocity from world to body frame (transpose of rotation matrix)
-        linear_velocity_body = np.dot(rotation_matrix.T, linear_velocity_world)
 
-        # Transform angular velocity from world frame to body frame
+        # Transform  velocity from world frame to body frame
         angular_velocity_body = np.dot(rotation_matrix.T, angular_velocity)
 
         # Publish MotionCaptureState

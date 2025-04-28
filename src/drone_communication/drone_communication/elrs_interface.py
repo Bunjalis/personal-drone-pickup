@@ -90,6 +90,8 @@ def channelsCrsfToChannelsPacket(channels) -> bytes:
 
 
 
+import serial.tools.list_ports  # Import to list available serial ports
+
 class ELRSInterface(Node):
     def __init__(self):
         super().__init__('elrs_interface')
@@ -98,7 +100,10 @@ class ELRSInterface(Node):
         self.timer = self.create_timer(dt, self.publish_message)
         self.telemetry_timer = self.create_timer(0.1, self.publish_telemetry)  # Timer for 10Hz publishing
         self.get_logger().info('ELRS Interface Node has started.')
-        self.ser = serial.Serial('/dev/ttyUSB0', 921600, timeout=2)
+
+        self.ser = None
+        self.connect_serial()  # Initialize serial connection
+
         self.input = bytearray()
 
         self.idle = 993
@@ -115,6 +120,21 @@ class ELRSInterface(Node):
         self.subscription_floats = self.create_subscription(ELRSCommand, 'ELRSCommand', self.controller_commands_callback, 10)
 
         self.last_message_time = time.time()  # Initialize the last message timestamp
+
+    def connect_serial(self):
+        while self.ser is None:
+            try:
+                ports = serial.tools.list_ports.comports()
+                for port in ports:
+                    if '/dev/ttyUSB' in port.device:  # Check for USB serial devices
+                        self.ser = serial.Serial(port.device, 921600, timeout=2)
+                        self.get_logger().info(f'Serial port {port.device} connected.')
+                        return
+                self.get_logger().warn('No suitable serial port found. Retrying...')
+                time.sleep(1)  # Wait before retrying
+            except serial.SerialException as e:
+                self.get_logger().error(f'Error while connecting to serial port: {e}')
+                time.sleep(1)  # Wait before retrying
 
     def controller_commands_callback(self, msg):
         self.last_message_time = time.time()  # Update the timestamp of the most recent message
@@ -212,26 +232,31 @@ class ELRSInterface(Node):
             self.packet = np.full(16, self.idle, dtype=np.uint16)
             self.packet[4] = 0
 
-        if self.ser.in_waiting > 0:
-            self.input.extend(self.ser.read(self.ser.in_waiting))
-        else:
-            self.ser.write(channelsCrsfToChannelsPacket(self.packet))
+        try:
+            if self.ser and self.ser.in_waiting > 0:
+                self.input.extend(self.ser.read(self.ser.in_waiting))
+            elif self.ser:
+                self.ser.write(channelsCrsfToChannelsPacket(self.packet))
 
-        while len(self.input) > 2:
-            expected_len = self.input[1] + 2
-            if expected_len > 64 or expected_len < 4:
-                self.input = bytearray()
-            elif len(self.input) >= expected_len:
-                single = self.input[:expected_len]
-                self.input = self.input[expected_len:]
+            while len(self.input) > 2:
+                expected_len = self.input[1] + 2
+                if expected_len > 64 or expected_len < 4:
+                    self.input = bytearray()
+                elif len(self.input) >= expected_len:
+                    single = self.input[:expected_len]
+                    self.input = self.input[expected_len:]
 
-                if not crsf_validate_frame(single):
-                    packet = ' '.join(map(hex, single))
-                    print(f"crc error: {packet}")
+                    if not crsf_validate_frame(single):
+                        packet = ' '.join(map(hex, single))
+                        print(f"crc error: {packet}")
+                    else:
+                        self.handleCrsfPacket(single[2], single)
                 else:
-                    self.handleCrsfPacket(single[2], single)
-            else:
-                break
+                    break
+        except (serial.SerialException, OSError):
+            self.get_logger().error('Serial connection lost. Attempting to reconnect...')
+            self.ser = None
+            self.connect_serial()
         
 
 
