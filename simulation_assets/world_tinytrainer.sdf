@@ -80,7 +80,7 @@
       <uri>
         modelTinyTrainer.sdf
       </uri>
-      <pose>2.0 0 0 0 0 1.5708</pose> <!-- Added pose with yaw of 90 degrees   --> 
+      <pose>0.1 0.1 0 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
       <plugin
         filename="ignition-gazebo-multicopter-motor-model-system"
         name="gz::sim::systems::MulticopterMotorModel">
@@ -88,8 +88,8 @@
         <jointName>X3/rotor_0_joint</jointName>
         <linkName>X3/rotor_0</linkName>
         <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0.0</timeConstantUp>
-        <timeConstantDown>0.0</timeConstantDown>
+        <timeConstantUp>0</timeConstantUp>
+        <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>5.326e-08</motorConstant>
         <momentConstant>0.006</momentConstant>
@@ -108,8 +108,8 @@
         <jointName>X3/rotor_1_joint</jointName>
         <linkName>X3/rotor_1</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0.0</timeConstantUp>
-        <timeConstantDown>0.0</timeConstantDown>
+        <timeConstantUp>0</timeConstantUp>
+        <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>5.326e-08</motorConstant>
         <momentConstant>0.006</momentConstant>
@@ -128,8 +128,8 @@
         <jointName>X3/rotor_2_joint</jointName>
         <linkName>X3/rotor_2</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0.0</timeConstantUp>
-        <timeConstantDown>0.0</timeConstantDown>
+        <timeConstantUp>0</timeConstantUp>
+        <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>5.326e-08</motorConstant>
         <momentConstant>0.006</momentConstant>
@@ -148,8 +148,8 @@
         <jointName>X3/rotor_3_joint</jointName>
         <linkName>X3/rotor_3</linkName>
         <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0.0</timeConstantUp>
-        <timeConstantDown>0.0</timeConstantDown>
+        <timeConstantUp>0</timeConstantUp>
+        <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>5.326e-08</motorConstant>
         <momentConstant>0.006</momentConstant>
