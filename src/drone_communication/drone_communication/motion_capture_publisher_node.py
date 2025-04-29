@@ -3,6 +3,8 @@ from rclpy.node import Node
 from geometry_msgs.msg import Pose, Twist
 from std_msgs.msg import Header
 from interfaces.msg import MotionCaptureState  # Import the new message type
+from geometry_msgs.msg import Twist, PoseArray, Pose, PoseStamped
+from tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_matrix
 import socket
 from dataclasses import dataclass
 from typing import Tuple, Optional
@@ -24,6 +26,7 @@ class MotionCapturePublisher(Node):
         
         # ROS2 Publisher
         self.publisher = self.create_publisher(MotionCaptureState, 'motion_capture_state', 10)
+        self.pose_publisher = self.create_publisher(PoseStamped, '/rviz_pose', 10)
         
         # UDP Setup
         self.HOST = "192.168.1.105"
@@ -43,33 +46,44 @@ class MotionCapturePublisher(Node):
         message = message.strip()
         message = message.replace('||', '|')
         return message
+    
+    def normalize_quaternion_positive_w(self, x, y, z, w):
+        """Normalize quaternion and ensure w is positive."""
+        print(f"Normalizing quaternion: {x}, {y}, {z}, {w}")
+        if w < 0:
+            print(f"Quaternion w is negative, negating all components.")
+            return -x, -y, -z, -w
+        print(f"Quaternion w is positive, no change needed.")
+        return x, y, z, w
 
     def parse_packet(self, data: str) -> Optional[ObjectData]:
         try:
+            print(f"trying to parse: {data}")
             if not data or '|' not in data:
+                print("Invalid data format, skipping packet.")
                 return None
 
             parts = [p.strip() for p in data.split('|') if p.strip()]
             if len(parts) != 3:
+                print("Invalid parts length.")
                 return None
 
-            obj_id, pos_str, rot_str, vel_str, ang_vel_str = parts
+            obj_id, pos_str, rot_str = parts
             
             pos_parts = [p.strip() for p in pos_str.split(',')]
             if len(pos_parts) != 3:
+                print("Invalid position format.")
                 return None
-            x, y, z = map(float, pos_parts)
+            x, y, z =  map(float,pos_parts)
             
             rot_parts = [p.strip() for p in rot_str.split(',')]
             if len(rot_parts) != 4:
+                print("Invalid rotation format.")
                 return None
-            qx, qy, qz, qw = map(float, rot_parts)
-
-            # Ensure quaternion w is positive
-            qx, qy, qz, qw = self.normalize_quaternion_positive_w(qx, qy, qz, qw)
+                
+            qx, qy, qz, qw  =  map(float,rot_parts)
 
             current_time = time.time()
-
             if self.last_pose is None:
                 # Initialize the last pose, orientation, and time
                 self.last_pose = np.array([x, y, z])
@@ -79,13 +93,16 @@ class MotionCapturePublisher(Node):
 
             # Calculate time difference (dt)
             dt = current_time - self.last_time
+            self.last_time = current_time
 
             if dt <= 0:
-                print("Time difference is non-positive, skipping packet.")
                 self.last_pose = np.array([x, y, z])
                 self.last_orientation = np.array([qx, qy, qz, qw])
                 self.last_time = current_time
                 return None
+            
+
+
 
             # Calculate linear velocity in the world frame
             dx, dy, dz = x - self.last_pose[0], y - self.last_pose[1], z - self.last_pose[2]
@@ -104,8 +121,21 @@ class MotionCapturePublisher(Node):
             # Update last pose, orientation, and time
             self.last_pose = np.array([x, y, z])
             self.last_orientation = np.array([qx, qy, qz, qw])
-            self.last_time = current_time
+            
 
+            pose_for_rviz = PoseStamped()
+            pose_for_rviz.header.stamp = self.get_clock().now().to_msg()
+            pose_for_rviz.header.frame_id = "map"
+            pose_for_rviz.pose.position.x = x
+            pose_for_rviz.pose.position.y = y
+            pose_for_rviz.pose.position.z = z
+            pose_for_rviz.pose.orientation.x = qx
+            pose_for_rviz.pose.orientation.y = qy
+            pose_for_rviz.pose.orientation.z = qz
+            pose_for_rviz.pose.orientation.w = qw
+
+            self.pose_publisher.publish(pose_for_rviz)
+            
             return ObjectData(
                 id=obj_id,
                 position=(x, y, z),
@@ -153,6 +183,8 @@ class MotionCapturePublisher(Node):
                 
                 cleaned_message = self.clean_message(message)
                 obj_data = self.parse_packet(cleaned_message)
+
+                print(f"Do we hqve obj_data? {obj_data}")
                 
                 if obj_data:
                     motion_capture_msg = self.create_motion_capture_state_msg(obj_data)

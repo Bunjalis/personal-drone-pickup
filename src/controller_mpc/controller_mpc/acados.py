@@ -89,8 +89,8 @@ def generate_ocp_controller():
     ocp.constraints.x0 = x0
 
     # Set constraints on u[0]
-    ocp.constraints.lbu = np.array([0.0, 0.0, 0.0, 0.0])
-    ocp.constraints.ubu = np.array([0.8, 0.8, 0.8, 0.8])
+    ocp.constraints.lbu = np.array([0.2, 0.2, 0.2, 0.2])
+    ocp.constraints.ubu = np.array([0.45, 0.45, 0.45, 0.45])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

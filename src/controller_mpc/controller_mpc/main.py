@@ -41,7 +41,8 @@ class Controller(Node):
 
         #self.x_traj = 2.0 * np.sin(2.0 * time_space)  # Sine wave with amplitude 2.0 and frequency 0.2
         #self.y_traj = 1.5 * np.sin(1.0 * time_space)  # Sine wave with amplitude 1.5 and frequency 0.1
-        self.z_traj = 1.5 + 0.5 * np.sin(0.5 * time_space)  # Sine wave with amplitude 0.5 and frequency 0.3, offset by 1.0
+        #self.z_traj = 1.5 + 0.5 * np.sin(0.5 * time_space)  # Sine wave with amplitude 0.5 and frequency 0.3, offset by 1.0
+        self.z_traj = 1.5 * np.ones_like(time_space)  # Sine wave with amplitude 0.5 and frequency 0.3, offset by 1.0
 
         # Define yaw trajectory (45 degrees to the left, which is -π/2 radians)
         #yaw_traj = np.where((time_space // 5) % 2 == 0, 0.0, np.pi / 2)
@@ -60,8 +61,6 @@ class Controller(Node):
         self.qz_traj = quaternions[:, 2]
         self.qw_traj = quaternions[:, 3]
 
-        print(f"w {self.qw_traj[0]}, x {self.qx_traj[0]}, y {self.qy_traj[0]}, z {self.qz_traj[0]}")
-
         self.gui = GUI(self)
         self.armed = False
         self.executing_actions = False
@@ -71,6 +70,34 @@ class Controller(Node):
         self.recorded_states = []  # To store the recorded states
         self.initial_solve_state = None
         self.initial_solve_controls = None
+
+
+
+        # Initialize CSV file at the start of the program
+        if not hasattr(self, 'csv_initialized'):
+            self.csv_initialized = True
+            self.csv_file = open('state_errors.csv', mode='w', newline='')
+            self.csv_writer = csv.writer(self.csv_file)
+            # Write header row
+            self.csv_writer.writerow([
+                    'Step', 'Last_Control_0', 'Last_Control_1', 'Last_Control_2', 'Last_Control_3',
+                        'Last_Position_X', 'Last_Position_Y', 'Last_Position_Z',
+                        'Predicted_Position_X', 'Predicted_Position_Y', 'Predicted_Position_Z',
+                        'Actual_Position_X', 'Actual_Position_Y', 'Actual_Position_Z',
+                        'Last_Linear_Velocity_X', 'Last_Linear_Velocity_Y', 'Last_Linear_Velocity_Z',
+                        'Predicted_Linear_Velocity_X', 'Predicted_Linear_Velocity_Y', 'Predicted_Linear_Velocity_Z',
+                        'Actual_Linear_Velocity_X', 'Actual_Linear_Velocity_Y', 'Actual_Linear_Velocity_Z',
+                        'Last_Orientation_W', 'Last_Orientation_X', 'Last_Orientation_Y', 'Last_Orientation_Z',
+                        'Predicted_Orientation_W', 'Predicted_Orientation_X', 'Predicted_Orientation_Y', 'Predicted_Orientation_Z',
+                        'Actual_Orientation_W', 'Actual_Orientation_X', 'Actual_Orientation_Y', 'Actual_Orientation_Z',
+                        'Last_Angular_Velocity_X', 'Last_Angular_Velocity_Y', 'Last_Angular_Velocity_Z',
+                        'Predicted_Angular_Velocity_X', 'Predicted_Angular_Velocity_Y', 'Predicted_Angular_Velocity_Z',
+                        'Actual_Angular_Velocity_X', 'Actual_Angular_Velocity_Y', 'Actual_Angular_Velocity_Z',
+                        'Position_Error', 'Orientation_Error', 'Linear_Velocity_Error', 'Angular_Velocity_Error',
+                        'Setpoint_X', 'Setpoint_Y', 'Setpoint_Z',
+                        'Setpoint_Orientation_W', 'Setpoint_Orientation_X', 'Setpoint_Orientation_Y', 'Setpoint_Orientation_Z'
+        ])
+
 
     def pose_callback(self, msg: MotionCaptureState):
         position = msg.pose.position
@@ -96,14 +123,6 @@ class Controller(Node):
             if self.step_counter > 0 and hasattr(self, 'last_state') and hasattr(self, 'last_control'):
                 # Integrate the previous state with the last control inputs to predict current state
 
-
-
-                print(f"\nModel vs. Actual State Error (Step {self.step_counter} of {self.steps}):")
-
-
-                #print(f"Last State: {np.round(self.last_state, 3)}")
-                
-
                 self.sim_integrator.set("x", self.last_state)
                 self.sim_integrator.set("u", self.last_control)
                 
@@ -115,11 +134,10 @@ class Controller(Node):
                 # Get the predicted state after integration
                 predicted_state = self.sim_integrator.get("x")
 
-                # Round the predicted state to 3 decimal places
-                #predicted_state = np.round(predicted_state, 3)
+
+                print(f"\nModel vs. Actual State Error (Step {self.step_counter} of {self.steps}):")
 
                 print(f"Last Control: {np.round(self.last_control, 3)}")
-
 
                 print("POSITION")
                 print(f"last position: {np.round(self.last_state[:3], 3)}")
@@ -131,22 +149,19 @@ class Controller(Node):
                 print(f"predicted_linear_velocity: {np.round(predicted_state[7:10], 3)}")
                 print(f"actual_linear_velocity: {np.round(self.current_pose[7:10], 3)}")
 
+                print("ORIENTATION")
+                print(f"last orientation (quaternion): {np.round(self.last_state[3:7], 3)}")
+                print(f"predicted orientation (quaternion): {np.round(predicted_state[3:7], 3)}")
+                print(f"actual orientation (quaternion): {np.round(self.current_pose[3:7], 3)}")
 
+                print("ANGULAR VELOCITY")
+                print(f"last angular_velocity: {np.round(self.last_state[10:13], 3)}")
+                print(f"predicted_angular_velocity: {np.round(predicted_state[10:13], 3)}")
+                print(f"actual_angular_velocity: {np.round(self.current_pose[10:13], 3)}")
 
-
-                #print("ORENTATION")
-                #print(f"last orientation (quaternion): {np.round(self.last_state[3:7], 3)}")
-                #print(f"predicted orientation (quaternion): {np.round(predicted_state[3:7], 3)}")
-                #print(f"actual orientation (quaternion): {np.round(self.current_pose[3:7], 3)}")
-
-                #print("ANGULAR VELOCITY")
-                #print(f"last angular_velocity: {np.round(self.last_state[10:13], 3)}")
-                #print(f"predicted_angular_velocity: {np.round(predicted_state[10:13], 3)}")
-                #print(f"actual_angular_velocity: {np.round(self.current_pose[10:13], 3)}")
-                
                 # Calculate the error between predicted and actual states
                 state_error = self.current_pose - predicted_state
-                
+
                 # Calculate relative errors for position, orientation, linear and angular velocities
                 position_error = np.linalg.norm(self.current_pose[:3] - predicted_state[:3])
                 orientation_error = np.linalg.norm(self.current_pose[3:7] - predicted_state[3:7])
@@ -157,6 +172,27 @@ class Controller(Node):
                 print(f"Orientation Error: {orientation_error:.3f}")
                 print(f"Linear Velocity Error: {linear_velocity_error:.3f}")
                 print(f"Angular Velocity Error: {angular_velocity_error:.3f}")
+
+                # Save data to CSV
+                self.csv_writer.writerow([
+                    self.step_counter,
+                    *np.round(self.last_control, 3),
+                    *np.round(self.last_state[:3], 3),
+                    *np.round(predicted_state[:3], 3),
+                    *np.round(self.current_pose[:3], 3),
+                    *np.round(self.last_state[7:10], 3),
+                    *np.round(predicted_state[7:10], 3),
+                    *np.round(self.current_pose[7:10], 3),
+                    *np.round(self.last_state[3:7], 3),
+                    *np.round(predicted_state[3:7], 3),
+                    *np.round(self.current_pose[3:7], 3),
+                    *np.round(self.last_state[10:13], 3),
+                    *np.round(predicted_state[10:13], 3),
+                    *np.round(self.current_pose[10:13], 3),
+                    position_error, orientation_error, linear_velocity_error, angular_velocity_error,
+                    self.x_traj[self.step_counter], self.y_traj[self.step_counter], self.z_traj[self.step_counter],
+                    self.qw_traj[self.step_counter], self.qx_traj[self.step_counter], self.qy_traj[self.step_counter], self.qz_traj[self.step_counter]
+                ])
 
 
             # Solve the OCP and save the trajectory

@@ -43,7 +43,7 @@ class QuadDynamics:
         self.J = np.array([.03, .03, .06])
         self.motor_constant = 5.326e-8
         self.moment_constant = 0.006
-        self.max_speed = 6000  # rad/s
+        self.max_speed = 5700  # rad/s
         #'''
         
 
@@ -112,10 +112,6 @@ class QuadDynamics:
 
         # Rotate thrust to the world frame and subtract gravity
         v_dynamics = self.v_dot_q(a_thrust, self.q) - g
-
-        # Floor constraint: if z <= 0, set velocity and acceleration to zero
-        z_position = self.p[2]  # z-coordinate of position
-        v_dynamics = cs.if_else(z_position <= 0, cs.vertcat(0.0, 0.0, 0.0), v_dynamics)
 
         return v_dynamics
 
