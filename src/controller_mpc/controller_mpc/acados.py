@@ -19,9 +19,9 @@ def generate_ocp_controller():
 
     model = AcadosModel()
     model.name = 'quad_dynamics'
-    model.x = optimizer.x
+    model.x = optimizer.x  # Include omega in the state vector
     model.u = optimizer.u
-    model.f_expl_expr = dynamics_expr(optimizer.x, optimizer.u)  # Set the expression, not the function
+    model.f_expl_expr = dynamics_expr(optimizer.x, optimizer.u)  # Use full state including omega internally
 
     # Create OCP object
     ocp = AcadosOcp()
@@ -29,27 +29,27 @@ def generate_ocp_controller():
     # Define the model using quadcopter dynamics
     ocp.model = model
 
-    ocp.solver_options.N_horizon = 60
+    ocp.solver_options.N_horizon = 120
     ocp.solver_options.tf = 2.0
 
     # Define the cost function
-    nx = 13  # Number of outputs
+    nx = 13  # Updated number of states
     nu = 4   # Number of inputs
     ny = nx + nu  # Number of outputs + inputs
 
     ocp.cost.cost_type = 'NONLINEAR_LS'
     ocp.cost.cost_type_e = 'NONLINEAR_LS'
 
-    Q_mat = 2 * np.diag([10, 10, 10, 8, 8, 8, 8, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0])
+    Q_mat = 2 * np.diag([5, 5, 10, 8, 8, 8, 8, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0])
     R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
 
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
     ocp.cost.W_e = Q_mat
 
     ocp.cost.Vx = np.zeros((ny, nx))
-    ocp.cost.Vx[:nx, :nx] = 1*np.eye(nx)
+    ocp.cost.Vx[:nx, :nx] = 1 * np.eye(nx)
     ocp.cost.Vu = np.zeros((ny, nu))
-    ocp.cost.Vu[-4:, -4:] = 5*np.eye(nu)
+    ocp.cost.Vu[-4:, -4:] = 3 * np.eye(nu)
     ocp.cost.Vx_e = np.eye(nx)
 
     ocp.model.cost_y_expr = ca.vertcat(model.x, model.u)
@@ -57,7 +57,7 @@ def generate_ocp_controller():
     ocp.cost.yref = np.zeros((nx + nu, ))
     ocp.cost.yref_e = np.zeros((nx, ))
     ocp.cost.yref[3] = 1
-    ocp.cost.yref_e[3] = 1 
+    ocp.cost.yref_e[3] = 1
 
     # Set prediction horizon
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
@@ -90,7 +90,7 @@ def generate_ocp_controller():
 
     # Set constraints on u[0]
     ocp.constraints.lbu = np.array([0.2, 0.2, 0.2, 0.2])
-    ocp.constraints.ubu = np.array([0.45, 0.45, 0.45, 0.45])
+    ocp.constraints.ubu = np.array([0.7, 0.7, 0.7, 0.7])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

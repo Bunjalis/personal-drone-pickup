@@ -22,8 +22,8 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
         self.current_pose = None
 
-        self.steps = 90 * 30
-        self.dt = 1.0 / 30.0
+        self.steps = 90 * 60
+        self.dt = 1.0 / 60.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -93,7 +93,6 @@ class Controller(Node):
                         'Last_Angular_Velocity_X', 'Last_Angular_Velocity_Y', 'Last_Angular_Velocity_Z',
                         'Predicted_Angular_Velocity_X', 'Predicted_Angular_Velocity_Y', 'Predicted_Angular_Velocity_Z',
                         'Actual_Angular_Velocity_X', 'Actual_Angular_Velocity_Y', 'Actual_Angular_Velocity_Z',
-                        'Position_Error', 'Orientation_Error', 'Linear_Velocity_Error', 'Angular_Velocity_Error',
                         'Setpoint_X', 'Setpoint_Y', 'Setpoint_Z',
                         'Setpoint_Orientation_W', 'Setpoint_Orientation_X', 'Setpoint_Orientation_Y', 'Setpoint_Orientation_Z'
         ])
@@ -119,84 +118,9 @@ class Controller(Node):
         msg.channel_3 = 0.0
 
         if self.armed and self.current_pose is not None:
-            # For every step except the first, compare predicted and actual states
-            if self.step_counter > 0 and hasattr(self, 'last_state') and hasattr(self, 'last_control'):
-                # Integrate the previous state with the last control inputs to predict current state
-
-                self.sim_integrator.set("x", self.last_state)
-                self.sim_integrator.set("u", self.last_control)
-                
-                # Run the integrator
-                status = self.sim_integrator.solve()
-                if status != 0:
-                    print(f"Warning: Integrator returned status {status}.")
-                
-                # Get the predicted state after integration
-                predicted_state = self.sim_integrator.get("x")
 
 
-                print(f"\nModel vs. Actual State Error (Step {self.step_counter} of {self.steps}):")
-
-                print(f"Last Control: {np.round(self.last_control, 3)}")
-
-                print("POSITION")
-                print(f"last position: {np.round(self.last_state[:3], 3)}")
-                print(f"predicted position: {np.round(predicted_state[:3], 3)}")
-                print(f"actual position: {np.round(self.current_pose[:3], 3)}")
-
-                print("LINEAR VELOCITY")
-                print(f"last linear_velocity: {np.round(self.last_state[7:10], 3)}")
-                print(f"predicted_linear_velocity: {np.round(predicted_state[7:10], 3)}")
-                print(f"actual_linear_velocity: {np.round(self.current_pose[7:10], 3)}")
-
-                print("ORIENTATION")
-                print(f"last orientation (quaternion): {np.round(self.last_state[3:7], 3)}")
-                print(f"predicted orientation (quaternion): {np.round(predicted_state[3:7], 3)}")
-                print(f"actual orientation (quaternion): {np.round(self.current_pose[3:7], 3)}")
-
-                print("ANGULAR VELOCITY")
-                print(f"last angular_velocity: {np.round(self.last_state[10:13], 3)}")
-                print(f"predicted_angular_velocity: {np.round(predicted_state[10:13], 3)}")
-                print(f"actual_angular_velocity: {np.round(self.current_pose[10:13], 3)}")
-
-                # Calculate the error between predicted and actual states
-                state_error = self.current_pose - predicted_state
-
-                # Calculate relative errors for position, orientation, linear and angular velocities
-                position_error = np.linalg.norm(self.current_pose[:3] - predicted_state[:3])
-                orientation_error = np.linalg.norm(self.current_pose[3:7] - predicted_state[3:7])
-                linear_velocity_error = np.linalg.norm(self.current_pose[7:10] - predicted_state[7:10])
-                angular_velocity_error = np.linalg.norm(self.current_pose[10:13] - predicted_state[10:13])
-
-                print(f"Position Error: {position_error:.3f}")
-                print(f"Orientation Error: {orientation_error:.3f}")
-                print(f"Linear Velocity Error: {linear_velocity_error:.3f}")
-                print(f"Angular Velocity Error: {angular_velocity_error:.3f}")
-
-                # Save data to CSV
-                self.csv_writer.writerow([
-                    self.step_counter,
-                    *np.round(self.last_control, 3),
-                    *np.round(self.last_state[:3], 3),
-                    *np.round(predicted_state[:3], 3),
-                    *np.round(self.current_pose[:3], 3),
-                    *np.round(self.last_state[7:10], 3),
-                    *np.round(predicted_state[7:10], 3),
-                    *np.round(self.current_pose[7:10], 3),
-                    *np.round(self.last_state[3:7], 3),
-                    *np.round(predicted_state[3:7], 3),
-                    *np.round(self.current_pose[3:7], 3),
-                    *np.round(self.last_state[10:13], 3),
-                    *np.round(predicted_state[10:13], 3),
-                    *np.round(self.current_pose[10:13], 3),
-                    position_error, orientation_error, linear_velocity_error, angular_velocity_error,
-                    self.x_traj[self.step_counter], self.y_traj[self.step_counter], self.z_traj[self.step_counter],
-                    self.qw_traj[self.step_counter], self.qx_traj[self.step_counter], self.qy_traj[self.step_counter], self.qz_traj[self.step_counter]
-                ])
-
-
-            # Solve the OCP and save the trajectory
-            N = 60
+            N = 120
 
             skip_steps = 1
             for j in range(N):
@@ -209,7 +133,6 @@ class Controller(Node):
                     yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0, 0.3, 0.3, 0.3, 0.3])
                 self.ocp.set(j, "yref", yref)
 
-            # Set terminal reference for the final point in the prediction horizon
             yref_N = np.array([self.x_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
                                     self.y_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
                                     self.z_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
@@ -234,6 +157,8 @@ class Controller(Node):
             msg.channel_1 = u[1]
             msg.channel_2 = u[2]
             msg.channel_3 = u[3]
+
+            print(f"Step: {self.step_counter}, Control: {u}")
             
             # Store current state and control for next step prediction
             self.last_state = self.current_pose.copy()
@@ -241,7 +166,33 @@ class Controller(Node):
 
             self.step_counter += 1
 
-            print(f"Step {self.step_counter}:")
+            if self.step_counter > 0 and hasattr(self, 'last_state') and hasattr(self, 'last_control'):
+                # Integrate the previous state with the last control inputs to predict current state
+
+                self.sim_integrator.set("x", self.last_state)
+                self.sim_integrator.set("u", self.last_control)
+                
+                status = self.sim_integrator.solve()
+                predicted_state = self.sim_integrator.get("x")
+
+                self.csv_writer.writerow([
+                    self.step_counter,
+                    *np.round(self.last_control, 3),
+                    *np.round(self.last_state[:3], 3),
+                    *np.round(predicted_state[:3], 3),
+                    *np.round(self.current_pose[:3], 3),
+                    *np.round(self.last_state[7:10], 3),
+                    *np.round(predicted_state[7:10], 3),
+                    *np.round(self.current_pose[7:10], 3),
+                    *np.round(self.last_state[3:7], 3),
+                    *np.round(predicted_state[3:7], 3),
+                    *np.round(self.current_pose[3:7], 3),
+                    *np.round(self.last_state[10:13], 3),
+                    *np.round(predicted_state[10:13], 3),
+                    *np.round(self.current_pose[10:13], 3),
+                    self.x_traj[self.step_counter], self.y_traj[self.step_counter], self.z_traj[self.step_counter],
+                    self.qw_traj[self.step_counter], self.qx_traj[self.step_counter], self.qy_traj[self.step_counter], self.qz_traj[self.step_counter]
+                ])
 
         else:
             self.step_counter = 0

@@ -15,9 +15,9 @@ class QuadDynamics:
         self.v = cs.MX.sym('v', 3)  # velocity
         self.r = cs.MX.sym('r', 3)  # angular velocity
 
-        # Full state vector (13-dimensional)
+        # Update full state vector to include motor speeds
         self.x = cs.vertcat(self.p, self.q, self.v, self.r)
-        self.state_dim = 13
+        self.state_dim = 13  # Updated state dimension
 
         # Control input vector (throttle, roll, pitch, yaw)
         m1 = cs.MX.sym('m1') # back right, counter-clockwise
@@ -43,7 +43,7 @@ class QuadDynamics:
         self.J = np.array([.03, .03, .06])
         self.motor_constant = 5.326e-8
         self.moment_constant = 0.006
-        self.max_speed = 5700  # rad/s
+        self.max_speed = 6000  # rad/s
         #'''
         
 
@@ -102,7 +102,7 @@ class QuadDynamics:
         return 1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
 
     def v_dynamics(self):
-        f_thrust = self.motor_constant * cs.power(self.u * self.max_speed, 2)  # Thrust for each motor
+        f_thrust = self.motor_constant * cs.power(self.u * self.max_speed, 2)  # Thrust for each motor using omega
 
         # Gravity vector
         g = cs.vertcat(0.0, 0.0, 9.81)
@@ -116,7 +116,7 @@ class QuadDynamics:
         return v_dynamics
 
     def w_dynamics(self):
-        f_thrust = self.motor_constant * cs.power(self.u * self.max_speed, 2)  # Thrust for each motor
+        f_thrust = self.motor_constant * cs.power(self.u * self.max_speed, 2)  # Thrust for each motor using omega
         tau_yaw = self.moment_constant * self.motor_constant * cs.power(self.u * self.max_speed, 2)  # Torque for each motor (yaw)
 
         # Convert parameters to CasADi symbolic variables
