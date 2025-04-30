@@ -30,17 +30,17 @@ def generate_ocp_controller():
     ocp.model = model
 
     ocp.solver_options.N_horizon = 120
-    ocp.solver_options.tf = 2.0
+    ocp.solver_options.tf = 4.0
 
     # Define the cost function
     nx = 13  # Updated number of states
     nu = 4   # Number of inputs
     ny = nx + nu  # Number of outputs + inputs
 
-    ocp.cost.cost_type = 'NONLINEAR_LS'
-    ocp.cost.cost_type_e = 'NONLINEAR_LS'
+    ocp.cost.cost_type = 'LINEAR_LS'
+    ocp.cost.cost_type_e = 'LINEAR_LS'
 
-    Q_mat = 2 * np.diag([5, 5, 10, 8, 8, 8, 8, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0])
+    Q_mat = 2 * np.diag([10, 10, 10, 10, 10, 10, 10, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
     R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
 
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
@@ -49,7 +49,7 @@ def generate_ocp_controller():
     ocp.cost.Vx = np.zeros((ny, nx))
     ocp.cost.Vx[:nx, :nx] = 1 * np.eye(nx)
     ocp.cost.Vu = np.zeros((ny, nu))
-    ocp.cost.Vu[-4:, -4:] = 3 * np.eye(nu)
+    ocp.cost.Vu[-4:, -4:] = 1 * np.eye(nu)
     ocp.cost.Vx_e = np.eye(nx)
 
     ocp.model.cost_y_expr = ca.vertcat(model.x, model.u)
@@ -89,8 +89,8 @@ def generate_ocp_controller():
     ocp.constraints.x0 = x0
 
     # Set constraints on u[0]
-    ocp.constraints.lbu = np.array([0.2, 0.2, 0.2, 0.2])
-    ocp.constraints.ubu = np.array([0.7, 0.7, 0.7, 0.7])
+    ocp.constraints.lbu = np.array([0.0, 0.0, 0.0, 0.0])
+    ocp.constraints.ubu = np.array([1.0, 1.0, 1.0, 1.0])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

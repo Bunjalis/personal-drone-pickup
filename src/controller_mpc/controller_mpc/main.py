@@ -22,8 +22,8 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
         self.current_pose = None
 
-        self.steps = 90 * 60
-        self.dt = 1.0 / 60.0
+        self.steps = 90 * 30
+        self.dt = 1.0 / 30.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -32,25 +32,50 @@ class Controller(Node):
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         
-        # Alternate between [0, 0, 2] and [1, 1, 2] every 10 seconds
-        #self.x_traj = np.where((time_space // 10) % 2 == 0, 0.0, 1.0)
-        #self.y_traj = np.where((time_space // 2) % 2 == 0, 0.0, 1.0)
+        # Generate a circular trajectory around (0, 0) with a radius of 2m and a speed of 1 rad/s
+        radius = 2.0
+        angular_speed = np.pi * 2/3  # rad/s
+        height = 1.5
 
-        self.x_traj = np.zeros_like(time_space)
-        self.y_traj = np.zeros_like(time_space)
+        # Generate a trajectory with hover, transition, and circular motion
+        hover_time = 5.0  # seconds
+        transition_time = 5.0  # seconds
+        circle_time = self.steps * self.dt - hover_time - transition_time
 
-        #self.x_traj = 2.0 * np.sin(2.0 * time_space)  # Sine wave with amplitude 2.0 and frequency 0.2
-        #self.y_traj = 1.5 * np.sin(1.0 * time_space)  # Sine wave with amplitude 1.5 and frequency 0.1
-        #self.z_traj = 1.5 + 0.5 * np.sin(0.5 * time_space)  # Sine wave with amplitude 0.5 and frequency 0.3, offset by 1.0
-        self.z_traj = 1.5 * np.ones_like(time_space)  # Sine wave with amplitude 0.5 and frequency 0.3, offset by 1.0
+        hover_steps = int(hover_time / self.dt)
+        transition_steps = int(transition_time / self.dt)
+        circle_steps = self.steps - hover_steps - transition_steps
 
-        # Define yaw trajectory (45 degrees to the left, which is -π/2 radians)
-        #yaw_traj = np.where((time_space // 5) % 2 == 0, 0.0, np.pi / 2)
+        # Hover at (0, 0, height)
+        hover_x = np.zeros(hover_steps)
+        hover_y = np.zeros(hover_steps)
+        hover_z = height * np.ones(hover_steps)
 
-        #yaw_traj = np.pi / 2 * np.sin(2 * np.pi * time_space)  # Yaw oscillates between -π/2 and π/2 with a frequency of 1 Hz
-        yaw_traj = np.zeros_like(time_space)
-        roll_traj = np.zeros_like(time_space)  # Roll remains 0
-        pitch_traj = np.zeros_like(time_space)  # Pitch remains 0
+        # Transition to the start of the circle
+        transition_x = np.linspace(0, radius, transition_steps)
+        transition_y = np.zeros(transition_steps)
+        transition_z = height * np.ones(transition_steps)
+
+        # Circular trajectory
+        time_space_circle = np.linspace(0, circle_time, circle_steps)
+        circle_x = radius * np.cos(angular_speed * time_space_circle)
+        circle_y = radius * np.sin(angular_speed * time_space_circle)
+        circle_z = height * np.ones(circle_steps)
+
+        # Combine trajectories
+        self.x_traj = np.concatenate((hover_x, transition_x, circle_x))
+        self.y_traj = np.concatenate((hover_y, transition_y, circle_y))
+        self.z_traj = np.concatenate((hover_z, transition_z, circle_z))
+
+        # Define yaw trajectory to always face the center (0, 0)
+        yaw_hover = np.zeros(hover_steps)
+        yaw_transition = np.zeros(transition_steps)
+        #yaw_circle = np.arctan2(-circle_y, -circle_x)
+        yaw_circle = np.zeros(circle_steps)  # Keep yaw constant during the circle
+        yaw_traj = np.concatenate((yaw_hover, yaw_transition, yaw_circle))
+
+        roll_traj = np.zeros_like(self.x_traj)  # Roll remains 0
+        pitch_traj = np.zeros_like(self.x_traj)  # Pitch remains 0
 
         # Convert RPY to quaternions
         rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
@@ -60,6 +85,21 @@ class Controller(Node):
         self.qy_traj = quaternions[:, 1]
         self.qz_traj = quaternions[:, 2]
         self.qw_traj = quaternions[:, 3]
+
+        # Calculate world frame velocities for the trajectory
+        self.vx_traj = np.gradient(self.x_traj, self.dt)
+        self.vy_traj = np.gradient(self.y_traj, self.dt)
+        self.vz_traj = np.gradient(self.z_traj, self.dt)
+
+        # Calculate desired angular velocities for the orientation trajectory
+        yaw_rate_hover = np.zeros(hover_steps)
+        yaw_rate_transition = np.gradient(yaw_transition, self.dt)
+        yaw_rate_circle = np.gradient(yaw_circle, self.dt)
+        yaw_rate_traj = np.concatenate((yaw_rate_hover, yaw_rate_transition, yaw_rate_circle))
+
+        self.ax_traj = np.zeros_like(yaw_rate_traj)  # Roll rate remains 0
+        self.ay_traj = np.zeros_like(yaw_rate_traj)  # Pitch rate remains 0
+        self.az_traj = yaw_rate_traj  # Yaw rate trajectory
 
         self.gui = GUI(self)
         self.armed = False
@@ -94,7 +134,9 @@ class Controller(Node):
                         'Predicted_Angular_Velocity_X', 'Predicted_Angular_Velocity_Y', 'Predicted_Angular_Velocity_Z',
                         'Actual_Angular_Velocity_X', 'Actual_Angular_Velocity_Y', 'Actual_Angular_Velocity_Z',
                         'Setpoint_X', 'Setpoint_Y', 'Setpoint_Z',
-                        'Setpoint_Orientation_W', 'Setpoint_Orientation_X', 'Setpoint_Orientation_Y', 'Setpoint_Orientation_Z'
+                        'Setpoint_Orientation_W', 'Setpoint_Orientation_X', 'Setpoint_Orientation_Y', 'Setpoint_Orientation_Z',
+                        'Setpoint_VX', 'Setpoint_VY', 'Setpoint_VZ',
+                        'Setpoint_AX', 'Setpoint_AY', 'Setpoint_AZ'
         ])
 
 
@@ -128,7 +170,10 @@ class Controller(Node):
                     yref = np.array([self.x_traj[self.step_counter + j*skip_steps], self.y_traj[self.step_counter + j*skip_steps],
                                      self.z_traj[self.step_counter + j*skip_steps], self.qw_traj[self.step_counter + j*skip_steps],
                                      self.qx_traj[self.step_counter + j*skip_steps], self.qy_traj[self.step_counter + j*skip_steps],
-                                     self.qz_traj[self.step_counter + j*skip_steps], 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0.3, 0.3])
+                                     self.qz_traj[self.step_counter + j*skip_steps], 
+                                     self.vx_traj[self.step_counter + j*skip_steps], self.vy_traj[self.step_counter + j*skip_steps], self.vz_traj[self.step_counter + j*skip_steps], 
+                                     self.ax_traj[self.step_counter + j*skip_steps], self.ay_traj[self.step_counter + j*skip_steps], self.az_traj[self.step_counter + j*skip_steps], 
+                                     0.3, 0.3, 0.3, 0.3])
                 else:
                     yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0, 0.3, 0.3, 0.3, 0.3])
                 self.ocp.set(j, "yref", yref)
@@ -140,7 +185,12 @@ class Controller(Node):
                                     self.qx_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
                                     self.qy_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
                                     self.qz_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
-                                    0, 0, 0, 0, 0, 0])
+                                    self.vx_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
+                                    self.vy_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
+                                    self.vz_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
+                                    self.ax_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
+                                    self.ay_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
+                                    self.az_traj[min(self.step_counter + N*skip_steps, self.steps - 1)] ])
 
             self.ocp.set(N, "yref", yref_N)
             self.ocp.set(0, "lbx", self.current_pose)
@@ -191,7 +241,9 @@ class Controller(Node):
                     *np.round(predicted_state[10:13], 3),
                     *np.round(self.current_pose[10:13], 3),
                     self.x_traj[self.step_counter], self.y_traj[self.step_counter], self.z_traj[self.step_counter],
-                    self.qw_traj[self.step_counter], self.qx_traj[self.step_counter], self.qy_traj[self.step_counter], self.qz_traj[self.step_counter]
+                    self.qw_traj[self.step_counter], self.qx_traj[self.step_counter], self.qy_traj[self.step_counter], self.qz_traj[self.step_counter],
+                    self.vx_traj[self.step_counter], self.vy_traj[self.step_counter], self.vz_traj[self.step_counter],
+                    self.ax_traj[self.step_counter], self.ay_traj[self.step_counter], self.az_traj[self.step_counter],
                 ])
 
         else:

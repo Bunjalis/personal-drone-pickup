@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 # Load the CSV file
-data = pd.read_csv('state_errors.csv')
+data = pd.read_csv('30Hz_test_2.csv')
 
 # Extract the measured angular velocity columns
 actual_angular_velocity_x = data['Actual_Angular_Velocity_X']

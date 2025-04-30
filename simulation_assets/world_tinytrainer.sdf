@@ -80,7 +80,7 @@
       <uri>
         modelTinyTrainer.sdf
       </uri>
-      <pose>0.1 0.1 0 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
+      <pose>0 0 0 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
       <plugin
         filename="ignition-gazebo-multicopter-motor-model-system"
         name="gz::sim::systems::MulticopterMotorModel">
@@ -92,7 +92,7 @@
         <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>5.326e-08</motorConstant>
-        <momentConstant>0.006</momentConstant>
+        <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>0</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>
@@ -112,7 +112,7 @@
         <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>5.326e-08</motorConstant>
-        <momentConstant>0.006</momentConstant>
+        <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>1</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>
@@ -132,7 +132,7 @@
         <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>5.326e-08</motorConstant>
-        <momentConstant>0.006</momentConstant>
+        <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>2</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>
@@ -152,7 +152,7 @@
         <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>5.326e-08</motorConstant>
-        <momentConstant>0.006</momentConstant>
+        <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>3</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>
