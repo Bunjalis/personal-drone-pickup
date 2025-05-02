@@ -15,6 +15,7 @@ import numpy as np
 @dataclass
 class ObjectData:
     id: str
+    recieve_time: int
     position: Tuple[float, float, float]
     rotation: Tuple[float, float, float, float]
     velocity: Tuple[float, float, float]
@@ -64,11 +65,20 @@ class MotionCapturePublisher(Node):
                 return None
 
             parts = [p.strip() for p in data.split('|') if p.strip()]
-            if len(parts) != 3:
+            if len(parts) != 4:
                 print("Invalid parts length.")
                 return None
 
-            obj_id, pos_str, rot_str = parts
+            recieve_time, obj_id, pos_str, rot_str = parts
+            
+
+            print(f"Incoming Current time: {time.time_ns()}")
+            print(f"Incoming Recorded time: {recieve_time}")
+            
+
+            time_diff = time.time_ns() - int(recieve_time)
+
+            print(f"Incoming Time difference: {time_diff/ 1e6} ms")
             
             pos_parts = [p.strip() for p in pos_str.split(',')]
             if len(pos_parts) != 3:
@@ -138,6 +148,7 @@ class MotionCapturePublisher(Node):
             
             return ObjectData(
                 id=obj_id,
+                recieve_time=int(recieve_time),
                 position=(x, y, z),
                 rotation=(qw, qx, qy, qz),
                 velocity=(linear_velocity_world[0], linear_velocity_world[1], linear_velocity_world[2]),
@@ -151,8 +162,13 @@ class MotionCapturePublisher(Node):
         
         # Set header
         msg.header = Header()
-        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.stamp = rclpy.time.Time(nanoseconds=obj_data.recieve_time).to_msg()
         msg.header.frame_id = obj_data.id
+
+        print(f"Outgoing Current time: {time.time_ns()}")
+        print(f"Outgoing Recorded time: {obj_data.recieve_time}")
+        print(f"Outgoing Time difference: {(time.time_ns() - (obj_data.recieve_time)) / 1e6} ms")
+            
         
         # Set pose
         msg.pose = Pose()

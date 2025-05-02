@@ -91,7 +91,7 @@
         <timeConstantUp>0</timeConstantUp>
         <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
-        <motorConstant>5.326e-08</motorConstant>
+        <motorConstant>1.326e-07</motorConstant>
         <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>0</motorNumber>
@@ -111,7 +111,7 @@
         <timeConstantUp>0</timeConstantUp>
         <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
-        <motorConstant>5.326e-08</motorConstant>
+        <motorConstant>1.326e-07</motorConstant>
         <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>1</motorNumber>
@@ -131,7 +131,7 @@
         <timeConstantUp>0</timeConstantUp>
         <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
-        <motorConstant>5.326e-08</motorConstant>
+        <motorConstant>1.326e-07</motorConstant>
         <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>2</motorNumber>
@@ -151,7 +151,7 @@
         <timeConstantUp>0</timeConstantUp>
         <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
-        <motorConstant>5.326e-08</motorConstant>
+        <motorConstant>1.326e-07</motorConstant>
         <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>3</motorNumber>

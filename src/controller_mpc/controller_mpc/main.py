@@ -8,7 +8,7 @@ import csv
 from rclpy.node import Node
 from datetime import datetime
 from scipy.spatial.transform import Rotation as R
-
+import time
 from .acados import generate_ocp_controller
 from .gui import GUI
 from interfaces.msg import MotionCaptureState, ELRSCommand
@@ -31,7 +31,10 @@ class Controller(Node):
         self.ocp, self.sim_integrator = generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
-        
+
+
+
+        '''
         # Generate a circular trajectory around (0, 0) with a radius of 2m and a speed of 1 rad/s
         radius = 2.0
         angular_speed = np.pi * 2/3  # rad/s
@@ -78,6 +81,19 @@ class Controller(Node):
         pitch_traj = np.zeros_like(self.x_traj)  # Pitch remains 0
 
         # Convert RPY to quaternions
+        
+
+        '''
+
+
+        self.x_traj = np.zeros_like(time_space)
+        self.y_traj = np.zeros_like(time_space)
+        self.z_traj = 1.5 * np.ones_like(time_space)
+
+        roll_traj = np.zeros_like(time_space)  # Roll remains 0
+        pitch_traj = np.zeros_like(time_space)  # Pitch remains 0
+        yaw_traj = np.zeros_like(time_space)  # Pitch remains 0
+
         rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
         quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Converts to [q_x, q_y, q_z, q_w]
 
@@ -92,14 +108,9 @@ class Controller(Node):
         self.vz_traj = np.gradient(self.z_traj, self.dt)
 
         # Calculate desired angular velocities for the orientation trajectory
-        yaw_rate_hover = np.zeros(hover_steps)
-        yaw_rate_transition = np.gradient(yaw_transition, self.dt)
-        yaw_rate_circle = np.gradient(yaw_circle, self.dt)
-        yaw_rate_traj = np.concatenate((yaw_rate_hover, yaw_rate_transition, yaw_rate_circle))
-
-        self.ax_traj = np.zeros_like(yaw_rate_traj)  # Roll rate remains 0
-        self.ay_traj = np.zeros_like(yaw_rate_traj)  # Pitch rate remains 0
-        self.az_traj = yaw_rate_traj  # Yaw rate trajectory
+        self.ax_traj = np.zeros_like(time_space)  # Roll rate remains 0
+        self.ay_traj = np.zeros_like(time_space)  # Pitch rate remains 0
+        self.az_traj = np.zeros_like(time_space)  # Yaw rate trajectory
 
         self.gui = GUI(self)
         self.armed = False
@@ -146,6 +157,10 @@ class Controller(Node):
         linear_velocity = msg.twist.linear
         angular_velocity = msg.twist.angular
 
+        print(f"Current time: {time.time_ns()}")
+        print(f"Recorded time: {msg.header.stamp.sec * 1e9 + msg.header.stamp.nanosec}")
+        print(f"Time difference: {(time.time_ns() - (msg.header.stamp.sec * 1e9 + msg.header.stamp.nanosec)) / 1e6} ms")
+
         self.current_pose = np.array([position.x, position.y, position.z,
                                       orientation.w, orientation.x, orientation.y, orientation.z,
                                       linear_velocity.x, linear_velocity.y, linear_velocity.z,
@@ -162,7 +177,7 @@ class Controller(Node):
         if self.armed and self.current_pose is not None:
 
 
-            N = 120
+            N = 60
 
             skip_steps = 1
             for j in range(N):
@@ -211,11 +226,6 @@ class Controller(Node):
             print(f"Step: {self.step_counter}, Control: {u}")
             
             # Store current state and control for next step prediction
-            self.last_state = self.current_pose.copy()
-            self.last_control = u.copy()
-
-            self.step_counter += 1
-
             if self.step_counter > 0 and hasattr(self, 'last_state') and hasattr(self, 'last_control'):
                 # Integrate the previous state with the last control inputs to predict current state
 
@@ -245,6 +255,12 @@ class Controller(Node):
                     self.vx_traj[self.step_counter], self.vy_traj[self.step_counter], self.vz_traj[self.step_counter],
                     self.ax_traj[self.step_counter], self.ay_traj[self.step_counter], self.az_traj[self.step_counter],
                 ])
+
+            self.last_state = self.current_pose.copy()
+            self.last_control = u.copy()
+
+            self.step_counter += 1
+
 
         else:
             self.step_counter = 0
