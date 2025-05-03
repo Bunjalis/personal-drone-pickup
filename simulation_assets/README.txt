@@ -18,3 +18,6 @@ ros2 run ros_ign_bridge parameter_bridge /X3/gazebo/command/motor_speed@actuator
 ### Simulation interfaces 
 ros2 run simulation_communication ELRS_pass_through 
 ros2 run simulation_communication motion_capture_emulator
+
+
+ros2 launch simulation_communication simulation_launch.py 

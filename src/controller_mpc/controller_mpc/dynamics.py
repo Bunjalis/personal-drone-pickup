@@ -41,9 +41,9 @@ class QuadDynamics:
         self.x_l = 0.054
         self.y_l = 0.046
         self.J = np.array([.03, .03, .06])
-        self.motor_constant = 8.326e-07
+        self.motor_constant = 1.326e-07
         self.moment_constant = 0.016
-        self.max_speed = 6070  # rad/s
+        self.max_speed = 6000  # rad/s
         #'''
         
 

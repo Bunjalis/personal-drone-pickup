@@ -37,10 +37,10 @@ def generate_ocp_controller():
     nu = 4   # Number of inputs
     ny = nx + nu  # Number of outputs + inputs
 
-    ocp.cost.cost_type = 'NONLINEAR_LS'
-    ocp.cost.cost_type_e = 'NONLINEAR_LS'
+    ocp.cost.cost_type = 'LINEAR_LS'
+    ocp.cost.cost_type_e = 'LINEAR_LS'
 
-    Q_mat = 2 * np.diag([8, 8, 10, 8, 8, 8, 8, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0])
+    Q_mat = 2 * np.diag([10, 10, 10, 8, 8, 8, 8, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0])
     R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
 
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)

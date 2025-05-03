@@ -3,7 +3,10 @@ import pandas as pd
 import numpy as np
 
 # Load the CSV file
-data = pd.read_csv('30Hz_test_5.csv')
+data = pd.read_csv('state_errors.csv')
+
+# Drop the last 3 data points from the dataset
+#data = data[:-50]
 
 # Extract the measured angular velocity columns
 actual_angular_velocity_x = data['Actual_Angular_Velocity_X']
@@ -54,7 +57,7 @@ delta_actual_angular_velocity_z = data['Actual_Angular_Velocity_Z'] - data['Last
 
 
 # Create a figure with four subplots
-fig, axs = plt.subplots(4, 1, figsize=(10, 24))
+fig, axs = plt.subplots(3, 1, figsize=(12, 6))
 
 # Plot the control variables on the first subplot
 axs[0].plot(steps, control_0, label='Control 0', color='r')
@@ -66,6 +69,7 @@ axs[0].set_xlabel('Step')
 axs[0].set_ylabel('Control Value')
 axs[0].legend()
 axs[0].grid(True)
+
 
 # Plot the XYZ pose of the drone and RPY on the second subplot
 axs[1].plot(steps, actual_position_x, label='Position X', color='r')
@@ -80,6 +84,7 @@ axs[1].set_ylabel('Position (m) / Orientation (rad)')
 axs[1].legend()
 axs[1].grid(True)
 
+
 # Plot the measured angular velocity on the third subplot
 axs[2].plot(steps, actual_angular_velocity_x, label='Angular Velocity X', color='r')
 axs[2].plot(steps, actual_angular_velocity_y, label='Angular Velocity Y', color='g')
@@ -90,6 +95,7 @@ axs[2].set_ylabel('Angular Velocity (rad/s)')
 axs[2].legend()
 axs[2].grid(True)
 
+'''
 # Plot the delta predicted and actual angular velocity on the fourth subplot
 axs[3].plot(steps, delta_predicted_angular_velocity_x, label='Delta Predicted Angular Velocity X', linestyle='--', color='r')
 axs[3].plot(steps, delta_predicted_angular_velocity_y, label='Delta Predicted Angular Velocity Y', linestyle='--', color='g')
@@ -102,6 +108,7 @@ axs[3].set_xlabel('Step')
 axs[3].set_ylabel('Delta Angular Velocity (rad/s)')
 axs[3].legend()
 axs[3].grid(True)
+'''
 
 # Iterate through the data and print the required information
 for index, row in data.iterrows():

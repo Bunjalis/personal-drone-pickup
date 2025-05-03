@@ -80,7 +80,7 @@
       <uri>
         modelTinyTrainer.sdf
       </uri>
-      <pose>0 0 0 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
+      <pose>0.1 0 0 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
       <plugin
         filename="ignition-gazebo-multicopter-motor-model-system"
         name="gz::sim::systems::MulticopterMotorModel">
@@ -88,15 +88,15 @@
         <jointName>X3/rotor_0_joint</jointName>
         <linkName>X3/rotor_0</linkName>
         <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <timeConstantUp>0.01</timeConstantUp>
+        <timeConstantDown>0.01</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>1.326e-07</motorConstant>
         <momentConstant>0.016</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>0</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>
-        <rollingMomentCoefficient>0</rollingMomentCoefficient>
+        <rollingMomentCoefficient>0.0</rollingMomentCoefficient>
         <motorSpeedPubTopic>motor_speed/0</motorSpeedPubTopic>
         <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
         <motorType>velocity</motorType>
@@ -108,8 +108,8 @@
         <jointName>X3/rotor_1_joint</jointName>
         <linkName>X3/rotor_1</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <timeConstantUp>0.01</timeConstantUp>
+        <timeConstantDown>0.01</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>1.326e-07</motorConstant>
         <momentConstant>0.016</momentConstant>
@@ -128,8 +128,8 @@
         <jointName>X3/rotor_2_joint</jointName>
         <linkName>X3/rotor_2</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <timeConstantUp>0.01</timeConstantUp>
+        <timeConstantDown>0.01</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>1.326e-07</motorConstant>
         <momentConstant>0.016</momentConstant>
@@ -148,8 +148,8 @@
         <jointName>X3/rotor_3_joint</jointName>
         <linkName>X3/rotor_3</linkName>
         <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <timeConstantUp>0.01</timeConstantUp>
+        <timeConstantDown>0.01</timeConstantDown>
         <maxRotVelocity>6000.0</maxRotVelocity>
         <motorConstant>1.326e-07</motorConstant>
         <momentConstant>0.016</momentConstant>

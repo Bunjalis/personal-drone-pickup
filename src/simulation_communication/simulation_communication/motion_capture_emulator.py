@@ -29,6 +29,8 @@ class PentaVerify(Node):
         self.last_pose = None
         self.last_orientation = None
         self.last_time = None
+
+        self.databuffer = []
         
     def normalize_quaternion_positive_w(self, x, y, z, w):
         """Normalize quaternion and ensure w is positive."""
@@ -126,7 +128,17 @@ class PentaVerify(Node):
 
         self.pose_publisher.publish(pose_for_rviz)
 
-        self.publisher.publish(mcs)
+        simulate_delay = False  # Set to True to simulate delay
+        if simulate_delay == True:
+
+            self.databuffer.append(mcs)
+            if len(self.databuffer) > 5 :
+                mcs = self.databuffer.pop(0)
+                self.publisher.publish(mcs)
+        else:
+            self.publisher.publish(mcs)
+
+        
 
         print("END")
 

@@ -218,10 +218,10 @@ class Controller(Node):
 
             u = self.ocp.get(0, "u")
             msg.armed = True
-            msg.channel_0 = u[0]
-            msg.channel_1 = u[1]
-            msg.channel_2 = u[2]
-            msg.channel_3 = u[3]
+            msg.channel_0 = round(u[0],3)
+            msg.channel_1 = round(u[1],3)
+            msg.channel_2 = round(u[2],3)
+            msg.channel_3 = round(u[3],3)
 
             print(f"Step: {self.step_counter}, Control: {u}")
             
