@@ -95,8 +95,7 @@ import serial.tools.list_ports  # Import to list available serial ports
 class ELRSInterface(Node):
     def __init__(self):
         super().__init__('elrs_interface')
-        dt = 1 / 333
-        print("dt: ", dt)
+        dt = 1 / 100
         self.timer = self.create_timer(dt, self.publish_message)
         self.telemetry_timer = self.create_timer(0.1, self.publish_telemetry)  # Timer for 10Hz publishing
         self.get_logger().info('ELRS Interface Node has started.')
@@ -117,9 +116,21 @@ class ELRSInterface(Node):
         self.mode = "UNKNOWN"
 
         self.telemetry_publisher = self.create_publisher(Telemetry, 'telemetry', 10)  # Telemetry publisher
-        self.subscription_floats = self.create_subscription(ELRSCommand, 'ELRSCommand', self.controller_commands_callback, 10)
+
+        from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=1
+        )
+        self.subscription_floats = self.create_subscription(
+            ELRSCommand, 'ELRSCommand', self.controller_commands_callback, qos_profile
+        )
 
         self.last_message_time = time.time()  # Initialize the last message timestamp
+
+        self.last_elrs_command_time_published = time.time()  # Initialize the last command timestamp
 
     def connect_serial(self):
         while self.ser is None:
@@ -127,7 +138,7 @@ class ELRSInterface(Node):
                 ports = serial.tools.list_ports.comports()
                 for port in ports:
                     if '/dev/ttyUSB' in port.device:  # Check for USB serial devices
-                        self.ser = serial.Serial(port.device, 921600, timeout=2)
+                        self.ser = serial.Serial(port.device, 921600, timeout=0.1)  # Reduced timeout
                         self.get_logger().info(f'Serial port {port.device} connected.')
                         return
                 self.get_logger().warn('No suitable serial port found. Retrying...')
@@ -225,7 +236,7 @@ class ELRSInterface(Node):
 
     def publish_message(self):
         # Check if no message has been received for 0.1 seconds
-        if time.time() - self.last_message_time > 0.1:
+        if time.time() - self.last_message_time > 0.5:
             if self.armed:  # Only log and disarm if currently armed
                 self.get_logger().warn("No message received for 0.1 seconds. Disarming motors.")
             self.armed = False
@@ -236,7 +247,14 @@ class ELRSInterface(Node):
             if self.ser and self.ser.in_waiting > 0:
                 self.input.extend(self.ser.read(self.ser.in_waiting))
             elif self.ser:
+                start_time = time.time()  # Start timing the write operation
                 self.ser.write(channelsCrsfToChannelsPacket(self.packet))
+                #self.ser.flush()  # Ensure data is sent immediately
+                elapsed_time = time.time() - start_time
+                self.get_logger().info(f"Serial write took {elapsed_time:.6f} seconds.")
+
+                time_now = time.time()
+                self.last_elrs_command_time_published = time_now
 
             while len(self.input) > 2:
                 expected_len = self.input[1] + 2

@@ -2,15 +2,23 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
+
+
+#
 def plot_thrust_stand_data():
     # Load the CSV data
-    data = pd.read_csv('thrust_stand_data.csv')
+    data = pd.read_csv('thrust_data_ramp.csv')
+    data['Thrust'] = data['Thrust'] * 9.80665
+
 
     # Group by throttle and calculate the average thrust
     grouped_data = data.groupby('Throttle', as_index=False).mean()
 
     # Filter data up to throttle 0.8 for quadratic fitting
     filtered_data = grouped_data[grouped_data['Throttle'] <= 0.8]
+
+    # Convert thrust from kilograms to newtons
+    
 
     # Perform quadratic fitting
     coefficients = np.polyfit(filtered_data['Throttle'], filtered_data['Thrust'], 2)
@@ -29,8 +37,8 @@ def plot_thrust_stand_data():
     plt.plot(grouped_data['Throttle'], grouped_data['Thrust'], marker='o', label='Thrust vs Throttle')
     plt.plot(throttle_fit, thrust_fit, color='red', label='Model Fit')
     plt.plot(additional_throttle_fit, additional_thrust_fit, color='blue', linestyle='--', label='(x*6000)^2 * 1.326e-07')
-    plt.xlabel('Throttle')
-    plt.ylabel('Thrust')
+    plt.xlabel('Throttle Input %')
+    plt.ylabel('Thrust(N)')
     plt.title('Thrust vs Throttle')
     plt.grid(True)
     plt.legend()
