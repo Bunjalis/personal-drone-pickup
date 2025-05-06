@@ -19,9 +19,11 @@ import matplotlib.ticker as ticker
 # thrust_data_step_10 changed ardupilot output from 50Hz to 400Hz - prop
 # thrust_data_step_11 switched to betaflight - prop
 # thrust_data_step_12 Back to ardupilot but with 100Hz full instead of 333Hz full - prop
+# thrust_data_step_13 Arduino thrust control with PWM
+# thrust_data_step_14 Arduino thrust control with PWM with 20% instead of 10% throttle
 
 
-filename = 'thrust_data_step_12.csv'
+filename = 'thrust_data_step_14.csv'
 # Load the thrust data CSV file
 data_thrust = pd.read_csv(filename, names=['Throttle', 'Thrust'])
 
@@ -33,6 +35,10 @@ if filename == 'thrust_data_step_11.csv':
     print("Data for thrust_data_step_11.csv loaded.")
     scaled_throttle = np.zeros_like(data_thrust['Throttle'])
     scaled_throttle = np.where(data_thrust['Throttle'] == -1.0, 0.007, np.where(data_thrust['Throttle'] == -0.8, 0.007, np.where(data_thrust['Throttle'] == -0.4, 0.09, scaled_throttle)))
+elif filename == 'thrust_data_step_14.csv':
+    print("Data for thrust_data_step_14.csv loaded.")
+    scaled_throttle = np.zeros_like(data_thrust['Throttle'])
+    scaled_throttle = np.where(data_thrust['Throttle'] == 0.0, 0.0, np.where(data_thrust['Throttle'] == 0.2, 0.0512, np.where(data_thrust['Throttle'] == 0.5, 0.109, scaled_throttle)))
 
 else:
     scaled_throttle = np.where(data_thrust['Throttle'] == 0, 0, (data_thrust['Throttle'] - 0.1) / (0.5 - 0.1) * (0.12415 - 0.0075) + 0.0075)
