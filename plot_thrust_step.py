@@ -21,9 +21,12 @@ import matplotlib.ticker as ticker
 # thrust_data_step_12 Back to ardupilot but with 100Hz full instead of 333Hz full - prop
 # thrust_data_step_13 Arduino thrust control with PWM
 # thrust_data_step_14 Arduino thrust control with PWM with 20% instead of 10% throttle
+# thrust_data_step_15 3D prop with 3s
+# thrust_data_step_16 3D prop with 4s
+# thrust_data_step_17 3D prop with 6s
+# thrust_data_step_18 3D prop with 6s including rotating change
 
-
-filename = 'thrust_data_step_14.csv'
+filename = 'thrust_data_step_17.csv'
 # Load the thrust data CSV file
 data_thrust = pd.read_csv(filename, names=['Throttle', 'Thrust'])
 
@@ -39,7 +42,32 @@ elif filename == 'thrust_data_step_14.csv':
     print("Data for thrust_data_step_14.csv loaded.")
     scaled_throttle = np.zeros_like(data_thrust['Throttle'])
     scaled_throttle = np.where(data_thrust['Throttle'] == 0.0, 0.0, np.where(data_thrust['Throttle'] == 0.2, 0.0512, np.where(data_thrust['Throttle'] == 0.5, 0.109, scaled_throttle)))
+elif filename == 'thrust_data_step_15.csv':
+    print("Data for thrust_data_step_15.csv loaded.")
+    scaled_throttle = np.zeros_like(data_thrust['Throttle'])
 
+    scaled_throttle = np.where(data_thrust['Throttle'] == 0.0, 0.0, 
+                        np.where(data_thrust['Throttle'] == 0.1, -0.0135, 
+                        np.where(data_thrust['Throttle'] == 0.2, -0.0435,
+                        np.where(data_thrust['Throttle'] == -0.1, 0.0135,
+                        np.where(data_thrust['Throttle'] == -0.2, 0.0435, scaled_throttle)))))
+
+elif filename == 'thrust_data_step_16.csv':
+    scaled_throttle = np.zeros_like(data_thrust['Throttle'])
+    scaled_throttle = np.where(data_thrust['Throttle'] == 0.0, 0.0, 
+                        np.where(data_thrust['Throttle'] == 0.1, -0.0235, 
+                        np.where(data_thrust['Throttle'] == 0.2, -0.0740,
+                        np.where(data_thrust['Throttle'] == -0.1, 0.0235,
+                        np.where(data_thrust['Throttle'] == -0.2, 0.0740, scaled_throttle)))))
+    
+elif filename == 'thrust_data_step_17.csv' or filename == 'thrust_data_step_18.csv':
+    scaled_throttle = np.zeros_like(data_thrust['Throttle'])
+    scaled_throttle = np.where(data_thrust['Throttle'] == 0.0, 0.0, 
+                        np.where(data_thrust['Throttle'] == 0.1, -0.0525, 
+                        np.where(data_thrust['Throttle'] == 0.2, -0.1560,
+                        np.where(data_thrust['Throttle'] == -0.1, 0.0525,
+                        np.where(data_thrust['Throttle'] == -0.2, 0.1560, scaled_throttle)))))
+    
 else:
     scaled_throttle = np.where(data_thrust['Throttle'] == 0, 0, (data_thrust['Throttle'] - 0.1) / (0.5 - 0.1) * (0.12415 - 0.0075) + 0.0075)
 

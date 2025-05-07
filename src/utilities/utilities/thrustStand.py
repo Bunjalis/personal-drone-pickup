@@ -40,7 +40,7 @@ class SerialSubscriberNode(Node):
         self.csv_writer = csv.writer(self.csv_file)
         self.csv_writer.writerow(['Throttle', 'Thrust'])
 
-        self.step_input_values = [0.1, 0.3, 0.0] 
+        self.step_input_values = [0.1, 0.2, 0.0, -0.1, -0.2, 0.0, 0.2, -0.2, 0.0] 
         self.step_iteration = 0
 
     def read_serial_data(self):
