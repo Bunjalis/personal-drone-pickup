@@ -27,8 +27,9 @@ class SerialSubscriberNode(Node):
         self.cmd_publisher_ = self.create_publisher(ELRSCommand, '/ELRSCommand', qos_profile)
 
         # Timer to periodically read from the serial port
-        self.timer = self.create_timer(0.001, self.read_serial_data)
+        self.timer = self.create_timer(0.01, self.read_serial_data)
         self.sequence_timer = self.create_timer(1.0, self.run_float_sequence)
+        self.ramp_timer = self.create_timer(1/30, self.run_ramp_sequence)
         self.throttle_value = 0.0
 
         # Subscriber for activating float sequence
@@ -40,8 +41,10 @@ class SerialSubscriberNode(Node):
         self.csv_writer = csv.writer(self.csv_file)
         self.csv_writer.writerow(['Throttle', 'Thrust'])
 
-        self.step_input_values = [0.1, 0.2, 0.0, -0.1, -0.2, 0.0, 0.2, -0.2, 0.0] 
+        self.step_input_values = [0.1, 0.2, 0.3, 0.4, 0.5, 0.1, 0.5, 0.1, 0.4, 0.1, 0.3, 0.2, 0.1]
+        self.ramp_mode = False  # New flag to toggle ramp mode
         self.step_iteration = 0
+        self.ramp_sample_count = 0
 
     def read_serial_data(self):
         msg = ELRSCommand()
@@ -51,19 +54,11 @@ class SerialSubscriberNode(Node):
         msg.channel_2 = 0.0
         msg.channel_3 = 0.0
 
-        if self.data_collection_activated:
-            msg.armed = True
-            msg.channel_1 = self.throttle_value
 
-        self.cmd_publisher_.publish(msg)
 
         try:
             if self.serial_port.in_waiting > 0:
-                start_time = time.time()  # Start timing the read operation
                 line = self.serial_port.readline().decode('utf-8').strip()
-                elapsed_time = time.time() - start_time
-                self.get_logger().info(f"Serial read took {elapsed_time:.6f} seconds.")
-
                 value = float(line)
                 print(f"Throttle: {self.throttle_value}, Thrust: {value}")
 
@@ -78,11 +73,30 @@ class SerialSubscriberNode(Node):
         except Exception as e:
             self.get_logger().error(f'Error reading from serial port: {e}')
 
+
+        if self.data_collection_activated:
+            msg.armed = True
+            msg.channel_1 = self.throttle_value
+
+        self.cmd_publisher_.publish(msg)
+
     def activate_float_sequence_callback(self, msg):
         if msg.data.lower() == 'start' and not self.data_collection_activated:
             self.data_collection_activated = True
             self.sequence_timer.cancel()
             self.sequence_timer.reset()
+            self.ramp_timer.cancel()
+            self.step_iteration = 0
+            self.get_logger().info('Float sequence activated.')
+            self.throttle_value = 0.0
+        elif msg.data.lower() == 'ramp':
+
+            self.ramp_mode = True
+            self.get_logger().info('Ramp mode activated.')
+            self.data_collection_activated = True
+            self.ramp_timer.cancel()
+            self.ramp_timer.reset()
+            self.sequence_timer.cancel()
             self.step_iteration = 0
             self.get_logger().info('Float sequence activated.')
             self.throttle_value = 0.0
@@ -91,40 +105,55 @@ class SerialSubscriberNode(Node):
             self.data_collection_activated = False
             if self.sequence_timer:
                 self.sequence_timer.cancel()
+            
+            if self.ramp_timer:
+                self.ramp_timer.cancel()
             # Close the CSV file when data collection ends
             self.csv_file.close()
             self.get_logger().info('CSV file saved.')
+
+    def run_ramp_sequence(self):
+        if not self.data_collection_activated:
+            return
+
+        if self.step_iteration >= len(self.step_input_values) - 1:
+            self.step_iteration = 0
+            self.get_logger().info('Ramp sequence completed. Reset to 0.')
+            self.ramp_timer.cancel()
+            self.data_collection_activated = False
+            self.csv_file.close()
+            self.get_logger().info('CSV file saved.')
+            self.throttle_value = 0.0
+            return
+
+        start_value = self.step_input_values[self.step_iteration]
+        end_value = self.step_input_values[self.step_iteration + 1]
+        step_size = (end_value - start_value) / 30  # 30 samples for 1 second ramp
+
+
+        self.throttle_value = start_value + step_size * self.ramp_sample_count
+        self.ramp_sample_count += 1
+
+        if self.ramp_sample_count >= 30:
+            self.step_iteration += 1
+            self.ramp_sample_count = 0
 
     def run_float_sequence(self):
         if not self.data_collection_activated:
             return
 
-        mode = "Step input"
-        if mode == "Step input":
+        if self.step_iteration >= len(self.step_input_values):
+            self.step_iteration = 0
+            self.get_logger().info('Step sequence completed. Reset to 0.')
+            self.sequence_timer.cancel()
+            self.data_collection_activated = False
+            self.csv_file.close()
+            self.get_logger().info('CSV file saved.')
+            self.throttle_value = 0.0
+            return
 
-            if self.step_iteration >= len(self.step_input_values):
-                self.step_iteration = 0
-                self.get_logger().info('Sequence completed. Reset to 0.')
-                self.sequence_timer.cancel()
-                self.data_collection_activated = False
-                # Close the CSV file when data collection ends
-                self.csv_file.close()
-                self.get_logger().info('CSV file saved.')
-                self.throttle_value = 0.0
-                return
-
-            self.throttle_value = self.step_input_values[self.step_iteration]
-            self.step_iteration += 1
-
-        else:
-            self.throttle_value += 0.05
-            if self.throttle_value > 1.01:
-                self.get_logger().info('Sequence completed. Reset to 0.')
-                self.sequence_timer.cancel()
-                self.data_collection_activated = False
-                # Close the CSV file when data collection ends
-                self.csv_file.close()
-                self.get_logger().info('CSV file saved.')
+        self.throttle_value = self.step_input_values[self.step_iteration]
+        self.step_iteration += 1
 
     def destroy_node(self):
         # Close the CSV file when the node is destroyed

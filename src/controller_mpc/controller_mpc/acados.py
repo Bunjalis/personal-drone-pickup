@@ -32,19 +32,39 @@ def generate_ocp_controller():
     ocp.solver_options.N_horizon = 60
     ocp.solver_options.tf = 2.0
 
-    # Define the cost function
-    nx = 13  # Updated number of states
-    nu = 4   # Number of inputs
+    # Define the number of inputs (nu) before using it
+    nu = 4  # Number of control inputs (throttle for 4 motors)
+
+    # Update the state vector to include omega_est (estimated motor speeds)
+    nx = 17  # Updated number of states to include motor speeds
+    model.x = optimizer.x  # Full state vector including omega_est
+
+    # Update the cost function dimensions
     ny = nx + nu  # Number of outputs + inputs
+
+    # Update the cost matrices to match the new state dimension
+
+    Q_mat = 2 * np.diag([10, 10, 10, 8, 8, 8, 8, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0])
+    R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
+    ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
+    ocp.cost.W_e = Q_mat[:nx, :nx]  # Terminal cost only considers the state
+
+    # Update the cost expressions to include omega_est
+    ocp.model.cost_y_expr = ca.vertcat(model.x, model.u)
+    ocp.model.cost_y_expr_e = model.x
+
+    # Update the initial condition to include omega_est
+    x0 = np.zeros(nx)
+    x0[3] = 1  # Initial orientation
+    ocp.constraints.x0 = x0
+
+    # Ensure omega_est is passed back into the system
+    # This is handled implicitly by including omega_est in the state vector and dynamics.
 
     ocp.cost.cost_type = 'LINEAR_LS'
     ocp.cost.cost_type_e = 'LINEAR_LS'
 
-    Q_mat = 2 * np.diag([10, 10, 10, 8, 8, 8, 8, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0])
-    R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
 
-    ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
-    ocp.cost.W_e = Q_mat
 
     ocp.cost.Vx = np.zeros((ny, nx))
     ocp.cost.Vx[:nx, :nx] = 1 * np.eye(nx)
@@ -52,8 +72,6 @@ def generate_ocp_controller():
     ocp.cost.Vu[-4:, -4:] = 1 * np.eye(nu)
     ocp.cost.Vx_e = np.eye(nx)
 
-    ocp.model.cost_y_expr = ca.vertcat(model.x, model.u)
-    ocp.model.cost_y_expr_e = model.x
     ocp.cost.yref = np.zeros((nx + nu, ))
     ocp.cost.yref_e = np.zeros((nx, ))
     ocp.cost.yref[3] = 1

@@ -25,6 +25,8 @@ import matplotlib.ticker as ticker
 # thrust_data_step_16 3D prop with 4s
 # thrust_data_step_17 3D prop with 6s
 # thrust_data_step_18 3D prop with 6s including rotating change
+# thrust_data_step_19 3" prop with lots of step changes for first order model identification 
+
 
 filename = 'thrust_data_step_17.csv'
 # Load the thrust data CSV file

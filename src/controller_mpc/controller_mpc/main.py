@@ -31,64 +31,15 @@ class Controller(Node):
         self.ocp, self.sim_integrator = generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
+        # Original trajectories
+        # self.x_traj = np.zeros_like(time_space)
+        # self.y_traj = np.zeros_like(time_space)
+        # self.z_traj = 1.5 * np.ones_like(time_space)
 
-
-
-        '''
-        # Generate a circular trajectory around (0, 0) with a radius of 2m and a speed of 1 rad/s
-        radius = 2.0
-        angular_speed = np.pi * 2/3  # rad/s
-        height = 1.5
-
-        # Generate a trajectory with hover, transition, and circular motion
-        hover_time = 5.0  # seconds
-        transition_time = 5.0  # seconds
-        circle_time = self.steps * self.dt - hover_time - transition_time
-
-        hover_steps = int(hover_time / self.dt)
-        transition_steps = int(transition_time / self.dt)
-        circle_steps = self.steps - hover_steps - transition_steps
-
-        # Hover at (0, 0, height)
-        hover_x = np.zeros(hover_steps)
-        hover_y = np.zeros(hover_steps)
-        hover_z = height * np.ones(hover_steps)
-
-        # Transition to the start of the circle
-        transition_x = np.linspace(0, radius, transition_steps)
-        transition_y = np.zeros(transition_steps)
-        transition_z = height * np.ones(transition_steps)
-
-        # Circular trajectory
-        time_space_circle = np.linspace(0, circle_time, circle_steps)
-        circle_x = radius * np.cos(angular_speed * time_space_circle)
-        circle_y = radius * np.sin(angular_speed * time_space_circle)
-        circle_z = height * np.ones(circle_steps)
-
-        # Combine trajectories
-        self.x_traj = np.concatenate((hover_x, transition_x, circle_x))
-        self.y_traj = np.concatenate((hover_y, transition_y, circle_y))
-        self.z_traj = np.concatenate((hover_z, transition_z, circle_z))
-
-        # Define yaw trajectory to always face the center (0, 0)
-        yaw_hover = np.zeros(hover_steps)
-        yaw_transition = np.zeros(transition_steps)
-        #yaw_circle = np.arctan2(-circle_y, -circle_x)
-        yaw_circle = np.zeros(circle_steps)  # Keep yaw constant during the circle
-        yaw_traj = np.concatenate((yaw_hover, yaw_transition, yaw_circle))
-
-        roll_traj = np.zeros_like(self.x_traj)  # Roll remains 0
-        pitch_traj = np.zeros_like(self.x_traj)  # Pitch remains 0
-
-        # Convert RPY to quaternions
-        
-
-        '''
-
-
-        self.x_traj = np.zeros_like(time_space)
-        self.y_traj = np.zeros_like(time_space)
-        self.z_traj = 1.5 * np.ones_like(time_space)
+        # New oscillating trajectories
+        self.x_traj = 0.5 * np.sin(2 * np.pi * 0.1 * time_space)  # Sine wave with frequency 0.1 Hz
+        self.y_traj = 0.5 * np.sin(2 * np.pi * 0.2 * time_space)  # Sine wave with frequency 0.2 Hz
+        self.z_traj = 1.5 + 0.5 * np.sin(2 * np.pi * 0.05 * time_space)  # Sine wave with frequency 0.05 Hz
 
         roll_traj = np.zeros_like(time_space)  # Roll remains 0
         pitch_traj = np.zeros_like(time_space)  # Pitch remains 0
@@ -156,11 +107,6 @@ class Controller(Node):
         orientation = msg.pose.orientation
         linear_velocity = msg.twist.linear
         angular_velocity = msg.twist.angular
-
-        print(f"Current time: {time.time_ns()}")
-        print(f"Recorded time: {msg.header.stamp.sec * 1e9 + msg.header.stamp.nanosec}")
-        print(f"Time difference: {(time.time_ns() - (msg.header.stamp.sec * 1e9 + msg.header.stamp.nanosec)) / 1e6} ms")
-
         self.current_pose = np.array([position.x, position.y, position.z,
                                       orientation.w, orientation.x, orientation.y, orientation.z,
                                       linear_velocity.x, linear_velocity.y, linear_velocity.z,
@@ -188,9 +134,10 @@ class Controller(Node):
                                      self.qz_traj[self.step_counter + j*skip_steps], 
                                      self.vx_traj[self.step_counter + j*skip_steps], self.vy_traj[self.step_counter + j*skip_steps], self.vz_traj[self.step_counter + j*skip_steps], 
                                      self.ax_traj[self.step_counter + j*skip_steps], self.ay_traj[self.step_counter + j*skip_steps], self.az_traj[self.step_counter + j*skip_steps], 
+                                     0.0, 0.0, 0.0, 0.0,
                                      0.3, 0.3, 0.3, 0.3])
                 else:
-                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0, 0.3, 0.3, 0.3, 0.3])
+                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 0.3])
                 self.ocp.set(j, "yref", yref)
 
             yref_N = np.array([self.x_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
@@ -205,28 +152,55 @@ class Controller(Node):
                                     self.vz_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
                                     self.ax_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
                                     self.ay_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
-                                    self.az_traj[min(self.step_counter + N*skip_steps, self.steps - 1)] ])
+                                    self.az_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
+                                    0.0, 0.0, 0.0, 0.0 ])
 
             self.ocp.set(N, "yref", yref_N)
-            self.ocp.set(0, "lbx", self.current_pose)
-            self.ocp.set(0, "ubx", self.current_pose)
 
+            # Modify the state vector to include estimated motor speeds (omega_est)
+            if not hasattr(self, 'omega_est'):
+                self.omega_est = np.zeros(4)  # Initialize omega_est if not already present
+
+            # Update the state vector to include omega_est
+            current_state_with_omega = np.concatenate((self.current_pose, self.omega_est))
+
+            # Pass the updated state vector to the OCP solver
+            self.ocp.set(0, "lbx", current_state_with_omega)
+            self.ocp.set(0, "ubx", current_state_with_omega)
+
+            # Solve the OCP
             status = self.ocp.solve()
             if status != 0:
                 raise Exception(f'acados returned status {status}.')
 
-
+            # Retrieve the control inputs
             u = self.ocp.get(0, "u")
             msg.armed = True
-            msg.channel_0 = round(u[0],3)
-            msg.channel_1 = round(u[1],3)
-            msg.channel_2 = round(u[2],3)
-            msg.channel_3 = round(u[3],3)
+            msg.channel_0 = round(u[0], 3)
+            msg.channel_1 = round(u[1], 3)
+            msg.channel_2 = round(u[2], 3)
+            msg.channel_3 = round(u[3], 3)
 
-            print(f"Step: {self.step_counter}, Control: {u}")
-            
+            # Update omega_est using the motor dynamics
+            self.sim_integrator.set("x", current_state_with_omega)
+            self.sim_integrator.set("u", u)
+            status = self.sim_integrator.solve()
+            if status != 0:
+                raise Exception(f'acados integrator returned status {status}.')
+
+            # Extract the updated omega_est from the integrator's state
+            updated_state = self.sim_integrator.get("x")
+            self.omega_est = updated_state[-4:]  # Extract the last 4 elements as omega_est
+
+
+            print(f"U = {np.round(u, 3)} omega_est = {np.round(self.omega_est, 3)}")
+
+            # Store the current state and control for the next step
+            self.last_state = current_state_with_omega.copy()
+            self.last_control = u.copy()
+
             # Store current state and control for next step prediction
-            if self.step_counter > 0 and hasattr(self, 'last_state') and hasattr(self, 'last_control'):
+            if self.step_counter > 0 and self.step_counter < self.steps and hasattr(self, 'last_state') and hasattr(self, 'last_control'):
                 # Integrate the previous state with the last control inputs to predict current state
 
                 self.sim_integrator.set("x", self.last_state)
@@ -255,9 +229,6 @@ class Controller(Node):
                     self.vx_traj[self.step_counter], self.vy_traj[self.step_counter], self.vz_traj[self.step_counter],
                     self.ax_traj[self.step_counter], self.ay_traj[self.step_counter], self.az_traj[self.step_counter],
                 ])
-
-            self.last_state = self.current_pose.copy()
-            self.last_control = u.copy()
 
             self.step_counter += 1
 

@@ -16,8 +16,9 @@ class QuadDynamics:
         self.r = cs.MX.sym('r', 3)  # angular velocity
 
         # Update full state vector to include motor speeds
-        self.x = cs.vertcat(self.p, self.q, self.v, self.r)
-        self.state_dim = 13  # Updated state dimension
+        self.omega = cs.MX.sym('omega', 4)  # Motor speeds
+        self.x = cs.vertcat(self.p, self.q, self.v, self.r, self.omega)
+        self.state_dim = 17  # Updated state dimension to include motor speeds
 
         # Control input vector (throttle, roll, pitch, yaw)
         m1 = cs.MX.sym('m1') # back right, counter-clockwise
@@ -51,8 +52,9 @@ class QuadDynamics:
         self.y_f = np.array([self.x_l, -self.x_l, self.x_l, -self.x_l])
         self.z_l_tau = np.array([-1, 1, 1, -1])
 
-        
-
+        # Motor dynamics parameters
+        self.tau_motor = 0.114  # Time constant for motor dynamics
+        self.K_motor = 1.053    # Gain for motor dynamics
 
     def q_to_rot_mat(self, q):
         qw, qx, qy, qz = q[0], q[1], q[2], q[3]
@@ -91,8 +93,14 @@ class QuadDynamics:
             cs.horzcat(v[1], -v[2], 0, v[0]),
             cs.horzcat(v[2], v[1], -v[0], 0))
 
+    def motor_dynamics(self):
+        # Define the motor dynamics as a first-order system
+        omega_dot = (1 / self.tau_motor) * (-self.omega + self.K_motor * self.u)
+        return omega_dot
+
     def quad_dynamics(self):
-        x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(), self.v_dynamics(), self.w_dynamics())
+        # Include motor dynamics in the overall dynamics
+        x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(), self.v_dynamics(), self.w_dynamics(), self.motor_dynamics())
         return cs.Function('x_dot', [self.x, self.u], [x_dot], ['x', 'u'], ['x_dot'])
 
     def p_dynamics(self):
@@ -102,7 +110,8 @@ class QuadDynamics:
         return 1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
 
     def v_dynamics(self):
-        f_thrust = self.motor_constant * cs.power(self.u * self.max_speed, 2)  # Thrust for each motor using omega
+        # Update thrust model to use the new equation
+        f_thrust = 7.46e-08 * cs.power(self.omega * self.max_speed, 2) + 1.51e-04 * (self.omega * self.max_speed)
 
         # Gravity vector
         g = cs.vertcat(0.0, 0.0, 9.81)
@@ -116,8 +125,9 @@ class QuadDynamics:
         return v_dynamics
 
     def w_dynamics(self):
-        f_thrust = self.motor_constant * cs.power(self.u * self.max_speed, 2)  # Thrust for each motor using omega
-        tau_yaw = self.moment_constant * self.motor_constant * cs.power(self.u * self.max_speed, 2)  # Torque for each motor (yaw)
+        # Use motor speeds (omega) instead of control inputs (u) directly
+        f_thrust = 7.46e-08 * cs.power(self.omega * self.max_speed, 2) + 1.51e-04 * (self.omega * self.max_speed) # Thrust for each motor using omega
+        tau_yaw = self.moment_constant * f_thrust  # Torque for each motor (yaw)
 
         # Convert parameters to CasADi symbolic variables
         x_f = cs.MX(self.x_f)  # x-offsets of motors for roll dynamics
