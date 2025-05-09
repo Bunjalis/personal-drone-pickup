@@ -2,8 +2,27 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
+
+
+# 30Hz_test_6 - with new first order system for motors
+# 50Hz_test_7 - tried running controller at 50Hz
+# 50Hz_test_8 - started at zero and decreased mass and inertia
+# 50Hz_test_9 - incrased mass
+# 50Hz_test_10 - saved each nlmpc solved/planned trajectory at each step
+# 50Hz_test_11 - hoizon 1.0s
+# 50Hz_test_12 - horizon 0.5s
+# 50Hz_test_13 - horizon 2.0s
+# 15Hz_test_14 - horizon 2.0s 
+# 50Hz_test_15 - horizon 1.0 20 samples/nodes
+# 50Hz_test_16 - horizon 1.0 20 samples/nodes but in simulation 
+# 50Hz_test_17 - horizon 1.0 20 samples/nodes
+# 50Hz_test_18 - horizon 1.0 20 samples/nodes with inverted yaw
+# 50Hz_test_19 - horizon 1.0 20 samples/nodes full data collection incase simulation presents data differently
+# 50Hz_test_20 - horizon 1.0 20 samples/nodes full data collection incase simulation presents data differently but in simulation
+# 50Hz_test_21 - horizon 1.0 20 samples/nodes full data collection incase simulation presents data differently motion capture at 60Hz
+
 # Load the CSV file
-data = pd.read_csv('state_errors.csv')
+data = pd.read_csv('50Hz_test_21.csv')
 
 # Drop the last 3 data points from the dataset
 #data = data[:-50]
@@ -112,12 +131,67 @@ axs[3].grid(True)
 
 # Iterate through the data and print the required information
 for index, row in data.iterrows():
+    print("----------------------------------------------------")
     print(f"Step: {row['Step']}")
-    print(f"Control Actions: {row['Last_Control_0']}, {row['Last_Control_1']}, {row['Last_Control_2']}, {row['Last_Control_3']}")
-    print(f"Previous Angular Velocity: {row['Last_Angular_Velocity_X']}, {row['Last_Angular_Velocity_Y']}, {row['Last_Angular_Velocity_Z']}")
-    print(f"Predicted Angular Velocity: {row['Predicted_Angular_Velocity_X']}, {row['Predicted_Angular_Velocity_Y']}, {row['Predicted_Angular_Velocity_Z']}")
-    print(f"Actual Angular Velocity: {row['Actual_Angular_Velocity_X']}, {row['Actual_Angular_Velocity_Y']}, {row['Actual_Angular_Velocity_Z']}")
-    print("-")
+
+    print("Position")
+    print(f" - CTRL Act: {row['Last_Control_0']}, {row['Last_Control_1']}, {row['Last_Control_2']}, {row['Last_Control_3']}")
+    print(f" - Prev Pos: {row['Last_Position_X']}, {row['Last_Position_Y']}, {row['Last_Position_Z']}")
+    print(f" - Pred Pos: {row['Predicted_Position_X']}, {row['Predicted_Position_Y']}, {row['Predicted_Position_Z']}")
+    print(f" - Actu Pos: {row['Actual_Position_X']}, {row['Actual_Position_Y']}, {row['Actual_Position_Z']}")
+    position_error = [
+        row['Predicted_Position_X'] - row['Actual_Position_X'],
+        row['Predicted_Position_Y'] - row['Actual_Position_Y'],
+        row['Predicted_Position_Z'] - row['Actual_Position_Z']
+    ]
+    total_position_error = sum(abs(e) for e in position_error)
+    print(f" - Pos Error: {position_error[0]}, {position_error[1]}, {position_error[2]}")
+    print(f" - Total Pos Error: {total_position_error}")
+
+    print("Orientation")
+    print(f" - CTRL Act: {row['Last_Control_0']}, {row['Last_Control_1']}, {row['Last_Control_2']}, {row['Last_Control_3']}")
+    print(f" - Prev Ori: {row['Last_Orientation_W']}, {row['Last_Orientation_X']}, {row['Last_Orientation_Y']}, {row['Last_Orientation_Z']}")
+    print(f" - Pred Ori: {row['Predicted_Orientation_W']}, {row['Predicted_Orientation_X']}, {row['Predicted_Orientation_Y']}, {row['Predicted_Orientation_Z']}")
+    print(f" - Actu Ori: {row['Actual_Orientation_W']}, {row['Actual_Orientation_X']}, {row['Actual_Orientation_Y']}, {row['Actual_Orientation_Z']}")
+    orientation_error = [
+        row['Predicted_Orientation_W'] - row['Actual_Orientation_W'],
+        row['Predicted_Orientation_X'] - row['Actual_Orientation_X'],
+        row['Predicted_Orientation_Y'] - row['Actual_Orientation_Y'],
+        row['Predicted_Orientation_Z'] - row['Actual_Orientation_Z']
+    ]
+    total_orientation_error = sum(abs(e) for e in orientation_error)
+    print(f" - Ori Error: {orientation_error[0]}, {orientation_error[1]}, {orientation_error[2]}, {orientation_error[3]}")
+    print(f" - Total Ori Error: {total_orientation_error}")
+
+    print("Linear Velocity")
+    print(f" - CTRL Act: {row['Last_Control_0']}, {row['Last_Control_1']}, {row['Last_Control_2']}, {row['Last_Control_3']}")
+    print(f" - Prev L_V: {row['Last_Linear_Velocity_X']}, {row['Last_Linear_Velocity_Y']}, {row['Last_Linear_Velocity_Z']}")
+    print(f" - Pred L_V: {row['Predicted_Linear_Velocity_X']}, {row['Predicted_Linear_Velocity_Y']}, {row['Predicted_Linear_Velocity_Z']}")
+    print(f" - Actu L_V: {row['Actual_Linear_Velocity_X']}, {row['Actual_Linear_Velocity_Y']}, {row['Actual_Linear_Velocity_Z']}")
+    linear_velocity_error = [
+        row['Predicted_Linear_Velocity_X'] - row['Actual_Linear_Velocity_X'],
+        row['Predicted_Linear_Velocity_Y'] - row['Actual_Linear_Velocity_Y'],
+        row['Predicted_Linear_Velocity_Z'] - row['Actual_Linear_Velocity_Z']
+    ]
+    total_linear_velocity_error = sum(abs(e) for e in linear_velocity_error)
+    print(f" - L_V Error: {linear_velocity_error[0]}, {linear_velocity_error[1]}, {linear_velocity_error[2]}")
+    print(f" - Total L_V Error: {total_linear_velocity_error}")
+
+    print("Angular Velocity")
+    print(f" - CTRL Act: {row['Last_Control_0']}, {row['Last_Control_1']}, {row['Last_Control_2']}, {row['Last_Control_3']}")
+    print(f" - Prev w_V: {row['Last_Angular_Velocity_X']}, {row['Last_Angular_Velocity_Y']}, {row['Last_Angular_Velocity_Z']}")
+    print(f" - Pred w_V: {row['Predicted_Angular_Velocity_X']}, {row['Predicted_Angular_Velocity_Y']}, {row['Predicted_Angular_Velocity_Z']}")
+    print(f" - Actu w_V: {row['Actual_Angular_Velocity_X']}, {row['Actual_Angular_Velocity_Y']}, {row['Actual_Angular_Velocity_Z']}")
+    angular_velocity_error = [
+        row['Predicted_Angular_Velocity_X'] - row['Actual_Angular_Velocity_X'],
+        row['Predicted_Angular_Velocity_Y'] - row['Actual_Angular_Velocity_Y'],
+        row['Predicted_Angular_Velocity_Z'] - row['Actual_Angular_Velocity_Z']
+    ]
+    total_angular_velocity_error = sum(abs(e) for e in angular_velocity_error)
+    print(f" - w_V Error: {angular_velocity_error[0]}, {angular_velocity_error[1]}, {angular_velocity_error[2]}")
+    print(f" - Total w_V Error: {total_angular_velocity_error}")
+    
+
 
 # Adjust layout and show the plot
 plt.tight_layout()

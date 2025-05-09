@@ -12,6 +12,7 @@ import time
 from .acados import generate_ocp_controller
 from .gui import GUI
 from interfaces.msg import MotionCaptureState, ELRSCommand
+from geometry_msgs.msg import Pose, PoseArray
 
 
 class Controller(Node):
@@ -20,10 +21,11 @@ class Controller(Node):
 
         self.cmd_publisher_ = self.create_publisher(ELRSCommand, '/ELRSCommand', 10)
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
+        self.trajectory_publisher_ = self.create_publisher(PoseArray, '/planned_trajectory', 10)
         self.current_pose = None
 
-        self.steps = 90 * 30
-        self.dt = 1.0 / 30.0
+        self.steps = 90 * 50
+        self.dt = 1.0 / 50.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -32,14 +34,14 @@ class Controller(Node):
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         # Original trajectories
-        # self.x_traj = np.zeros_like(time_space)
-        # self.y_traj = np.zeros_like(time_space)
-        # self.z_traj = 1.5 * np.ones_like(time_space)
+        self.x_traj = np.zeros_like(time_space)
+        self.y_traj = np.zeros_like(time_space)
+        self.z_traj = 0.5 * np.ones_like(time_space)
 
         # New oscillating trajectories
-        self.x_traj = 0.5 * np.sin(2 * np.pi * 0.1 * time_space)  # Sine wave with frequency 0.1 Hz
-        self.y_traj = 0.5 * np.sin(2 * np.pi * 0.2 * time_space)  # Sine wave with frequency 0.2 Hz
-        self.z_traj = 1.5 + 0.5 * np.sin(2 * np.pi * 0.05 * time_space)  # Sine wave with frequency 0.05 Hz
+        #self.x_traj = 0.5 * np.sin(2 * np.pi * 0.1 * time_space)  # Sine wave with frequency 0.1 Hz
+        #self.y_traj = 0.5 * np.sin(2 * np.pi * 0.2 * time_space)  # Sine wave with frequency 0.2 Hz
+        #self.z_traj = 1.5 + 0.5 * np.sin(2 * np.pi * 0.05 * time_space)  # Sine wave with frequency 0.05 Hz
 
         roll_traj = np.zeros_like(time_space)  # Roll remains 0
         pitch_traj = np.zeros_like(time_space)  # Pitch remains 0
@@ -73,7 +75,11 @@ class Controller(Node):
         self.initial_solve_state = None
         self.initial_solve_controls = None
 
+        self.omega_est = np.array([0.2,0.2,0.2,0.2])  # Initialize omega_est if not already present
 
+        self.pre_start_duration = 1.0  # Duration for the pre-start state in seconds
+        self.pre_start_counter = 0  # Counter to track pre-start steps
+        self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
 
         # Initialize CSV file at the start of the program
         if not hasattr(self, 'csv_initialized'):
@@ -98,7 +104,14 @@ class Controller(Node):
                         'Setpoint_X', 'Setpoint_Y', 'Setpoint_Z',
                         'Setpoint_Orientation_W', 'Setpoint_Orientation_X', 'Setpoint_Orientation_Y', 'Setpoint_Orientation_Z',
                         'Setpoint_VX', 'Setpoint_VY', 'Setpoint_VZ',
-                        'Setpoint_AX', 'Setpoint_AY', 'Setpoint_AZ'
+                        'Setpoint_AX', 'Setpoint_AY', 'Setpoint_AZ',
+                        *[f'Planned_Position_X_{i}' for i in range(51)],
+                        *[f'Planned_Position_Y_{i}' for i in range(51)],
+                        *[f'Planned_Position_Z_{i}' for i in range(51)],
+                        *[f'Planned_Orientation_W_{i}' for i in range(51)],
+                        *[f'Planned_Orientation_X_{i}' for i in range(51)],
+                        *[f'Planned_Orientation_Y_{i}' for i in range(51)],
+                        *[f'Planned_Orientation_Z_{i}' for i in range(51)],
         ])
 
 
@@ -120,10 +133,20 @@ class Controller(Node):
         msg.channel_2 = 0.0
         msg.channel_3 = 0.0
 
-        if self.armed and self.current_pose is not None:
+        # Pre-start state: Send 0.1 on all channels for one second
+        if self.armed and self.pre_start_counter < self.pre_start_steps:
+            msg.armed = True
+            msg.channel_0 = 0.2
+            msg.channel_1 = 0.2
+            msg.channel_2 = 0.2
+            msg.channel_3 = 0.2
+            self.cmd_publisher_.publish(msg)
+
+            self.pre_start_counter += 1
+        elif self.armed and self.current_pose is not None:
 
 
-            N = 60
+            N = 20
 
             skip_steps = 1
             for j in range(N):
@@ -134,37 +157,21 @@ class Controller(Node):
                                      self.qz_traj[self.step_counter + j*skip_steps], 
                                      self.vx_traj[self.step_counter + j*skip_steps], self.vy_traj[self.step_counter + j*skip_steps], self.vz_traj[self.step_counter + j*skip_steps], 
                                      self.ax_traj[self.step_counter + j*skip_steps], self.ay_traj[self.step_counter + j*skip_steps], self.az_traj[self.step_counter + j*skip_steps], 
-                                     0.0, 0.0, 0.0, 0.0,
-                                     0.3, 0.3, 0.3, 0.3])
+                                     0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 0.3])
                 else:
                     yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 0.3])
                 self.ocp.set(j, "yref", yref)
 
-            yref_N = np.array([self.x_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
-                                    self.y_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
-                                    self.z_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
-                                    self.qw_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
-                                    self.qx_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
-                                    self.qy_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
-                                    self.qz_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
-                                    self.vx_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
-                                    self.vy_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
-                                    self.vz_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
-                                    self.ax_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
-                                    self.ay_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
-                                    self.az_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
-                                    0.0, 0.0, 0.0, 0.0 ])
 
+            yref_N = np.array([self.x_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.y_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.z_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
+                                    self.qw_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], self.qx_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.qy_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.qz_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
+                                    self.vx_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], self.vy_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.vz_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
+                                    self.ax_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], self.ay_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.az_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
+                                    0.0, 0.0, 0.0, 0.0 ])
             self.ocp.set(N, "yref", yref_N)
 
-            # Modify the state vector to include estimated motor speeds (omega_est)
-            if not hasattr(self, 'omega_est'):
-                self.omega_est = np.zeros(4)  # Initialize omega_est if not already present
-
-            # Update the state vector to include omega_est
             current_state_with_omega = np.concatenate((self.current_pose, self.omega_est))
 
-            # Pass the updated state vector to the OCP solver
             self.ocp.set(0, "lbx", current_state_with_omega)
             self.ocp.set(0, "ubx", current_state_with_omega)
 
@@ -181,59 +188,82 @@ class Controller(Node):
             msg.channel_2 = round(u[2], 3)
             msg.channel_3 = round(u[3], 3)
 
-            # Update omega_est using the motor dynamics
-            self.sim_integrator.set("x", current_state_with_omega)
-            self.sim_integrator.set("u", u)
-            status = self.sim_integrator.solve()
-            if status != 0:
-                raise Exception(f'acados integrator returned status {status}.')
+            self.cmd_publisher_.publish(msg)
+            self.omega_est = self.ocp.get(1,"x")[-4:]
 
-            # Extract the updated omega_est from the integrator's state
-            updated_state = self.sim_integrator.get("x")
-            self.omega_est = updated_state[-4:]  # Extract the last 4 elements as omega_est
+            # After solving the OCP
+            if status == 0:  # Ensure the OCP solved successfully
+                # Create a PoseArray message
+                trajectory_msg = PoseArray()
+                trajectory_msg.header.stamp = self.get_clock().now().to_msg()
+                trajectory_msg.header.frame_id = "map"  # Set the appropriate frame
+
+                # Extract the planned trajectory from the OCP
+                for j in range(N + 1):  # Include all steps in the horizon
+                    state = self.ocp.get(j, "x")
+                    pose = Pose()
+                    pose.position.x = state[0]  # X position
+                    pose.position.y = state[1]  # Y position
+                    pose.position.z = state[2]  # Z position
+                    pose.orientation.w = state[3]  # Quaternion W
+                    pose.orientation.x = state[4]  # Quaternion X
+                    pose.orientation.y = state[5]  # Quaternion Y
+                    pose.orientation.z = state[6]  # Quaternion Z
+                    trajectory_msg.poses.append(pose)
+
+                # Publish the trajectory
+                self.trajectory_publisher_.publish(trajectory_msg)
 
 
             print(f"U = {np.round(u, 3)} omega_est = {np.round(self.omega_est, 3)}")
+
+            # Store current state and control for next step prediction
+            if self.step_counter > 0 and self.step_counter < self.steps and hasattr(self, 'last_state') and hasattr(self, 'last_control'):
+                # Integrate the previous state with the last control inputs to predict current state
+                predicted_state = self.ocp.get(1, "x")
+
+                # Extract the planned trajectory
+                planned_positions = []
+                planned_orientations = []
+                for j in range(N + 1):  # Include all steps in the horizon
+                    state = self.ocp.get(j, "x")
+                    planned_positions.extend([state[0], state[1], state[2]])  # X, Y, Z
+                    planned_orientations.extend([state[3], state[4], state[5], state[6]])  # Quaternion W, X, Y, Z
+
+                self.csv_writer.writerow([
+                    self.step_counter,
+                    *self.last_control,
+                    *self.last_state[:3],
+                    *predicted_state[:3],
+                    *self.current_pose[:3],
+                    *self.last_state[7:10],
+                    *predicted_state[7:10],
+                    *self.current_pose[7:10],
+                    *self.last_state[3:7],
+                    *predicted_state[3:7],
+                    *self.current_pose[3:7],
+                    *self.last_state[10:13],
+                    *predicted_state[10:13],
+                    *self.current_pose[10:13],
+                    self.x_traj[self.step_counter], self.y_traj[self.step_counter], self.z_traj[self.step_counter],
+                    self.qw_traj[self.step_counter], self.qx_traj[self.step_counter], self.qy_traj[self.step_counter], self.qz_traj[self.step_counter],
+                    self.vx_traj[self.step_counter], self.vy_traj[self.step_counter], self.vz_traj[self.step_counter],
+                    self.ax_traj[self.step_counter], self.ay_traj[self.step_counter], self.az_traj[self.step_counter],
+                    *planned_positions,
+                    *planned_orientations,
+                ])
 
             # Store the current state and control for the next step
             self.last_state = current_state_with_omega.copy()
             self.last_control = u.copy()
 
-            # Store current state and control for next step prediction
-            if self.step_counter > 0 and self.step_counter < self.steps and hasattr(self, 'last_state') and hasattr(self, 'last_control'):
-                # Integrate the previous state with the last control inputs to predict current state
-
-                self.sim_integrator.set("x", self.last_state)
-                self.sim_integrator.set("u", self.last_control)
-                
-                status = self.sim_integrator.solve()
-                predicted_state = self.sim_integrator.get("x")
-
-                self.csv_writer.writerow([
-                    self.step_counter,
-                    *np.round(self.last_control, 3),
-                    *np.round(self.last_state[:3], 3),
-                    *np.round(predicted_state[:3], 3),
-                    *np.round(self.current_pose[:3], 3),
-                    *np.round(self.last_state[7:10], 3),
-                    *np.round(predicted_state[7:10], 3),
-                    *np.round(self.current_pose[7:10], 3),
-                    *np.round(self.last_state[3:7], 3),
-                    *np.round(predicted_state[3:7], 3),
-                    *np.round(self.current_pose[3:7], 3),
-                    *np.round(self.last_state[10:13], 3),
-                    *np.round(predicted_state[10:13], 3),
-                    *np.round(self.current_pose[10:13], 3),
-                    self.x_traj[self.step_counter], self.y_traj[self.step_counter], self.z_traj[self.step_counter],
-                    self.qw_traj[self.step_counter], self.qx_traj[self.step_counter], self.qy_traj[self.step_counter], self.qz_traj[self.step_counter],
-                    self.vx_traj[self.step_counter], self.vy_traj[self.step_counter], self.vz_traj[self.step_counter],
-                    self.ax_traj[self.step_counter], self.ay_traj[self.step_counter], self.az_traj[self.step_counter],
-                ])
 
             self.step_counter += 1
 
 
         else:
+            self.cmd_publisher_.publish(msg)
+
             self.step_counter = 0
             # Reset stored states when disarmed
             if hasattr(self, 'last_state'):
@@ -242,8 +272,9 @@ class Controller(Node):
                 delattr(self, 'last_control')
             if hasattr(self, 'prediction_errors'):
                 delattr(self, 'prediction_errors')
+                        
 
-        self.cmd_publisher_.publish(msg)
+        #print(f"msg: {msg.channel_0}, {msg.channel_1}, {msg.channel_2}, {msg.channel_3}")
 
 
 

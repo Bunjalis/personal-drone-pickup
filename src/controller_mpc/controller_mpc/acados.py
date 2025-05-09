@@ -29,8 +29,8 @@ def generate_ocp_controller():
     # Define the model using quadcopter dynamics
     ocp.model = model
 
-    ocp.solver_options.N_horizon = 60
-    ocp.solver_options.tf = 2.0
+    ocp.dims.N = 20
+    ocp.solver_options.tf = 1.0
 
     # Define the number of inputs (nu) before using it
     nu = 4  # Number of control inputs (throttle for 4 motors)
@@ -44,7 +44,7 @@ def generate_ocp_controller():
 
     # Update the cost matrices to match the new state dimension
 
-    Q_mat = 2 * np.diag([10, 10, 10, 8, 8, 8, 8, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0])
+    Q_mat = 2 * np.diag([10.0, 10.0, 10.0, 1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0])
     R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
     ocp.cost.W_e = Q_mat[:nx, :nx]  # Terminal cost only considers the state
@@ -83,8 +83,8 @@ def generate_ocp_controller():
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
     
     # Increase iterations and relax tolerances to improve convergence
-    ocp.solver_options.nlp_solver_max_iter = 500
-    ocp.solver_options.qp_solver_iter_max = 300
+    ocp.solver_options.nlp_solver_max_iter = 100
+    ocp.solver_options.qp_solver_iter_max = 50
     
     # Relax QP solver tolerances
     #ocp.solver_options.qp_solver_tol_stat = 1e-1  # Stationarity tolerance (was 1e-3)
@@ -108,7 +108,7 @@ def generate_ocp_controller():
 
     # Set constraints on u[0]
     ocp.constraints.lbu = np.array([0.1, 0.1, 0.1, 0.1])
-    ocp.constraints.ubu = np.array([0.5, 0.5, 0.5, 0.5])
+    ocp.constraints.ubu = np.array([0.6, 0.6, 0.6, 0.6])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

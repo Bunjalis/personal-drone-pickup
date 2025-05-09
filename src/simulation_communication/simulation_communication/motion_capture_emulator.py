@@ -62,6 +62,8 @@ class PentaVerify(Node):
         # Calculate time difference (dt)
         dt = (current_time.sec + current_time.nanosec * 1e-9) - (self.last_time.sec + self.last_time.nanosec * 1e-9)
 
+        print(f"Time difference (dt): {dt:.6f} seconds")
+
         if dt <= 0:
 
             print("Time difference is non-positive, skipping callback.")
@@ -84,7 +86,7 @@ class PentaVerify(Node):
         q_relative = quaternion_multiply(q2, quaternion_inverse(q1))  # Relative rotation
         angular_velocity = 2 * np.array([q_relative[0], q_relative[1], q_relative[2]]) / dt  # Angular velocity
         q_current = [current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w]
-        rotation_matrix = quaternion_matrix(q_current)[:3, :3]  # Extract 3x3 rotation part
+        rotation_matrix = quaternion_matrix(q1)[:3, :3]  # Extract 3x3 rotation part
 
         # Transform  velocity from world frame to body frame
         angular_velocity_body = np.dot(rotation_matrix.T, angular_velocity)

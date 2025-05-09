@@ -71,14 +71,6 @@ class MotionCapturePublisher(Node):
 
             recieve_time, obj_id, pos_str, rot_str = parts
             
-
-            print(f"Incoming Current time: {time.time_ns()}")
-            print(f"Incoming Recorded time: {recieve_time}")
-            
-
-            time_diff = time.time_ns() - int(recieve_time)
-
-            print(f"Incoming Time difference: {time_diff/ 1e6} ms")
             
             pos_parts = [p.strip() for p in pos_str.split(',')]
             if len(pos_parts) != 3:
@@ -104,6 +96,8 @@ class MotionCapturePublisher(Node):
             # Calculate time difference (dt)
             dt = current_time - self.last_time
             self.last_time = current_time
+
+            print(f"Time difference (dt): {dt:.6f} seconds")
 
             if dt <= 0:
                 self.last_pose = np.array([x, y, z])
