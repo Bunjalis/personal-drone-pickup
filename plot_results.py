@@ -20,6 +20,9 @@ import numpy as np
 # 50Hz_test_19 - horizon 1.0 20 samples/nodes full data collection incase simulation presents data differently
 # 50Hz_test_20 - horizon 1.0 20 samples/nodes full data collection incase simulation presents data differently but in simulation
 # 50Hz_test_21 - horizon 1.0 20 samples/nodes full data collection incase simulation presents data differently motion capture at 60Hz
+# 50Hz_test_22 - first simulation test with a 0.01 g point mass offset from the drones body -0.03, -0.03
+# 50Hz_test_23 - first simulation test with a 0.02 g point mass offset from the drones body -0.03, -0.03
+# 50Hz_test_24 - first simulation test with a 0.05 g point mass offset from the drones body -0.03, -0.03
 
 # Load the CSV file
 data = pd.read_csv('50Hz_test_21.csv')

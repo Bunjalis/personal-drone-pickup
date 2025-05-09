@@ -188,6 +188,10 @@ class Controller(Node):
             msg.channel_2 = round(u[2], 3)
             msg.channel_3 = round(u[3], 3)
 
+
+            msg.channel_0 += 0.1
+            msg.channel_1 += 0.1
+
             self.cmd_publisher_.publish(msg)
             self.omega_est = self.ocp.get(1,"x")[-4:]
 
