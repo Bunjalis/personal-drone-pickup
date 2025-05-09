@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd
 import numpy as np
 
@@ -23,9 +24,9 @@ import numpy as np
 # 50Hz_test_22 - first simulation test with a 0.01 g point mass offset from the drones body -0.03, -0.03
 # 50Hz_test_23 - first simulation test with a 0.02 g point mass offset from the drones body -0.03, -0.03
 # 50Hz_test_24 - first simulation test with a 0.05 g point mass offset from the drones body -0.03, -0.03
-
+# 50Hz_test_25 - simulation to show NLMPC solution
 # Load the CSV file
-data = pd.read_csv('50Hz_test_21.csv')
+data = pd.read_csv('state_errors.csv')
 
 # Drop the last 3 data points from the dataset
 #data = data[:-50]
@@ -137,6 +138,7 @@ for index, row in data.iterrows():
     print("----------------------------------------------------")
     print(f"Step: {row['Step']}")
 
+    '''
     print("Position")
     print(f" - CTRL Act: {row['Last_Control_0']}, {row['Last_Control_1']}, {row['Last_Control_2']}, {row['Last_Control_3']}")
     print(f" - Prev Pos: {row['Last_Position_X']}, {row['Last_Position_Y']}, {row['Last_Position_Z']}")
@@ -179,7 +181,7 @@ for index, row in data.iterrows():
     total_linear_velocity_error = sum(abs(e) for e in linear_velocity_error)
     print(f" - L_V Error: {linear_velocity_error[0]}, {linear_velocity_error[1]}, {linear_velocity_error[2]}")
     print(f" - Total L_V Error: {total_linear_velocity_error}")
-
+    '''
     print("Angular Velocity")
     print(f" - CTRL Act: {row['Last_Control_0']}, {row['Last_Control_1']}, {row['Last_Control_2']}, {row['Last_Control_3']}")
     print(f" - Prev w_V: {row['Last_Angular_Velocity_X']}, {row['Last_Angular_Velocity_Y']}, {row['Last_Angular_Velocity_Z']}")
@@ -191,11 +193,42 @@ for index, row in data.iterrows():
         row['Predicted_Angular_Velocity_Z'] - row['Actual_Angular_Velocity_Z']
     ]
     total_angular_velocity_error = sum(abs(e) for e in angular_velocity_error)
-    print(f" - w_V Error: {angular_velocity_error[0]}, {angular_velocity_error[1]}, {angular_velocity_error[2]}")
-    print(f" - Total w_V Error: {total_angular_velocity_error}")
+    #print(f" - w_V Error: {angular_velocity_error[0]}, {angular_velocity_error[1]}, {angular_velocity_error[2]}")
+    #print(f" - Total w_V Error: {total_angular_velocity_error}")
     
 
 
 # Adjust layout and show the plot
 plt.tight_layout()
 plt.show()
+
+# Load the CSV file
+file_path = '50Hz_test_21.csv'  # Replace with the desired file
+columns_to_read = ["Step"] + [f"Planned_Position_X_{i}" for i in range(51)] + [f"Planned_Position_Y_{i}" for i in range(51)] + [f"Planned_Position_Z_{i}" for i in range(51)]
+data = pd.read_csv(file_path, usecols=columns_to_read)
+
+# Iterate through each timestep and plot the planned trajectory
+for index, row in data.iterrows():
+    step = row["Step"]
+    planned_x = [row[f"Planned_Position_X_{i}"] for i in range(10)]
+    planned_y = [row[f"Planned_Position_Y_{i}"] for i in range(10)]
+    planned_z = [row[f"Planned_Position_Z_{i}"] for i in range(10)]
+
+    print(f"x {step}: {planned_x[0:3]}")
+    print(f"y {step}: {planned_y[0:3]}")
+    print(f"z {step}: {planned_z[0:3]}")
+
+    # Create a 3D plot
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(planned_x, planned_y, planned_z, label=f'Timestep {step}')
+
+    # Set labels and title
+    ax.set_xlabel('X Position (m)')
+    ax.set_ylabel('Y Position (m)')
+    ax.set_zlabel('Z Position (m)')
+    ax.set_title(f'Planned Trajectory at Timestep {step}')
+    ax.legend()
+
+    # Show the plot
+    plt.show()

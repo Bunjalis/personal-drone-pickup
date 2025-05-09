@@ -29,8 +29,8 @@ def generate_ocp_controller():
     # Define the model using quadcopter dynamics
     ocp.model = model
 
-    ocp.dims.N = 20
-    ocp.solver_options.tf = 1.0
+    ocp.solver_options.N_horizon = 60
+    ocp.solver_options.tf = 2.0
 
     # Define the number of inputs (nu) before using it
     nu = 4  # Number of control inputs (throttle for 4 motors)
@@ -44,7 +44,7 @@ def generate_ocp_controller():
 
     # Update the cost matrices to match the new state dimension
 
-    Q_mat = 2 * np.diag([10.0, 10.0, 10.0, 1.0, 1.0, 1.0, 1.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0])
+    Q_mat = 2 * np.diag([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0])
     R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
     ocp.cost.W_e = Q_mat[:nx, :nx]  # Terminal cost only considers the state
@@ -61,8 +61,8 @@ def generate_ocp_controller():
     # Ensure omega_est is passed back into the system
     # This is handled implicitly by including omega_est in the state vector and dynamics.
 
-    ocp.cost.cost_type = 'LINEAR_LS'
-    ocp.cost.cost_type_e = 'LINEAR_LS'
+    ocp.cost.cost_type = 'NONLINEAR_LS'
+    ocp.cost.cost_type_e = 'NONLINEAR_LS'
 
 
 
@@ -83,23 +83,23 @@ def generate_ocp_controller():
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
     
     # Increase iterations and relax tolerances to improve convergence
-    ocp.solver_options.nlp_solver_max_iter = 100
-    ocp.solver_options.qp_solver_iter_max = 50
+    ocp.solver_options.nlp_solver_max_iter = 500
+    ocp.solver_options.qp_solver_iter_max = 300
     
     # Relax QP solver tolerances
-    #ocp.solver_options.qp_solver_tol_stat = 1e-1  # Stationarity tolerance (was 1e-3)
-    #ocp.solver_options.qp_solver_tol_eq = 1e-1   # Equality constraint tolerance (was 1e-3)
-    #ocp.solver_options.qp_solver_tol_ineq = 1e-1  # Inequality constraint tolerance (was 1e-3)
-    #ocp.solver_options.qp_solver_tol_comp = 1e-1  # Complementarity tolerance (was 1e-3)
+    ocp.solver_options.qp_solver_tol_stat = 1e-3  # Stationarity tolerance (was 1e-3)
+    ocp.solver_options.qp_solver_tol_eq = 1e-3   # Equality constraint tolerance (was 1e-3)
+    ocp.solver_options.qp_solver_tol_ineq = 1e-3  # Inequality constraint tolerance (was 1e-3)
+    ocp.solver_options.qp_solver_tol_comp = 1e-3  # Complementarity tolerance (was 1e-3)
     
     # Relax NLP solver tolerances
-    #ocp.solver_options.nlp_solver_tol_stat = 1e-1  # Optimality/stationarity
-    #ocp.solver_options.nlp_solver_tol_eq = 1e-1    # Feasibility of equality constraints
-    #ocp.solver_options.nlp_solver_tol_ineq = 1e-1  # Feasibility of inequality constraints
-    #ocp.solver_options.nlp_solver_tol_comp = 1e-1  # Complementarity
+    ocp.solver_options.nlp_solver_tol_stat = 1e-3  # Optimality/stationarity
+    ocp.solver_options.nlp_solver_tol_eq = 1e-3    # Feasibility of equality constraints
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-3  # Feasibility of inequality constraints
+    ocp.solver_options.nlp_solver_tol_comp = 1e-3  # Complementarity
     
     # Add Levenberg-Marquardt regularization to improve numerical stability
-    #ocp.solver_options.levenberg_marquardt = 1e-1
+    ocp.solver_options.levenberg_marquardt = 1e-3
 
     # Set initial conditionx0
     x0 = np.zeros(nx)

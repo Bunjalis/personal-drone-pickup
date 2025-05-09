@@ -5,6 +5,7 @@ import numpy as np
 import copy
 import math
 import csv
+import os
 from rclpy.node import Node
 from datetime import datetime
 from scipy.spatial.transform import Rotation as R
@@ -24,8 +25,8 @@ class Controller(Node):
         self.trajectory_publisher_ = self.create_publisher(PoseArray, '/planned_trajectory', 10)
         self.current_pose = None
 
-        self.steps = 90 * 50
-        self.dt = 1.0 / 50.0
+        self.steps = 90 * 30
+        self.dt = 1.0 / 30.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -36,7 +37,7 @@ class Controller(Node):
         # Original trajectories
         self.x_traj = np.zeros_like(time_space)
         self.y_traj = np.zeros_like(time_space)
-        self.z_traj = 0.5 * np.ones_like(time_space)
+        self.z_traj = 1.0 * np.ones_like(time_space)
 
         # New oscillating trajectories
         #self.x_traj = 0.5 * np.sin(2 * np.pi * 0.1 * time_space)  # Sine wave with frequency 0.1 Hz
@@ -81,6 +82,12 @@ class Controller(Node):
         self.pre_start_counter = 0  # Counter to track pre-start steps
         self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
 
+        self.N = 60
+
+        # Create the planned_trajectories folder if it doesn't exist
+        self.trajectories_folder = os.path.join(os.getcwd(), 'planned_trajectories')
+        os.makedirs(self.trajectories_folder, exist_ok=True)
+
         # Initialize CSV file at the start of the program
         if not hasattr(self, 'csv_initialized'):
             self.csv_initialized = True
@@ -105,13 +112,6 @@ class Controller(Node):
                         'Setpoint_Orientation_W', 'Setpoint_Orientation_X', 'Setpoint_Orientation_Y', 'Setpoint_Orientation_Z',
                         'Setpoint_VX', 'Setpoint_VY', 'Setpoint_VZ',
                         'Setpoint_AX', 'Setpoint_AY', 'Setpoint_AZ',
-                        *[f'Planned_Position_X_{i}' for i in range(51)],
-                        *[f'Planned_Position_Y_{i}' for i in range(51)],
-                        *[f'Planned_Position_Z_{i}' for i in range(51)],
-                        *[f'Planned_Orientation_W_{i}' for i in range(51)],
-                        *[f'Planned_Orientation_X_{i}' for i in range(51)],
-                        *[f'Planned_Orientation_Y_{i}' for i in range(51)],
-                        *[f'Planned_Orientation_Z_{i}' for i in range(51)],
         ])
 
 
@@ -120,10 +120,11 @@ class Controller(Node):
         orientation = msg.pose.orientation
         linear_velocity = msg.twist.linear
         angular_velocity = msg.twist.angular
+        noise = np.random.normal(0, 0.0, 13)  # Generate Gaussian noise with mean 0 and standard deviation 0.01
         self.current_pose = np.array([position.x, position.y, position.z,
-                                      orientation.w, orientation.x, orientation.y, orientation.z,
-                                      linear_velocity.x, linear_velocity.y, linear_velocity.z,
-                                      angular_velocity.x, angular_velocity.y, angular_velocity.z])
+                  orientation.w, orientation.x, orientation.y, orientation.z,
+                  linear_velocity.x, linear_velocity.y, linear_velocity.z,
+                  angular_velocity.x, angular_velocity.y, angular_velocity.z]) + noise
 
     def control_loop(self):
         msg = ELRSCommand()
@@ -146,10 +147,10 @@ class Controller(Node):
         elif self.armed and self.current_pose is not None:
 
 
-            N = 20
+            
 
             skip_steps = 1
-            for j in range(N):
+            for j in range(self.N):
                 if self.step_counter + j*skip_steps < self.steps:
                     yref = np.array([self.x_traj[self.step_counter + j*skip_steps], self.y_traj[self.step_counter + j*skip_steps],
                                      self.z_traj[self.step_counter + j*skip_steps], self.qw_traj[self.step_counter + j*skip_steps],
@@ -163,12 +164,12 @@ class Controller(Node):
                 self.ocp.set(j, "yref", yref)
 
 
-            yref_N = np.array([self.x_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.y_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.z_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
-                                    self.qw_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], self.qx_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.qy_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.qz_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
-                                    self.vx_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], self.vy_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.vz_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], 
-                                    self.ax_traj[min(self.step_counter + N*skip_steps, self.steps - 1)], self.ay_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],  self.az_traj[min(self.step_counter + N*skip_steps, self.steps - 1)],
+            yref_N = np.array([self.x_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.y_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.z_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
+                                    self.qw_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.qx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
+                                    self.vx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.vy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.vz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], 
+                                    self.ax_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.ay_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.az_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
                                     0.0, 0.0, 0.0, 0.0 ])
-            self.ocp.set(N, "yref", yref_N)
+            self.ocp.set(self.N, "yref", yref_N)
 
             current_state_with_omega = np.concatenate((self.current_pose, self.omega_est))
 
@@ -187,39 +188,12 @@ class Controller(Node):
             msg.channel_1 = round(u[1], 3)
             msg.channel_2 = round(u[2], 3)
             msg.channel_3 = round(u[3], 3)
-
-
-            msg.channel_0 += 0.1
-            msg.channel_1 += 0.1
-
+            
             self.cmd_publisher_.publish(msg)
             self.omega_est = self.ocp.get(1,"x")[-4:]
 
-            # After solving the OCP
-            if status == 0:  # Ensure the OCP solved successfully
-                # Create a PoseArray message
-                trajectory_msg = PoseArray()
-                trajectory_msg.header.stamp = self.get_clock().now().to_msg()
-                trajectory_msg.header.frame_id = "map"  # Set the appropriate frame
-
-                # Extract the planned trajectory from the OCP
-                for j in range(N + 1):  # Include all steps in the horizon
-                    state = self.ocp.get(j, "x")
-                    pose = Pose()
-                    pose.position.x = state[0]  # X position
-                    pose.position.y = state[1]  # Y position
-                    pose.position.z = state[2]  # Z position
-                    pose.orientation.w = state[3]  # Quaternion W
-                    pose.orientation.x = state[4]  # Quaternion X
-                    pose.orientation.y = state[5]  # Quaternion Y
-                    pose.orientation.z = state[6]  # Quaternion Z
-                    trajectory_msg.poses.append(pose)
-
-                # Publish the trajectory
-                self.trajectory_publisher_.publish(trajectory_msg)
-
-
             print(f"U = {np.round(u, 3)} omega_est = {np.round(self.omega_est, 3)}")
+
 
             # Store current state and control for next step prediction
             if self.step_counter > 0 and self.step_counter < self.steps and hasattr(self, 'last_state') and hasattr(self, 'last_control'):
@@ -229,7 +203,7 @@ class Controller(Node):
                 # Extract the planned trajectory
                 planned_positions = []
                 planned_orientations = []
-                for j in range(N + 1):  # Include all steps in the horizon
+                for j in range(self.N + 1):  # Include all steps in the horizon
                     state = self.ocp.get(j, "x")
                     planned_positions.extend([state[0], state[1], state[2]])  # X, Y, Z
                     planned_orientations.extend([state[3], state[4], state[5], state[6]])  # Quaternion W, X, Y, Z
@@ -253,14 +227,23 @@ class Controller(Node):
                     self.qw_traj[self.step_counter], self.qx_traj[self.step_counter], self.qy_traj[self.step_counter], self.qz_traj[self.step_counter],
                     self.vx_traj[self.step_counter], self.vy_traj[self.step_counter], self.vz_traj[self.step_counter],
                     self.ax_traj[self.step_counter], self.ay_traj[self.step_counter], self.az_traj[self.step_counter],
-                    *planned_positions,
-                    *planned_orientations,
                 ])
 
             # Store the current state and control for the next step
             self.last_state = current_state_with_omega.copy()
             self.last_control = u.copy()
 
+            # Save planned position and control actions to a CSV file for each step
+            step_file_path = os.path.join(self.trajectories_folder, f'step_{self.step_counter}.csv')
+            with open(step_file_path, mode='w', newline='') as step_file:
+                step_writer = csv.writer(step_file)
+                step_writer.writerow(['Planned_Position_X', 'Planned_Position_Y', 'Planned_Position_Z',
+                                      'Control_Action_0', 'Control_Action_1', 'Control_Action_2', 'Control_Action_3'])
+                for j in range(self.N + 1):
+                    state = self.ocp.get(j, "x")
+                    control = self.ocp.get(j, "u") if j < self.N else [None, None, None, None]
+                    step_writer.writerow([state[0], state[1], state[2],
+                                          control[0], control[1], control[2], control[3]])
 
             self.step_counter += 1
 
@@ -276,11 +259,6 @@ class Controller(Node):
                 delattr(self, 'last_control')
             if hasattr(self, 'prediction_errors'):
                 delattr(self, 'prediction_errors')
-                        
-
-        #print(f"msg: {msg.channel_0}, {msg.channel_1}, {msg.channel_2}, {msg.channel_3}")
-
-
 
     def signal_handler(self, sig, frame):
         self.on_close()
