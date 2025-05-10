@@ -25,8 +25,16 @@ import numpy as np
 # 50Hz_test_23 - first simulation test with a 0.02 g point mass offset from the drones body -0.03, -0.03
 # 50Hz_test_24 - first simulation test with a 0.05 g point mass offset from the drones body -0.03, -0.03
 # 50Hz_test_25 - simulation to show NLMPC solution
+
+
+
+
+
+
+# new_inertia_test_1 - simulation has new inertia, mpc has old inertia
+# new_inertia_test_2 - simulation has new inertia, mpc has new inertia - Notes: yaw is weird
 # Load the CSV file
-data = pd.read_csv('state_errors.csv')
+data = pd.read_csv('new_inertia_test_2.csv')
 
 # Drop the last 3 data points from the dataset
 #data = data[:-50]
@@ -183,19 +191,18 @@ for index, row in data.iterrows():
     print(f" - Total L_V Error: {total_linear_velocity_error}")
     '''
     print("Angular Velocity")
-    print(f" - CTRL Act: {row['Last_Control_0']}, {row['Last_Control_1']}, {row['Last_Control_2']}, {row['Last_Control_3']}")
-    print(f" - Prev w_V: {row['Last_Angular_Velocity_X']}, {row['Last_Angular_Velocity_Y']}, {row['Last_Angular_Velocity_Z']}")
-    print(f" - Pred w_V: {row['Predicted_Angular_Velocity_X']}, {row['Predicted_Angular_Velocity_Y']}, {row['Predicted_Angular_Velocity_Z']}")
-    print(f" - Actu w_V: {row['Actual_Angular_Velocity_X']}, {row['Actual_Angular_Velocity_Y']}, {row['Actual_Angular_Velocity_Z']}")
+    print(f" - CTRL Act: {row['Last_Control_0']:.3f}, {row['Last_Control_1']:.3f}, {row['Last_Control_2']:.3f}, {row['Last_Control_3']:.3f}")
+    print(f" - Prev w_V: {row['Last_Angular_Velocity_X']:.3f}, {row['Last_Angular_Velocity_Y']:.3f}, {row['Last_Angular_Velocity_Z']:.3f}")
+    print(f" - Pred w_V: {row['Predicted_Angular_Velocity_X']:.3f}, {row['Predicted_Angular_Velocity_Y']:.3f}, {row['Predicted_Angular_Velocity_Z']:.3f}")
+    print(f" - Actu w_V: {row['Actual_Angular_Velocity_X']:.3f}, {row['Actual_Angular_Velocity_Y']:.3f}, {row['Actual_Angular_Velocity_Z']:.3f}")
     angular_velocity_error = [
-        row['Predicted_Angular_Velocity_X'] - row['Actual_Angular_Velocity_X'],
-        row['Predicted_Angular_Velocity_Y'] - row['Actual_Angular_Velocity_Y'],
-        row['Predicted_Angular_Velocity_Z'] - row['Actual_Angular_Velocity_Z']
+        round(row['Predicted_Angular_Velocity_X'] - row['Actual_Angular_Velocity_X'], 3),
+        round(row['Predicted_Angular_Velocity_Y'] - row['Actual_Angular_Velocity_Y'], 3),
+        round(row['Predicted_Angular_Velocity_Z'] - row['Actual_Angular_Velocity_Z'], 3)
     ]
-    total_angular_velocity_error = sum(abs(e) for e in angular_velocity_error)
-    #print(f" - w_V Error: {angular_velocity_error[0]}, {angular_velocity_error[1]}, {angular_velocity_error[2]}")
-    #print(f" - Total w_V Error: {total_angular_velocity_error}")
-    
+    total_angular_velocity_error = round(sum(abs(e) for e in angular_velocity_error), 3)
+    print(f" - w_V Error: {angular_velocity_error[0]:.3f}, {angular_velocity_error[1]:.3f}, {angular_velocity_error[2]:.3f}")
+    print(f" - Total w_V Error: {total_angular_velocity_error:.3f}")
 
 
 # Adjust layout and show the plot

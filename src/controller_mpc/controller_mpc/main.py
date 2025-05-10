@@ -120,11 +120,17 @@ class Controller(Node):
         orientation = msg.pose.orientation
         linear_velocity = msg.twist.linear
         angular_velocity = msg.twist.angular
-        noise = np.random.normal(0, 0.0, 13)  # Generate Gaussian noise with mean 0 and standard deviation 0.01
+        noise = np.random.normal(0, 0.01, 13)  # Generate Gaussian noise with mean 0 and standard deviation 0.01
         self.current_pose = np.array([position.x, position.y, position.z,
                   orientation.w, orientation.x, orientation.y, orientation.z,
                   linear_velocity.x, linear_velocity.y, linear_velocity.z,
-                  angular_velocity.x, angular_velocity.y, angular_velocity.z]) + noise
+                 angular_velocity.x, angular_velocity.y, angular_velocity.z]) #+ noise
+
+
+        #self.current_pose = np.round(np.array([position.x, position.y, position.z,
+        #          orientation.w, orientation.x, orientation.y, orientation.z,
+        #          linear_velocity.x, linear_velocity.y, linear_velocity.z,
+        #          angular_velocity.x, angular_velocity.y, angular_velocity.z]) + noise,2)
 
     def control_loop(self):
         msg = ELRSCommand()
