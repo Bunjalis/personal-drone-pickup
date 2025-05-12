@@ -42,7 +42,7 @@ class Controller(Node):
         # New oscillating trajectories
         #self.x_traj = 0.5 * np.sin(2 * np.pi * 0.1 * time_space)  # Sine wave with frequency 0.1 Hz
         #self.y_traj = 0.5 * np.sin(2 * np.pi * 0.2 * time_space)  # Sine wave with frequency 0.2 Hz
-        #self.z_traj = 1.5 + 0.5 * np.sin(2 * np.pi * 0.05 * time_space)  # Sine wave with frequency 0.05 Hz
+        #self.z_traj = 1.25 + 0.5 * np.sin(2 * np.pi * 0.2 * time_space)  # Sine wave with frequency 0.05 Hz
 
         roll_traj = np.zeros_like(time_space)  # Roll remains 0
         pitch_traj = np.zeros_like(time_space)  # Pitch remains 0
@@ -76,13 +76,13 @@ class Controller(Node):
         self.initial_solve_state = None
         self.initial_solve_controls = None
 
-        self.omega_est = np.array([0.2,0.2,0.2,0.2])  # Initialize omega_est if not already present
+        self.omega_est = np.array([0.1,0.1,0.1,0.1])  # Initialize omega_est if not already present
 
         self.pre_start_duration = 1.0  # Duration for the pre-start state in seconds
         self.pre_start_counter = 0  # Counter to track pre-start steps
         self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
 
-        self.N = 60
+        self.N = 20
 
         # Create the planned_trajectories folder if it doesn't exist
         self.trajectories_folder = os.path.join(os.getcwd(), 'planned_trajectories')
@@ -91,27 +91,19 @@ class Controller(Node):
         # Initialize CSV file at the start of the program
         if not hasattr(self, 'csv_initialized'):
             self.csv_initialized = True
-            self.csv_file = open('state_errors.csv', mode='w', newline='')
+            self.csv_file = open('results.csv', mode='w', newline='')
             self.csv_writer = csv.writer(self.csv_file)
             # Write header row
             self.csv_writer.writerow([
-                    'Step', 'Last_Control_0', 'Last_Control_1', 'Last_Control_2', 'Last_Control_3',
-                        'Last_Position_X', 'Last_Position_Y', 'Last_Position_Z',
-                        'Predicted_Position_X', 'Predicted_Position_Y', 'Predicted_Position_Z',
-                        'Actual_Position_X', 'Actual_Position_Y', 'Actual_Position_Z',
-                        'Last_Linear_Velocity_X', 'Last_Linear_Velocity_Y', 'Last_Linear_Velocity_Z',
-                        'Predicted_Linear_Velocity_X', 'Predicted_Linear_Velocity_Y', 'Predicted_Linear_Velocity_Z',
-                        'Actual_Linear_Velocity_X', 'Actual_Linear_Velocity_Y', 'Actual_Linear_Velocity_Z',
-                        'Last_Orientation_W', 'Last_Orientation_X', 'Last_Orientation_Y', 'Last_Orientation_Z',
-                        'Predicted_Orientation_W', 'Predicted_Orientation_X', 'Predicted_Orientation_Y', 'Predicted_Orientation_Z',
-                        'Actual_Orientation_W', 'Actual_Orientation_X', 'Actual_Orientation_Y', 'Actual_Orientation_Z',
-                        'Last_Angular_Velocity_X', 'Last_Angular_Velocity_Y', 'Last_Angular_Velocity_Z',
-                        'Predicted_Angular_Velocity_X', 'Predicted_Angular_Velocity_Y', 'Predicted_Angular_Velocity_Z',
-                        'Actual_Angular_Velocity_X', 'Actual_Angular_Velocity_Y', 'Actual_Angular_Velocity_Z',
-                        'Setpoint_X', 'Setpoint_Y', 'Setpoint_Z',
-                        'Setpoint_Orientation_W', 'Setpoint_Orientation_X', 'Setpoint_Orientation_Y', 'Setpoint_Orientation_Z',
-                        'Setpoint_VX', 'Setpoint_VY', 'Setpoint_VZ',
-                        'Setpoint_AX', 'Setpoint_AY', 'Setpoint_AZ',
+                    'Step', 'u0', 'u1', 'u2', 'u3',
+                        'px', 'py', 'pz',
+                        'rw', 'rx', 'ry', 'rz',
+                        'vx', 'vy', 'vz',
+                        'wx', 'wy', 'wz',
+                        'sp_px', 'sp_py', 'sp_pz',
+                        'sp_rw', 'sp_rx', 'sp_ry', 'sp_rz',
+                        'sp_vx', 'sp_vy', 'sp_vz',
+                        'sp_wx', 'sp_wy', 'sp_wz',
         ])
 
 
@@ -120,11 +112,11 @@ class Controller(Node):
         orientation = msg.pose.orientation
         linear_velocity = msg.twist.linear
         angular_velocity = msg.twist.angular
-        noise = np.random.normal(0, 0.01, 13)  # Generate Gaussian noise with mean 0 and standard deviation 0.01
-        self.current_pose = np.array([position.x, position.y, position.z,
+        #noise = np.random.normal(0, 0.01, 13)  # Generate Gaussian noise with mean 0 and standard deviation 0.01
+        self.current_pose = np.round(np.array([position.x, position.y, position.z,
                   orientation.w, orientation.x, orientation.y, orientation.z,
                   linear_velocity.x, linear_velocity.y, linear_velocity.z,
-                 angular_velocity.x, angular_velocity.y, angular_velocity.z]) #+ noise
+                 angular_velocity.x, angular_velocity.y, angular_velocity.z]),3) #+ noise
 
 
         #self.current_pose = np.round(np.array([position.x, position.y, position.z,
@@ -143,17 +135,14 @@ class Controller(Node):
         # Pre-start state: Send 0.1 on all channels for one second
         if self.armed and self.pre_start_counter < self.pre_start_steps:
             msg.armed = True
-            msg.channel_0 = 0.2
-            msg.channel_1 = 0.2
-            msg.channel_2 = 0.2
-            msg.channel_3 = 0.2
+            msg.channel_0 = 0.1
+            msg.channel_1 = 0.1
+            msg.channel_2 = 0.1
+            msg.channel_3 = 0.1
             self.cmd_publisher_.publish(msg)
 
             self.pre_start_counter += 1
         elif self.armed and self.current_pose is not None:
-
-
-            
 
             skip_steps = 1
             for j in range(self.N):
@@ -202,33 +191,15 @@ class Controller(Node):
 
 
             # Store current state and control for next step prediction
-            if self.step_counter > 0 and self.step_counter < self.steps and hasattr(self, 'last_state') and hasattr(self, 'last_control'):
-                # Integrate the previous state with the last control inputs to predict current state
-                predicted_state = self.ocp.get(1, "x")
-
-                # Extract the planned trajectory
-                planned_positions = []
-                planned_orientations = []
-                for j in range(self.N + 1):  # Include all steps in the horizon
-                    state = self.ocp.get(j, "x")
-                    planned_positions.extend([state[0], state[1], state[2]])  # X, Y, Z
-                    planned_orientations.extend([state[3], state[4], state[5], state[6]])  # Quaternion W, X, Y, Z
+            if self.step_counter > 0 and self.step_counter < self.steps:
 
                 self.csv_writer.writerow([
                     self.step_counter,
-                    *self.last_control,
-                    *self.last_state[:3],
-                    *predicted_state[:3],
-                    *self.current_pose[:3],
-                    *self.last_state[7:10],
-                    *predicted_state[7:10],
-                    *self.current_pose[7:10],
-                    *self.last_state[3:7],
-                    *predicted_state[3:7],
-                    *self.current_pose[3:7],
-                    *self.last_state[10:13],
-                    *predicted_state[10:13],
-                    *self.current_pose[10:13],
+                    msg.channel_0, msg.channel_1, msg.channel_2, msg.channel_3,
+                    self.current_pose[0], self.current_pose[1], self.current_pose[2],
+                    self.current_pose[3], self.current_pose[4], self.current_pose[5], self.current_pose[6],
+                    self.current_pose[7], self.current_pose[8], self.current_pose[9],
+                    self.current_pose[10], self.current_pose[11], self.current_pose[12],
                     self.x_traj[self.step_counter], self.y_traj[self.step_counter], self.z_traj[self.step_counter],
                     self.qw_traj[self.step_counter], self.qx_traj[self.step_counter], self.qy_traj[self.step_counter], self.qz_traj[self.step_counter],
                     self.vx_traj[self.step_counter], self.vy_traj[self.step_counter], self.vz_traj[self.step_counter],
@@ -240,6 +211,7 @@ class Controller(Node):
             self.last_control = u.copy()
 
             # Save planned position and control actions to a CSV file for each step
+            '''
             step_file_path = os.path.join(self.trajectories_folder, f'step_{self.step_counter}.csv')
             with open(step_file_path, mode='w', newline='') as step_file:
                 step_writer = csv.writer(step_file)
@@ -251,20 +223,15 @@ class Controller(Node):
                     step_writer.writerow([state[0], state[1], state[2],
                                           control[0], control[1], control[2], control[3]])
 
+            '''
+
             self.step_counter += 1
 
 
         else:
             self.cmd_publisher_.publish(msg)
-
             self.step_counter = 0
             # Reset stored states when disarmed
-            if hasattr(self, 'last_state'):
-                delattr(self, 'last_state')
-            if hasattr(self, 'last_control'):
-                delattr(self, 'last_control')
-            if hasattr(self, 'prediction_errors'):
-                delattr(self, 'prediction_errors')
 
     def signal_handler(self, sig, frame):
         self.on_close()

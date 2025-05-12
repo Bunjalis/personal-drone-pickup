@@ -38,13 +38,13 @@ class QuadDynamics:
         '''
 
         #''' Simulated tiny trainer parameters
-        self.mass = 0.2
+        self.mass = 0.17
         self.x_l = 0.054
         self.y_l = 0.046
         #self.J = np.array([.03, .03, .06])
         self.J = np.array([0.0004124292645, 0.0003459416836, 0.0005984955024])
         self.motor_constant = 1.326e-07
-        self.moment_constant = 0.3
+        self.moment_constant = 0.05
         self.max_speed = 6000  # rad/s
         #'''
         
@@ -112,8 +112,8 @@ class QuadDynamics:
 
     def v_dynamics(self):
         # Update thrust model to use the new equation
-        #f_thrust = 7.46e-08 * cs.power(self.omega * self.max_speed, 2) + 1.51e-04 * (self.omega * self.max_speed)
-        f_thrust = self.motor_constant * cs.power(self.omega * self.max_speed, 2)
+        f_thrust = 7.46e-08 * cs.power(self.omega * self.max_speed, 2) + 1.51e-04 * (self.omega * self.max_speed)
+        #f_thrust = self.motor_constant * cs.power(self.omega * self.max_speed, 2)
 
         # Gravity vector
         g = cs.vertcat(0.0, 0.0, 9.81)
@@ -128,8 +128,8 @@ class QuadDynamics:
 
     def w_dynamics(self):
         # Use motor speeds (omega) instead of control inputs (u) directly
-        #f_thrust = 7.46e-08 * cs.power(self.omega * self.max_speed, 2) + 1.51e-04 * (self.omega * self.max_speed) # Thrust for each motor using omega
-        f_thrust = self.motor_constant * cs.power(self.omega * self.max_speed, 2)
+        f_thrust = 7.46e-08 * cs.power(self.omega * self.max_speed, 2) + 1.51e-04 * (self.omega * self.max_speed) # Thrust for each motor using omega
+        #f_thrust = self.motor_constant * cs.power(self.omega * self.max_speed, 2)
         tau_yaw = self.moment_constant * f_thrust  # Torque for each motor (yaw)
 
         # Convert parameters to CasADi symbolic variables

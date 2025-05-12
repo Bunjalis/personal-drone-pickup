@@ -34,7 +34,7 @@ import numpy as np
 # new_inertia_test_1 - simulation has new inertia, mpc has old inertia
 # new_inertia_test_2 - simulation has new inertia, mpc has new inertia - Notes: yaw is weird
 # Load the CSV file
-data = pd.read_csv('new_inertia_test_2.csv')
+data = pd.read_csv('state_errors.csv')
 
 # Drop the last 3 data points from the dataset
 #data = data[:-50]

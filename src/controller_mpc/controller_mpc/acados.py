@@ -29,7 +29,7 @@ def generate_ocp_controller():
     # Define the model using quadcopter dynamics
     ocp.model = model
 
-    ocp.solver_options.N_horizon = 60
+    ocp.solver_options.N_horizon = 20
     ocp.solver_options.tf = 2.0
 
     # Define the number of inputs (nu) before using it
