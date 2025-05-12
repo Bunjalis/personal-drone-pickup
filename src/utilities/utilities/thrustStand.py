@@ -41,7 +41,9 @@ class SerialSubscriberNode(Node):
         self.csv_writer = csv.writer(self.csv_file)
         self.csv_writer.writerow(['Throttle', 'Thrust'])
 
-        self.step_input_values = [0.1, 0.2, 0.3, 0.4, 0.5, 0.1, 0.5, 0.1, 0.4, 0.1, 0.3, 0.2, 0.1]
+        self.step_input_values = [0.1, 0.2, 0.3, 0.4, 0.2, 0.4, 0.2, 0.3, 0.2, 0.1]
+        #self.step_input_values = [0.1, 0.2, 0.3, 0.1, 0.3, 0.2, 0.1]
+        
         self.ramp_mode = False  # New flag to toggle ramp mode
         self.step_iteration = 0
         self.ramp_sample_count = 0

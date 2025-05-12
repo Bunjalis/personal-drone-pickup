@@ -5,7 +5,7 @@ import numpy as np
 from scipy.optimize import minimize
 
 # Load the CSV file
-data = pd.read_csv('thrust_data_step_19.csv', header=None, names=['Throttle', 'Thrust'])
+data = pd.read_csv('2306_thrust_stand_data.csv', header=None, names=['Throttle', 'Thrust'])
 
 # Extract throttle input and measured thrust
 throttle = data['Throttle'].values
@@ -16,18 +16,20 @@ time = np.arange(len(throttle)) * dt  # Generate time array
 # Define the cost function for optimizing a and b
 def cost_function_ab(params):
     a, b,c = params
-    scaled_throttle = a * (throttle * c)**2 + b * (throttle * c)
+    scaled_throttle = a * (throttle * c)**2 #+ b * (throttle * c)
     return np.sum((scaled_throttle - measured_thrust) ** 2)
 
 # Initial guesses for a and b
-initial_guess_ab = [8.1443e-08, 1.5962e-04, 6000]
+initial_guess_ab = [1.31e-05, 1.35e-03, 4631]
 
 # Perform optimization to fit the scaled throttle
-result_ab = minimize(cost_function_ab, initial_guess_ab, bounds=[(1e-10, 1e-6), (1e-6, 1e-2), (1000, 10000)])
+result_ab = minimize(cost_function_ab, initial_guess_ab, bounds=[(1e-10, 1e-2), (1e-6, 1e-2), (1000, 10000)])
 a_opt, b_opt,c_opt = result_ab.x
 
+print   (f"Optimized Parameters: a = {a_opt:.2e}, b = {b_opt:.2e}, c = {c_opt:.2f}")
 
-scaled_throttle = a_opt * (throttle * c_opt)**2 + b_opt * (throttle * c_opt)
+
+scaled_throttle = a_opt * (throttle * c_opt)**2 #+ b_opt * (throttle * c_opt)
 
 
 # Plot the results
