@@ -61,8 +61,8 @@ def generate_ocp_controller():
     # Ensure omega_est is passed back into the system
     # This is handled implicitly by including omega_est in the state vector and dynamics.
 
-    ocp.cost.cost_type = 'NONLINEAR_LS'
-    ocp.cost.cost_type_e = 'NONLINEAR_LS'
+    ocp.cost.cost_type = 'LINEAR_LS'
+    ocp.cost.cost_type_e = 'LINEAR_LS'
 
 
 
@@ -86,18 +86,20 @@ def generate_ocp_controller():
     ocp.solver_options.nlp_solver_max_iter = 500
     ocp.solver_options.qp_solver_iter_max = 300
     
+    
     # Relax QP solver tolerances
-    ocp.solver_options.qp_solver_tol_stat = 1e-3  # Stationarity tolerance (was 1e-3)
-    ocp.solver_options.qp_solver_tol_eq = 1e-3   # Equality constraint tolerance (was 1e-3)
-    ocp.solver_options.qp_solver_tol_ineq = 1e-3  # Inequality constraint tolerance (was 1e-3)
-    ocp.solver_options.qp_solver_tol_comp = 1e-3  # Complementarity tolerance (was 1e-3)
+    ocp.solver_options.qp_solver_tol_stat = 1e-4 # Stationarity tolerance (was 1e-3)
+    ocp.solver_options.qp_solver_tol_eq = 1e-4  # Equality constraint tolerance (was 1e-3)
+    ocp.solver_options.qp_solver_tol_ineq = 1e-4 # Inequality constraint tolerance (was 1e-3)
+    ocp.solver_options.qp_solver_tol_comp = 1e-4  # Complementarity tolerance (was 1e-3)
     
     # Relax NLP solver tolerances
-    ocp.solver_options.nlp_solver_tol_stat = 1e-3  # Optimality/stationarity
-    ocp.solver_options.nlp_solver_tol_eq = 1e-3    # Feasibility of equality constraints
-    ocp.solver_options.nlp_solver_tol_ineq = 1e-3  # Feasibility of inequality constraints
-    ocp.solver_options.nlp_solver_tol_comp = 1e-3  # Complementarity
+    ocp.solver_options.nlp_solver_tol_stat = 1e-4  # Optimality/stationarity
+    ocp.solver_options.nlp_solver_tol_eq = 1e-4  # Feasibility of equality constraints
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-4  # Feasibility of inequality constraints
+    ocp.solver_options.nlp_solver_tol_comp = 1e-4 # Complementarity
     
+
     # Add Levenberg-Marquardt regularization to improve numerical stability
     ocp.solver_options.levenberg_marquardt = 1e-3
 
@@ -107,8 +109,8 @@ def generate_ocp_controller():
     ocp.constraints.x0 = x0
 
     # Set constraints on u[0]
-    ocp.constraints.lbu = np.array([0.1, 0.1, 0.1, 0.1])
-    ocp.constraints.ubu = np.array([0.6, 0.6, 0.6, 0.6])
+    ocp.constraints.lbu = np.array([0.05, 0.05, 0.05, 0.05])
+    ocp.constraints.ubu = np.array([0.4, 0.4, 0.4, 0.4])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

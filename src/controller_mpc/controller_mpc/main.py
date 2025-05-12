@@ -40,9 +40,9 @@ class Controller(Node):
         self.z_traj = 1.0 * np.ones_like(time_space)
 
         # New oscillating trajectories
-        #self.x_traj = 0.5 * np.sin(2 * np.pi * 0.1 * time_space)  # Sine wave with frequency 0.1 Hz
-        #self.y_traj = 0.5 * np.sin(2 * np.pi * 0.2 * time_space)  # Sine wave with frequency 0.2 Hz
-        #self.z_traj = 1.25 + 0.5 * np.sin(2 * np.pi * 0.2 * time_space)  # Sine wave with frequency 0.05 Hz
+        #self.x_traj = 2.0 * np.sin(2 * np.pi * 1.0 * time_space)  # Sine wave with frequency 0.1 Hz
+        #self.y_traj = 2.0 * np.sin(2 * np.pi * 0.5 * time_space)  # Sine wave with frequency 0.2 Hz
+        #self.z_traj = 1.5 + 0.5 * np.sin(2 * np.pi * 0.5 * time_space)  # Sine wave with frequency 0.05 Hz
 
         roll_traj = np.zeros_like(time_space)  # Roll remains 0
         pitch_traj = np.zeros_like(time_space)  # Pitch remains 0
@@ -116,7 +116,7 @@ class Controller(Node):
         self.current_pose = np.round(np.array([position.x, position.y, position.z,
                   orientation.w, orientation.x, orientation.y, orientation.z,
                   linear_velocity.x, linear_velocity.y, linear_velocity.z,
-                 angular_velocity.x, angular_velocity.y, angular_velocity.z]),3) #+ noise
+                 angular_velocity.x, angular_velocity.y, angular_velocity.z]),3)# + noise
 
 
         #self.current_pose = np.round(np.array([position.x, position.y, position.z,
@@ -144,7 +144,7 @@ class Controller(Node):
             self.pre_start_counter += 1
         elif self.armed and self.current_pose is not None:
 
-            skip_steps = 1
+            skip_steps = 3
             for j in range(self.N):
                 if self.step_counter + j*skip_steps < self.steps:
                     yref = np.array([self.x_traj[self.step_counter + j*skip_steps], self.y_traj[self.step_counter + j*skip_steps],
