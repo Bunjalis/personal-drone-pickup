@@ -6,22 +6,20 @@ import casadi as ca
 from acados_template import AcadosSim, AcadosSimSolver
 
 
-def generate_ocp_controller():
+def generate_ocp_controller(dynamics=None):
     # Define the dynamics model
-    quad_dynamics = QuadDynamics()
-    dynamics_function = quad_dynamics.quad_dynamics()
+    if dynamics is None:
+        quad_dynamics = QuadDynamics()
+    else:
+        quad_dynamics = dynamics
 
-    # Use the rounded dynamics in the Acados model
-    optimizer = QuadDynamics()
-    
-    # Get the dynamics expression
-    dynamics_expr = optimizer.quad_dynamics()
+    dynamics_expr = quad_dynamics.quad_dynamics()
 
     model = AcadosModel()
     model.name = 'quad_dynamics'
-    model.x = optimizer.x  # Include omega in the state vector
-    model.u = optimizer.u
-    model.f_expl_expr = dynamics_expr(optimizer.x, optimizer.u)  # Use full state including omega internally
+    model.x = quad_dynamics.x  # Include omega in the state vector
+    model.u = quad_dynamics.u
+    model.f_expl_expr = dynamics_expr(quad_dynamics.x, quad_dynamics.u)  # Use full state including omega internally
 
     # Create OCP object
     ocp = AcadosOcp()
@@ -37,7 +35,7 @@ def generate_ocp_controller():
 
     # Update the state vector to include omega_est (estimated motor speeds)
     nx = 17  # Updated number of states to include motor speeds
-    model.x = optimizer.x  # Full state vector including omega_est
+    model.x = quad_dynamics.x  # Full state vector including omega_est
 
     # Update the cost function dimensions
     ny = nx + nu  # Number of outputs + inputs
