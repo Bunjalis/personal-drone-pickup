@@ -91,11 +91,12 @@ class Controller(Node):
         # Initialize CSV file at the start of the program
         if not hasattr(self, 'csv_initialized'):
             self.csv_initialized = True
-            self.csv_file = open('results.csv', mode='w', newline='')
+            self.csv_file = open('control_results.csv', mode='w', newline='')
             self.csv_writer = csv.writer(self.csv_file)
             # Write header row
             self.csv_writer.writerow([
                     'Step', 'u0', 'u1', 'u2', 'u3',
+                        'o_u0', 'o_u1', 'o_u2', 'o_u3',
                         'px', 'py', 'pz',
                         'rw', 'rx', 'ry', 'rz',
                         'vx', 'vy', 'vz',
@@ -107,16 +108,43 @@ class Controller(Node):
         ])
 
 
+        if not hasattr(self, 'motion_capture_csv_initialized'):
+            self.motion_capture_csv_initialized = True
+            self.motion_capture_csv_file = open('motion_capture_results.csv', mode='w', newline='')
+            self.motion_capture_csv_writer = csv.writer(self.motion_capture_csv_file)
+            # Write header row
+            self.motion_capture_csv_writer.writerow([
+                        'px', 'py', 'pz',
+                        'rw', 'rx', 'ry', 'rz',
+                        'vx', 'vy', 'vz',
+                        'wx', 'wy', 'wz',
+        ])
+
+
     def pose_callback(self, msg: MotionCaptureState):
         position = msg.pose.position
         orientation = msg.pose.orientation
         linear_velocity = msg.twist.linear
         angular_velocity = msg.twist.angular
-        #noise = np.random.normal(0, 0.01, 13)  # Generate Gaussian noise with mean 0 and standard deviation 0.01
-        self.current_pose = np.round(np.array([position.x, position.y, position.z,
-                  orientation.w, orientation.x, orientation.y, orientation.z,
-                  linear_velocity.x, linear_velocity.y, linear_velocity.z,
-                 angular_velocity.x, angular_velocity.y, angular_velocity.z]),3)# + noise
+        # Generate Gaussian noise for each state component
+        noise_pos = np.random.normal(0, 0.05, 3)  # Position noise
+        noise_rot = np.random.normal(0, 0.05, 4)  # Orientation noise
+        noise_lin_vel = np.random.normal(0, 0.1, 3)  # Linear velocity noise
+        noise_rot_vel = np.random.normal(0, 0.1, 3)  # Angular velocity noise
+
+        # Add noise to each state component
+        noisy_position = np.array([position.x, position.y, position.z]) #+ noise_pos
+        noisy_orientation = np.array([orientation.w, orientation.x, orientation.y, orientation.z]) #+ noise_rot
+        noisy_linear_velocity = np.array([linear_velocity.x, linear_velocity.y, linear_velocity.z]) #+ noise_lin_vel
+        noisy_angular_velocity = np.array([angular_velocity.x, angular_velocity.y, angular_velocity.z]) #+ noise_rot_vel
+
+        # Combine all components into the current pose
+        self.current_pose = np.round(np.concatenate((noisy_position, noisy_orientation, noisy_linear_velocity, noisy_angular_velocity)), 3)
+
+        if self.armed:
+            self.motion_capture_csv_writer.writerow(np.round(np.concatenate((
+            noisy_position, noisy_orientation, noisy_linear_velocity, noisy_angular_velocity
+            )), 3))
 
 
         #self.current_pose = np.round(np.array([position.x, position.y, position.z,
@@ -153,9 +181,9 @@ class Controller(Node):
                                      self.qz_traj[self.step_counter + j*skip_steps], 
                                      self.vx_traj[self.step_counter + j*skip_steps], self.vy_traj[self.step_counter + j*skip_steps], self.vz_traj[self.step_counter + j*skip_steps], 
                                      self.ax_traj[self.step_counter + j*skip_steps], self.ay_traj[self.step_counter + j*skip_steps], self.az_traj[self.step_counter + j*skip_steps], 
-                                     0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 0.3])
+                                     0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2])
                 else:
-                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 0.3])
+                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2])
                 self.ocp.set(j, "yref", yref)
 
 
@@ -196,6 +224,7 @@ class Controller(Node):
                 self.csv_writer.writerow([
                     self.step_counter,
                     msg.channel_0, msg.channel_1, msg.channel_2, msg.channel_3,
+                    self.omega_est[0], self.omega_est[1], self.omega_est[2], self.omega_est[3],
                     self.current_pose[0], self.current_pose[1], self.current_pose[2],
                     self.current_pose[3], self.current_pose[4], self.current_pose[5], self.current_pose[6],
                     self.current_pose[7], self.current_pose[8], self.current_pose[9],

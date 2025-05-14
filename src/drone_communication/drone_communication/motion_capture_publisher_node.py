@@ -11,11 +11,11 @@ from typing import Tuple, Optional
 import sys
 import time
 import numpy as np
+from collections import deque  # Import deque for the rolling average filter
 
 @dataclass
 class ObjectData:
     id: str
-    recieve_time: int
     position: Tuple[float, float, float]
     rotation: Tuple[float, float, float, float]
     velocity: Tuple[float, float, float]
@@ -37,9 +37,32 @@ class MotionCapturePublisher(Node):
         
         self.get_logger().info(f'Listening for UDP on {self.HOST}:{self.PORT}')
 
-        self.last_pose = None
-        self.last_orientation = None
-        self.last_time = None
+        self.last_pose = np.array([0, 0, 0])
+        self.last_orientation = np.array([0, 0, 0, 1])
+        self.last_time = time.time()
+
+        # Rolling average buffers for position, orientation, velocity, and angular velocity
+        self.position_buffers = {
+            'x': deque(maxlen=4),
+            'y': deque(maxlen=4),
+            'z': deque(maxlen=4)
+        }
+        self.orientation_buffers = {
+            'qx': deque(maxlen=4),
+            'qy': deque(maxlen=4),
+            'qz': deque(maxlen=4),
+            'qw': deque(maxlen=4)
+        }
+        self.velocity_buffers = {
+            'x': deque(maxlen=12),
+            'y': deque(maxlen=12),
+            'z': deque(maxlen=12)
+        }
+        self.angular_velocity_buffers = {
+            'x': deque(maxlen=12),
+            'y': deque(maxlen=12),
+            'z': deque(maxlen=12)
+        }
 
     def clean_message(self, message: str) -> str:
         message = message.replace('-(', '|').replace(')-', '|')
@@ -57,43 +80,48 @@ class MotionCapturePublisher(Node):
         print(f"Quaternion w is positive, no change needed.")
         return x, y, z, w
 
+    def apply_rolling_average(self, buffers, *values):
+        """Apply a rolling average filter to the given components."""
+        for key, value in zip(buffers.keys(), values):
+            buffers[key].append(value)
+
+        averages = tuple(sum(buffers[key]) / len(buffers[key]) for key in buffers.keys())
+        return averages
+
     def parse_packet(self, data: str) -> Optional[ObjectData]:
         try:
-            print(f"trying to parse: {data}")
             if not data or '|' not in data:
                 print("Invalid data format, skipping packet.")
                 return None
 
             parts = [p.strip() for p in data.split('|') if p.strip()]
-            if len(parts) != 4:
+            if len(parts) != 3:
                 print("Invalid parts length.")
                 return None
 
-            recieve_time, obj_id, pos_str, rot_str = parts
+            obj_id, pos_str, rot_str = parts
             
-            
+            # Parse position
             pos_parts = [p.strip() for p in pos_str.split(',')]
             if len(pos_parts) != 3:
                 print("Invalid position format.")
                 return None
-            x, y, z =  map(float,pos_parts)
+            x, y, z = map(float, pos_parts)
             
+            # Apply rolling average filter to position
+            #x, y, z = self.apply_rolling_average(self.position_buffers, x, y, z)
+            
+            # Parse orientation
             rot_parts = [p.strip() for p in rot_str.split(',')]
             if len(rot_parts) != 4:
                 print("Invalid rotation format.")
                 return None
-                
-            qx, qy, qz, qw  =  map(float,rot_parts)
+            qx, qy, qz, qw = map(float, rot_parts)
+            
+            # Apply rolling average filter to orientation
+            #qx, qy, qz, qw = self.apply_rolling_average(self.orientation_buffers, qx, qy, qz, qw)
 
             current_time = time.time()
-            if self.last_pose is None:
-                # Initialize the last pose, orientation, and time
-                self.last_pose = np.array([x, y, z])
-                self.last_orientation = np.array([qx, qy, qz, qw])
-                self.last_time = current_time
-                return None
-
-            # Calculate time difference (dt)
             dt = current_time - self.last_time
             self.last_time = current_time
 
@@ -104,13 +132,13 @@ class MotionCapturePublisher(Node):
                 self.last_orientation = np.array([qx, qy, qz, qw])
                 self.last_time = current_time
                 return None
-            
-
-
 
             # Calculate linear velocity in the world frame
             dx, dy, dz = x - self.last_pose[0], y - self.last_pose[1], z - self.last_pose[2]
             linear_velocity_world = np.array([dx / dt, dy / dt, dz / dt])
+
+            # Apply rolling average filter to velocity
+            vx, vy, vz = self.apply_rolling_average(self.velocity_buffers, *linear_velocity_world)
 
             # Calculate angular velocity
             q1 = self.last_orientation
@@ -122,31 +150,19 @@ class MotionCapturePublisher(Node):
             # Transform velocity from world frame to body frame
             angular_velocity_body = np.dot(rotation_matrix.T, angular_velocity)
 
+            # Apply rolling average filter to angular velocity
+            avx, avy, avz = self.apply_rolling_average(self.angular_velocity_buffers, *angular_velocity_body)
+
             # Update last pose, orientation, and time
             self.last_pose = np.array([x, y, z])
             self.last_orientation = np.array([qx, qy, qz, qw])
             
-
-            pose_for_rviz = PoseStamped()
-            pose_for_rviz.header.stamp = self.get_clock().now().to_msg()
-            pose_for_rviz.header.frame_id = "map"
-            pose_for_rviz.pose.position.x = x
-            pose_for_rviz.pose.position.y = y
-            pose_for_rviz.pose.position.z = z
-            pose_for_rviz.pose.orientation.x = qx
-            pose_for_rviz.pose.orientation.y = qy
-            pose_for_rviz.pose.orientation.z = qz
-            pose_for_rviz.pose.orientation.w = qw
-
-            self.pose_publisher.publish(pose_for_rviz)
-            
             return ObjectData(
                 id=obj_id,
-                recieve_time=int(recieve_time),
                 position=(x, y, z),
                 rotation=(qw, qx, qy, qz),
-                velocity=(linear_velocity_world[0], linear_velocity_world[1], linear_velocity_world[2]),
-                angular_velocity=(angular_velocity_body[0], angular_velocity_body[1], angular_velocity_body[2])
+                velocity=(vx, vy, vz),
+                angular_velocity=(avx, avy, avz)
             )
         except Exception:
             return None
@@ -156,13 +172,8 @@ class MotionCapturePublisher(Node):
         
         # Set header
         msg.header = Header()
-        msg.header.stamp = rclpy.time.Time(nanoseconds=obj_data.recieve_time).to_msg()
+        msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = obj_data.id
-
-        print(f"Outgoing Current time: {time.time_ns()}")
-        print(f"Outgoing Recorded time: {obj_data.recieve_time}")
-        print(f"Outgoing Time difference: {(time.time_ns() - (obj_data.recieve_time)) / 1e6} ms")
-            
         
         # Set pose
         msg.pose = Pose()
@@ -194,9 +205,8 @@ class MotionCapturePublisher(Node):
                 cleaned_message = self.clean_message(message)
                 obj_data = self.parse_packet(cleaned_message)
 
-                print(f"Do we hqve obj_data? {obj_data}")
-                
                 if obj_data:
+                    
                     motion_capture_msg = self.create_motion_capture_state_msg(obj_data)
                     self.publisher.publish(motion_capture_msg)
 
