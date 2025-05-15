@@ -146,12 +146,6 @@ class Controller(Node):
             noisy_position, noisy_orientation, noisy_linear_velocity, noisy_angular_velocity
             )), 3))
 
-
-        #self.current_pose = np.round(np.array([position.x, position.y, position.z,
-        #          orientation.w, orientation.x, orientation.y, orientation.z,
-        #          linear_velocity.x, linear_velocity.y, linear_velocity.z,
-        #          angular_velocity.x, angular_velocity.y, angular_velocity.z]) + noise,2)
-
     def control_loop(self):
         msg = ELRSCommand()
         msg.armed = False

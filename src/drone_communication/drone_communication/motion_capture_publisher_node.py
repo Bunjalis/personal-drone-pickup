@@ -12,6 +12,8 @@ import sys
 import time
 import numpy as np
 from collections import deque  # Import deque for the rolling average filter
+import csv
+import scipy.signal  # Import scipy.signal for Butterworth filter
 
 @dataclass
 class ObjectData:
@@ -42,27 +44,97 @@ class MotionCapturePublisher(Node):
         self.last_time = time.time()
 
         # Rolling average buffers for position, orientation, velocity, and angular velocity
-        self.position_buffers = {
-            'x': deque(maxlen=4),
-            'y': deque(maxlen=4),
-            'z': deque(maxlen=4)
-        }
-        self.orientation_buffers = {
-            'qx': deque(maxlen=4),
-            'qy': deque(maxlen=4),
-            'qz': deque(maxlen=4),
-            'qw': deque(maxlen=4)
-        }
+
         self.velocity_buffers = {
-            'x': deque(maxlen=12),
-            'y': deque(maxlen=12),
-            'z': deque(maxlen=12)
+            'x': deque(maxlen=8),
+            'y': deque(maxlen=8),
+            'z': deque(maxlen=8)
         }
         self.angular_velocity_buffers = {
-            'x': deque(maxlen=12),
-            'y': deque(maxlen=12),
-            'z': deque(maxlen=12)
+            'x': deque(maxlen=8),
+            'y': deque(maxlen=8),
+            'z': deque(maxlen=8)
         }
+
+        # Rolling average buffers for velocity
+        self.rolling_velocity_buffers = {
+            'x': deque(maxlen=8),
+            'y': deque(maxlen=8),
+            'z': deque(maxlen=8)
+        }
+
+        # Low-pass filter buffers for velocity
+        self.low_pass_velocity_buffers = {
+            'x': deque(maxlen=8),
+            'y': deque(maxlen=8),
+            'z': deque(maxlen=8)
+        }
+
+        # Butterworth filter buffers for velocity
+        self.butter_velocity_buffers = {
+            'x': deque(maxlen=8),
+            'y': deque(maxlen=8),
+            'z': deque(maxlen=8)
+        }
+
+        # Rolling average buffers for angular velocity
+        self.rolling_angular_velocity_buffers = {
+            'x': deque(maxlen=8),
+            'y': deque(maxlen=8),
+            'z': deque(maxlen=8)
+        }
+
+        # Low-pass filter buffers for angular velocity
+        self.low_pass_angular_velocity_buffers = {
+            'x': deque(maxlen=8),
+            'y': deque(maxlen=8),
+            'z': deque(maxlen=8)
+        }
+
+        # Butterworth filter buffers for angular velocity
+        self.butter_angular_velocity_buffers = {
+            'x': deque(maxlen=8),
+            'y': deque(maxlen=8),
+            'z': deque(maxlen=8)
+        }
+
+        # Low-pass filter parameters
+        self.alpha = 0.2  # Smoothing factor (0 < alpha <= 1)
+
+
+        # Butterworth filter parameters
+        self.butter_cutoff = 0.1  # Cutoff frequency (normalized, 0 < butter_cutoff < 0.5)
+        self.butter_order = 2    # Order of the Butterworth filter
+
+
+        # Precompute Butterworth filter coefficients
+        self.butter_b, self.butter_a = scipy.signal.butter(
+            self.butter_order, self.butter_cutoff, btype='low', analog=False
+        )
+
+        # Initialize filtered values for velocity and angular velocity
+        self.filtered_velocity = np.array([0.0, 0.0, 0.0])
+        self.filtered_angular_velocity = np.array([0.0, 0.0, 0.0])
+
+        '''
+
+        self.motion_capture_csv_file = open('motion_capture_raw.csv', mode='w', newline='')
+        self.motion_capture_csv_writer = csv.writer(self.motion_capture_csv_file)
+        self.motion_capture_csv_writer.writerow([
+                        'r_px', 'r_py', 'r_pz',
+                        'r_rw', 'r_rx', 'r_ry', 'r_rz',
+                        'r_vx', 'r_vy', 'r_vz',
+                        'r_wx', 'r_wy', 'r_wz',
+                        'rolling_vx', 'rolling_vy', 'rolling_vz',
+                        'low_pass_vx', 'low_pass_vy', 'low_pass_vz',
+                        'butter_vx', 'butter_vy', 'butter_vz',
+                        'rolling_wx', 'rolling_wy', 'rolling_wz',
+                        'low_pass_wx', 'low_pass_wy', 'low_pass_wz',
+                        'butter_wx', 'butter_wy', 'butter_wz',
+        ])'''
+
+
+
 
     def clean_message(self, message: str) -> str:
         message = message.replace('-(', '|').replace(')-', '|')
@@ -88,6 +160,36 @@ class MotionCapturePublisher(Node):
         averages = tuple(sum(buffers[key]) / len(buffers[key]) for key in buffers.keys())
         return averages
 
+    def apply_low_pass_filter(self, buffers, *values):
+        """Apply a low-pass filter to the given components."""
+        filtered_values = []
+        for key, value in zip(buffers.keys(), values):
+            if len(buffers[key]) == 0:
+                # Initialize the buffer with the first value
+                buffers[key].append(value)
+            else:
+                # Apply low-pass filter
+                filtered_value = self.alpha * value + (1 - self.alpha) * buffers[key][-1]
+                buffers[key].append(filtered_value)
+            filtered_values.append(buffers[key][-1])
+        return tuple(filtered_values)
+
+    def apply_butterworth_filter(self, buffers, *values):
+        """Apply a Butterworth filter to the given components."""
+        filtered_values = []
+        for key, value in zip(buffers.keys(), values):
+            buffers[key].append(value)
+            if len(buffers[key]) < len(self.butter_b):
+                # Not enough data to apply the filter yet
+                filtered_values.append(value)
+            else:
+                # Apply the Butterworth filter
+                filtered_value = scipy.signal.lfilter(
+                    self.butter_b, self.butter_a, list(buffers[key])
+                )[-1]
+                filtered_values.append(filtered_value)
+        return tuple(filtered_values)
+
     def parse_packet(self, data: str) -> Optional[ObjectData]:
         try:
             if not data or '|' not in data:
@@ -106,7 +208,7 @@ class MotionCapturePublisher(Node):
             if len(pos_parts) != 3:
                 print("Invalid position format.")
                 return None
-            x, y, z = map(float, pos_parts)
+            r_x, r_y, r_z = map(float, pos_parts)
             
             # Apply rolling average filter to position
             #x, y, z = self.apply_rolling_average(self.position_buffers, x, y, z)
@@ -116,7 +218,7 @@ class MotionCapturePublisher(Node):
             if len(rot_parts) != 4:
                 print("Invalid rotation format.")
                 return None
-            qx, qy, qz, qw = map(float, rot_parts)
+            r_qx, r_qy, r_qz, r_qw = map(float, rot_parts)
             
             # Apply rolling average filter to orientation
             #qx, qy, qz, qw = self.apply_rolling_average(self.orientation_buffers, qx, qy, qz, qw)
@@ -128,21 +230,36 @@ class MotionCapturePublisher(Node):
             print(f"Time difference (dt): {dt:.6f} seconds")
 
             if dt <= 0:
-                self.last_pose = np.array([x, y, z])
-                self.last_orientation = np.array([qx, qy, qz, qw])
+                self.last_pose = np.array([r_x, r_y, r_z])
+                self.last_orientation = np.array([r_qx, r_qy, r_qz, r_qw])
                 self.last_time = current_time
                 return None
 
             # Calculate linear velocity in the world frame
-            dx, dy, dz = x - self.last_pose[0], y - self.last_pose[1], z - self.last_pose[2]
+            dx, dy, dz = r_x - self.last_pose[0], r_y - self.last_pose[1], r_z - self.last_pose[2]
             linear_velocity_world = np.array([dx / dt, dy / dt, dz / dt])
 
+            r_vx, r_vy, r_vz = linear_velocity_world
+
+
             # Apply rolling average filter to velocity
-            vx, vy, vz = self.apply_rolling_average(self.velocity_buffers, *linear_velocity_world)
+            # rolling_vx, rolling_vy, rolling_vz = self.apply_rolling_average(
+            #    self.rolling_velocity_buffers, *linear_velocity_world
+            #)
+
+            # Apply low-pass filter to velocity
+            low_pass_vx, low_pass_vy, low_pass_vz = self.apply_low_pass_filter(
+                self.low_pass_velocity_buffers, *linear_velocity_world
+            )
+
+            # Apply Butterworth filter to velocity
+            #butter_vx, butter_vy, butter_vz = self.apply_butterworth_filter(
+            #    self.butter_velocity_buffers, *linear_velocity_world
+            #)
 
             # Calculate angular velocity
             q1 = self.last_orientation
-            q2 = np.array([qx, qy, qz, qw])
+            q2 = np.array([r_qx, r_qy,r_qz, r_qw])
             q_relative = quaternion_multiply(q2, quaternion_inverse(q1))  # Relative rotation
             angular_velocity = 2 * np.array([q_relative[0], q_relative[1], q_relative[2]]) / dt  # Angular velocity
             rotation_matrix = quaternion_matrix(q2)[:3, :3]  # Extract 3x3 rotation part
@@ -150,19 +267,57 @@ class MotionCapturePublisher(Node):
             # Transform velocity from world frame to body frame
             angular_velocity_body = np.dot(rotation_matrix.T, angular_velocity)
 
+            r_avx, r_avy, r_avz = angular_velocity_body
+            # Apply low-pass filter to angular velocity
+            #f_avx, f_avy, f_avz = self.apply_low_pass_filter(self.angular_velocity_buffers, *angular_velocity_body)
+            f_avx, f_avy, f_avz = self.apply_butterworth_filter(self.butter_angular_velocity_buffers, *angular_velocity_body)      
+            
+
             # Apply rolling average filter to angular velocity
-            avx, avy, avz = self.apply_rolling_average(self.angular_velocity_buffers, *angular_velocity_body)
+            #f_avx, f_avy, f_avz = self.apply_rolling_average(self.angular_velocity_buffers, *angular_velocity_body)
+
+            # Apply rolling average filter to angular velocity
+            #rolling_wx, rolling_wy, rolling_wz = self.apply_rolling_average(
+            #    self.rolling_angular_velocity_buffers, *angular_velocity_body
+            #)
+
+            # Apply low-pass filter to angular velocity
+            low_pass_wx, low_pass_wy, low_pass_wz = self.apply_low_pass_filter(
+                self.low_pass_angular_velocity_buffers, *angular_velocity_body
+            )
+
+            # Apply Butterworth filter to angular velocity
+            #butter_wx, butter_wy, butter_wz = self.apply_butterworth_filter(
+            #    self.butter_angular_velocity_buffers, *angular_velocity_body
+            #)
 
             # Update last pose, orientation, and time
-            self.last_pose = np.array([x, y, z])
-            self.last_orientation = np.array([qx, qy, qz, qw])
+            self.last_pose = np.array([r_x, r_y, r_z])
+            self.last_orientation = np.array([r_qx, r_qy, r_qz, r_qw])
+
+
+
+            '''
+            self.motion_capture_csv_writer.writerow([
+                r_x, r_y, r_z,
+                r_qw, r_qx, r_qy, r_qz,
+                r_vx, r_vy, r_vz,
+                r_avx, r_avy, r_avz,
+                rolling_vx, rolling_vy, rolling_vz,
+                low_pass_vx, low_pass_vy, low_pass_vz,
+                butter_vx, butter_vy, butter_vz,
+                rolling_wx, rolling_wy, rolling_wz,
+                low_pass_wx, low_pass_wy, low_pass_wz,
+                butter_wx, butter_wy, butter_wz,
+            ])'''
+
             
             return ObjectData(
                 id=obj_id,
-                position=(x, y, z),
-                rotation=(qw, qx, qy, qz),
-                velocity=(vx, vy, vz),
-                angular_velocity=(avx, avy, avz)
+                position=(r_x, r_y, r_z),
+                rotation=(r_qw, r_qx, r_qy, r_qz),
+                velocity=(low_pass_vx, low_pass_vy, low_pass_vz),  # Use Butterworth-filtered velocity
+                angular_velocity=(low_pass_wx, low_pass_wy, low_pass_wz)  # Use Butterworth-filtered angular velocity
             )
         except Exception:
             return None
