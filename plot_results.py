@@ -5,8 +5,13 @@ import matplotlib.pyplot as plt
 sampling_frequency = 240  # Hz
 time_step = 1 / sampling_frequency
 
+
+
+motion_capture_file_path = 'misc/trajectory_results/10_motion_capture_results.csv'
+control_file_path = 'misc/trajectory_results/10_control_results.csv'
+
 # Load motion capture results
-motion_capture_results = pd.read_csv('motion_capture_results.csv')
+motion_capture_results = pd.read_csv(motion_capture_file_path)
 time_motion = motion_capture_results.index * time_step
 
 # Plot motion capture results
@@ -47,7 +52,7 @@ axs1[3].legend()
 
 sampling_frequency = 30  # Hz
 time_step = 1 / sampling_frequency
-control_results = pd.read_csv('control_results.csv')
+control_results = pd.read_csv(control_file_path)
 time_control = control_results.index * time_step
 
 # Plot control results
