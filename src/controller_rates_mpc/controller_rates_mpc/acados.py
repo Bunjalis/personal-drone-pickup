@@ -81,8 +81,8 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.levenberg_marquardt = 1e-3
 
     # Set input constraints (tune as needed)
-    ocp.constraints.lbu = np.array([0.05, -10.0, -10.0, -10.0])  # throttle, roll_rate, pitch_rate, yaw_rate
-    ocp.constraints.ubu = np.array([0.4, 10.0, 10.0, 10.0])
+    ocp.constraints.lbu = np.array([-0.05, -0.05, 0.05, -0.05])  # throttle, roll_rate, pitch_rate, yaw_rate
+    ocp.constraints.ubu = np.array([0.05, 0.05, 0.4, 0.05])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

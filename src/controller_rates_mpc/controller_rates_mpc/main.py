@@ -76,17 +76,12 @@ class Controller(Node):
         self.initial_solve_state = None
         self.initial_solve_controls = None
 
-        self.omega_est = np.array([0.1,0.1,0.1,0.1])  # Initialize omega_est if not already present
-
-        self.pre_start_duration = 1.0  # Duration for the pre-start state in seconds
+        self.pre_start_duration = 10.0  # Duration for the pre-start state in seconds
         self.pre_start_counter = 0  # Counter to track pre-start steps
         self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
 
         self.N = 20
 
-        # Create the planned_trajectories folder if it doesn't exist
-        self.trajectories_folder = os.path.join(os.getcwd(), 'planned_trajectories')
-        os.makedirs(self.trajectories_folder, exist_ok=True)
 
         # Initialize CSV file at the start of the program
         if not hasattr(self, 'csv_initialized'):
@@ -96,7 +91,6 @@ class Controller(Node):
             # Write header row
             self.csv_writer.writerow([
                     'Step', 'u0', 'u1', 'u2', 'u3',
-                        'o_u0', 'o_u1', 'o_u2', 'o_u3',
                         'px', 'py', 'pz',
                         'rw', 'rx', 'ry', 'rz',
                         'vx', 'vy', 'vz',
@@ -126,13 +120,7 @@ class Controller(Node):
         orientation = msg.pose.orientation
         linear_velocity = msg.twist.linear
         angular_velocity = msg.twist.angular
-        # Generate Gaussian noise for each state component
-        noise_pos = np.random.normal(0, 0.05, 3)  # Position noise
-        noise_rot = np.random.normal(0, 0.05, 4)  # Orientation noise
-        noise_lin_vel = np.random.normal(0, 0.1, 3)  # Linear velocity noise
-        noise_rot_vel = np.random.normal(0, 0.1, 3)  # Angular velocity noise
 
-        # Add noise to each state component
         noisy_position = np.array([position.x, position.y, position.z]) #+ noise_pos
         noisy_orientation = np.array([orientation.w, orientation.x, orientation.y, orientation.z]) #+ noise_rot
         noisy_linear_velocity = np.array([linear_velocity.x, linear_velocity.y, linear_velocity.z]) #+ noise_lin_vel
@@ -142,9 +130,7 @@ class Controller(Node):
         self.current_pose = np.round(np.concatenate((noisy_position, noisy_orientation, noisy_linear_velocity, noisy_angular_velocity)), 3)
 
         if self.armed:
-            self.motion_capture_csv_writer.writerow(np.round(np.concatenate((
-            noisy_position, noisy_orientation, noisy_linear_velocity, noisy_angular_velocity
-            )), 3))
+            self.motion_capture_csv_writer.writerow(np.round(np.concatenate(( noisy_position, noisy_orientation, noisy_linear_velocity, noisy_angular_velocity  )), 3))
 
     def control_loop(self):
         msg = ELRSCommand()
@@ -157,10 +143,10 @@ class Controller(Node):
         # Pre-start state: Send 0.1 on all channels for one second
         if self.armed and self.pre_start_counter < self.pre_start_steps:
             msg.armed = True
-            msg.channel_0 = 0.1
-            msg.channel_1 = 0.1
-            msg.channel_2 = 0.1
-            msg.channel_3 = 0.1
+            msg.channel_0 = 0.0
+            msg.channel_1 = 0.0
+            msg.channel_2 = 0.0
+            msg.channel_3 = 0.0
             self.cmd_publisher_.publish(msg)
 
             self.pre_start_counter += 1
@@ -187,10 +173,8 @@ class Controller(Node):
                                     self.ax_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.ay_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.az_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)]])
             self.ocp.set(self.N, "yref", yref_N)
 
-            current_state_with_omega = np.concatenate((self.current_pose, self.omega_est))
-
-            self.ocp.set(0, "lbx", current_state_with_omega)
-            self.ocp.set(0, "ubx", current_state_with_omega)
+            self.ocp.set(0, "lbx", self.current_pose)
+            self.ocp.set(0, "ubx", self.current_pose)
 
             # Solve the OCP
             status = self.ocp.solve()
@@ -206,9 +190,8 @@ class Controller(Node):
             msg.channel_3 = round(u[3], 3)
             
             self.cmd_publisher_.publish(msg)
-            self.omega_est = self.ocp.get(1,"x")[-4:]
 
-            print(f"U = {np.round(u, 3)} omega_est = {np.round(self.omega_est, 3)}")
+            print(f"U = {np.round(u, 3)}")
 
 
             # Store current state and control for next step prediction
@@ -217,7 +200,6 @@ class Controller(Node):
                 self.csv_writer.writerow([
                     self.step_counter,
                     msg.channel_0, msg.channel_1, msg.channel_2, msg.channel_3,
-                    self.omega_est[0], self.omega_est[1], self.omega_est[2], self.omega_est[3],
                     self.current_pose[0], self.current_pose[1], self.current_pose[2],
                     self.current_pose[3], self.current_pose[4], self.current_pose[5], self.current_pose[6],
                     self.current_pose[7], self.current_pose[8], self.current_pose[9],
@@ -228,32 +210,12 @@ class Controller(Node):
                     self.ax_traj[self.step_counter], self.ay_traj[self.step_counter], self.az_traj[self.step_counter],
                 ])
 
-            # Store the current state and control for the next step
-            self.last_state = current_state_with_omega.copy()
-            self.last_control = u.copy()
-
-            # Save planned position and control actions to a CSV file for each step
-            '''
-            step_file_path = os.path.join(self.trajectories_folder, f'step_{self.step_counter}.csv')
-            with open(step_file_path, mode='w', newline='') as step_file:
-                step_writer = csv.writer(step_file)
-                step_writer.writerow(['Planned_Position_X', 'Planned_Position_Y', 'Planned_Position_Z',
-                                      'Control_Action_0', 'Control_Action_1', 'Control_Action_2', 'Control_Action_3'])
-                for j in range(self.N + 1):
-                    state = self.ocp.get(j, "x")
-                    control = self.ocp.get(j, "u") if j < self.N else [None, None, None, None]
-                    step_writer.writerow([state[0], state[1], state[2],
-                                          control[0], control[1], control[2], control[3]])
-
-            '''
-
             self.step_counter += 1
 
 
         else:
             self.cmd_publisher_.publish(msg)
             self.step_counter = 0
-            # Reset stored states when disarmed
 
     def signal_handler(self, sig, frame):
         self.on_close()

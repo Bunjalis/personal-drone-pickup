@@ -105,7 +105,8 @@ class ELRSInterface(Node):
 
         self.input = bytearray()
 
-        self.idle = 993
+        self.idle = 993 # may be 993 for ardupilot (this is strange)
+        self.range = 805
         self.armed = False
         self.packet = np.full(16, self.idle, dtype=np.uint16)
         self.packet[4] = 0
@@ -153,21 +154,24 @@ class ELRSInterface(Node):
 
         self.get_logger().info(f"Armed: {self.armed}")
 
+        self.packet[0] = self.idle + int(max(-1.0, min(1.0, msg.channel_0)) * self.range)
+        self.packet[1] = self.idle + int(max(-1.0, min(1.0, msg.channel_1)) * self.range)
+        #self.packet[2] = self.idle + int(max(-1.0, min(1.0, msg.channel_2)) * self.range)
+        self.packet[2] = self.idle - self.range + int(max(0.0, min(1.0, msg.channel_2)) * 2 * self.range) #betaflight throttle
+
+
+        self.packet[3] = self.idle + int(max(-1.0, min(1.0, msg.channel_3)) * self.range)
+        self.packet[5] = self.idle + int(max(-1.0, min(1.0, msg.channel_4)) * self.range)
+        self.packet[6] = self.idle + int(max(-1.0, min(1.0, msg.channel_5)) * self.range)
+        self.packet[7] = self.idle + int(max(-1.0, min(1.0, msg.channel_6)) * self.range)
+        self.packet[8] = self.idle + int(max(-1.0, min(1.0, msg.channel_7)) * self.range)
+        self.packet[8] = self.idle + int(max(-1.0, min(1.0, msg.channel_8)) * self.range)
+        self.packet[10] = self.idle + int(max(-1.0, min(1.0, msg.channel_9)) * self.range)
+        self.packet[11] = self.idle + int(max(-1.0, min(1.0, msg.channel_10)) * self.range)
+
         if self.armed:
-            self.packet[0] = self.idle + int(max(-1.0, min(1.0, msg.channel_0)) * self.idle)
-            self.packet[1] = self.idle + int(max(-1.0, min(1.0, msg.channel_1)) * self.idle)
-            self.packet[2] = self.idle + int(max(-1.0, min(1.0, msg.channel_2)) * self.idle)
-            self.packet[3] = self.idle + int(max(-1.0, min(1.0, msg.channel_3)) * self.idle)
             self.packet[4] = 2000
-            self.packet[5] = self.idle + int(max(-1.0, min(1.0, msg.channel_4)) * self.idle)
-            self.packet[6] = self.idle + int(max(-1.0, min(1.0, msg.channel_5)) * self.idle)
-            self.packet[7] = self.idle + int(max(-1.0, min(1.0, msg.channel_6)) * self.idle)
-            self.packet[8] = self.idle + int(max(-1.0, min(1.0, msg.channel_7)) * self.idle)
-            self.packet[8] = self.idle + int(max(-1.0, min(1.0, msg.channel_8)) * self.idle)
-            self.packet[10] = self.idle + int(max(-1.0, min(1.0, msg.channel_9)) * self.idle)
-            self.packet[11] = self.idle + int(max(-1.0, min(1.0, msg.channel_10)) * self.idle)
         else:
-            self.packet = np.full(16, self.idle, dtype=np.uint16)
             self.packet[4] = 0
 
     def handleCrsfPacket(self, ptype, data):
@@ -239,6 +243,8 @@ class ELRSInterface(Node):
         if time.time() - self.last_message_time > 0.5:
             if self.armed:  # Only log and disarm if currently armed
                 self.get_logger().warn("No message received for 0.1 seconds. Disarming motors.")
+
+            print(" -------------------------- THIS TRIGGERED --------------------------")
             self.armed = False
             self.packet = np.full(16, self.idle, dtype=np.uint16)
             self.packet[4] = 0
@@ -247,14 +253,9 @@ class ELRSInterface(Node):
             if self.ser and self.ser.in_waiting > 0:
                 self.input.extend(self.ser.read(self.ser.in_waiting))
             elif self.ser:
-                start_time = time.time()  # Start timing the write operation
-                self.ser.write(channelsCrsfToChannelsPacket(self.packet))
-                #self.ser.flush()  # Ensure data is sent immediately
-                elapsed_time = time.time() - start_time
-                self.get_logger().info(f"Serial write took {elapsed_time:.6f} seconds.")
 
-                time_now = time.time()
-                self.last_elrs_command_time_published = time_now
+                
+                self.ser.write(channelsCrsfToChannelsPacket(self.packet))
 
             while len(self.input) > 2:
                 expected_len = self.input[1] + 2
