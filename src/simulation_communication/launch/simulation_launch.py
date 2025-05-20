@@ -5,14 +5,14 @@ def generate_launch_description():
     return LaunchDescription([
         # ROS2 pose bridge
         Node(
-            package='ros_ign_bridge',
+            package='ros_gz_bridge',
             executable='parameter_bridge',
             name='pose_bridge',
             arguments=['/world/quadcopter/dynamic_pose/info@geometry_msgs/msg/PoseArray[ignition.msgs.Pose_V']
         ),
         # ROS2 control bridge
         Node(
-            package='ros_ign_bridge',
+            package='ros_gz_bridge',
             executable='parameter_bridge',
             name='control_bridge',
             arguments=['/X3/gazebo/command/motor_speed@actuator_msgs/msg/Actuators]ignition.msgs.Actuators']
