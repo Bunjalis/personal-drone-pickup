@@ -88,12 +88,12 @@ class QuadDynamics:
         return v_dynamics
 
     def w_dynamics(self):
-        max_rate_deg = 400  # Maximum rate in deg/s (adjust if needed)
+        max_rate_deg = 400
         max_rate_rad = max_rate_deg * np.pi / 180.0
         r_cmd = cs.vertcat(
-            self.u[0] * max_rate_rad,  # roll
-            self.u[1] * max_rate_rad,  # pitch
-            self.u[3] * max_rate_rad   # yaw
+            self.u[0] * max_rate_rad,
+            self.u[1] * max_rate_rad,
+            -self.u[3] * max_rate_rad 
         )
         r_dot = (1 / self.tau_rate) * (r_cmd - self.r)
         return r_dot
