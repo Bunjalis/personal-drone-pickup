@@ -175,17 +175,16 @@ class Controller(Node):
                                      self.qz_traj[self.step_counter + j*skip_steps], 
                                      self.vx_traj[self.step_counter + j*skip_steps], self.vy_traj[self.step_counter + j*skip_steps], self.vz_traj[self.step_counter + j*skip_steps], 
                                      self.ax_traj[self.step_counter + j*skip_steps], self.ay_traj[self.step_counter + j*skip_steps], self.az_traj[self.step_counter + j*skip_steps], 
-                                     0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2])
+                                      0.2, 0.2, 0.2, 0.2])
                 else:
-                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2])
+                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.2, 0.2, 0.2, 0.2])
                 self.ocp.set(j, "yref", yref)
 
 
             yref_N = np.array([self.x_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.y_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.z_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
                                     self.qw_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.qx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
                                     self.vx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.vy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.vz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], 
-                                    self.ax_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.ay_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.az_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
-                                    0.0, 0.0, 0.0, 0.0 ])
+                                    self.ax_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.ay_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.az_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)]])
             self.ocp.set(self.N, "yref", yref_N)
 
             current_state_with_omega = np.concatenate((self.current_pose, self.omega_est))

@@ -15,60 +15,24 @@ class QuadDynamics:
         self.v = cs.MX.sym('v', 3)  # velocity
         self.r = cs.MX.sym('r', 3)  # angular velocity
 
-        # Update full state vector to include motor speeds
-        self.omega = cs.MX.sym('omega', 4)  # Motor speeds
-        self.x = cs.vertcat(self.p, self.q, self.v, self.r, self.omega)
-        self.state_dim = 17  # Updated state dimension to include motor speeds
+        # State vector: position, quaternion, velocity, angular velocity
+        self.x = cs.vertcat(self.p, self.q, self.v, self.r)
+        self.state_dim = 13
 
-        # Control input vector (throttle, roll, pitch, yaw)
-        m1 = cs.MX.sym('m1') # back right, counter-clockwise
-        m2 = cs.MX.sym('m2') # front right, clockwise
-        m3 = cs.MX.sym('m3') # back left, clockwise
-        m4 = cs.MX.sym('m4') # front left, counter-clockwise
-        self.u = cs.vertcat(m1, m2, m3, m4)
+        # Control input: throttle, desired roll rate, pitch rate, yaw rate (Betaflight style)
+        throttle = cs.MX.sym('throttle')
+        roll_rate_cmd = cs.MX.sym('roll_rate_cmd')
+        pitch_rate_cmd = cs.MX.sym('pitch_rate_cmd')
+        yaw_rate_cmd = cs.MX.sym('yaw_rate_cmd')
+        self.u = cs.vertcat(throttle, roll_rate_cmd, pitch_rate_cmd, yaw_rate_cmd)
 
-        ''' simulated quadcopter parameters 
-        self.mass = 1.04
-        self.x_l = 0.15
-        self.y_l = 0.15
-        self.J = np.array([.03, .03, .06])
-        self.motor_constant = 8.54858e-6
-        self.moment_constant = 0.016 
-        self.max_speed = 1000  # rad/s
-        '''
-
-        ''' Simulated tiny trainer parameters
-        self.mass = 0.17
-        self.x_l = 0.054
-        self.y_l = 0.046
-        #self.J = np.array([.03, .03, .06])
-        self.J = np.array([0.0004124292645, 0.0003459416836, 0.0005984955024])
-        self.motor_constant = 1.326e-07
-        self.moment_constant = 0.05
-        self.max_speed = 6000  # rad/s
-        self.tau_motor = 0.114  # Time constant for motor dynamics
-        self.K_motor = 1.053    # Gain for motor dynamics
-        '''
-
-        #''' Simulated tiny trainer parameters
         self.mass = 0.6
         self.x_l = 0.173/2
         self.y_l = 0.146/2
         self.J = np.array([0.001799424313, 0.001522934832, 0.002923509135])
-        self.motor_constant = 1.62e-06
-        self.moment_constant = 0.05
-        self.max_speed = 4000  # rad/s
-        self.tau_motor = 0.121  # Time constant for motor dynamics
-        self.K_motor = 0.799    # Gain for motor dynamics
-        #'''
-        
-        
-
-        self.x_f = np.array([-self.y_l, -self.y_l, self.y_l, self.y_l])
-        self.y_f = np.array([self.x_l, -self.x_l, self.x_l, -self.x_l])
-        #self.z_l_tau = np.array([-1, 1, 1, -1]) # tiny trainer
-        self.z_l_tau = np.array([1, -1, -1, 1]) # THIS IS THE CORRECT SIGN FOR THE LARGE QUAD
-
+        self.thrust_constant = 18
+        self.tau_rate = 0.05
+    
     def q_to_rot_mat(self, q):
         qw, qx, qy, qz = q[0], q[1], q[2], q[3]
 
@@ -106,14 +70,8 @@ class QuadDynamics:
             cs.horzcat(v[1], -v[2], 0, v[0]),
             cs.horzcat(v[2], v[1], -v[0], 0))
 
-    def motor_dynamics(self):
-        # Define the motor dynamics as a first-order system
-        omega_dot = (1 / self.tau_motor) * (-self.omega + self.K_motor * self.u)
-        return omega_dot
-
     def quad_dynamics(self):
-        # Include motor dynamics in the overall dynamics
-        x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(), self.v_dynamics(), self.w_dynamics(), self.motor_dynamics())
+        x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(), self.v_dynamics(), self.w_dynamics())
         return cs.Function('x_dot', [self.x, self.u], [x_dot], ['x', 'u'], ['x_dot'])
 
     def p_dynamics(self):
@@ -123,37 +81,19 @@ class QuadDynamics:
         return 1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
 
     def v_dynamics(self):
-        # Update thrust model to use the new equation
-        #f_thrust = 7.46e-08 * cs.power(self.omega * self.max_speed, 2) + 1.51e-04 * (self.omega * self.max_speed)
-        f_thrust = self.motor_constant * cs.power(self.omega * self.max_speed, 2)
-
-        # Gravity vector
+        f_thrust = self.thrust_constant * self.u[2]
+        a_thrust = cs.vertcat(0.0, 0.0, f_thrust) / self.mass
         g = cs.vertcat(0.0, 0.0, 9.81)
-
-        # Total thrust in the body z-direction
-        a_thrust = cs.vertcat(0.0, 0.0, f_thrust[0] + f_thrust[1] + f_thrust[2] + f_thrust[3]) / self.mass
-
-        # Rotate thrust to the world frame and subtract gravity
         v_dynamics = self.v_dot_q(a_thrust, self.q) - g
-
         return v_dynamics
 
     def w_dynamics(self):
-        # Use motor speeds (omega) instead of control inputs (u) directly
-        #f_thrust = 7.46e-08 * cs.power(self.omega * self.max_speed, 2) + 1.51e-04 * (self.omega * self.max_speed) # Thrust for each motor using omega
-        f_thrust = self.motor_constant * cs.power(self.omega * self.max_speed, 2)
-        tau_yaw = self.moment_constant * f_thrust  # Torque for each motor (yaw)
-
-        # Convert parameters to CasADi symbolic variables
-        x_f = cs.MX(self.x_f)  # x-offsets of motors for roll dynamics
-        y_f = cs.MX(self.y_f)  # y-offsets of motors for pitch dynamics
-        c_f = cs.MX(self.z_l_tau)  # yaw torque coefficients
-
-        # Calculate angular velocity dynamics
-        w_dynamics = cs.vertcat(
-            (cs.mtimes(f_thrust.T, x_f) + (self.J[1] - self.J[2]) * self.r[1] * self.r[2]) / self.J[0],  # Roll dynamics
-            (cs.mtimes(f_thrust.T, y_f) + (self.J[2] - self.J[0]) * self.r[2] * self.r[0]) / self.J[1],  # Pitch dynamics
-            (cs.mtimes(tau_yaw.T, c_f) + (self.J[0] - self.J[1]) * self.r[0] * self.r[1]) / self.J[2]   # Yaw dynamics
+        max_rate_deg = 400  # Maximum rate in deg/s (adjust if needed)
+        max_rate_rad = max_rate_deg * np.pi / 180.0
+        r_cmd = cs.vertcat(
+            self.u[0] * max_rate_rad,  # roll
+            self.u[1] * max_rate_rad,  # pitch
+            self.u[3] * max_rate_rad   # yaw
         )
-
-        return w_dynamics
+        r_dot = (1 / self.tau_rate) * (r_cmd - self.r)
+        return r_dot
