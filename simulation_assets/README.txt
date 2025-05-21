@@ -21,3 +21,32 @@ ros2 run simulation_communication motion_capture_emulator
 
 
 ros2 launch simulation_communication simulation_launch.py 
+
+
+
+
+
+
+### Launch the betaflight simulation
+
+## Launch websockify
+
+cd websockify-other/c
+./websockify 127.0.0.1:6761 127.0.0.1:5761
+
+
+## Launch betaflight SITL - https://betaflight.com/docs/development/SITL
+
+./obj/main/betaflight_SITL.elf 
+
+## Launch the ros2 betaflight communication bridge 
+
+ros2 launch simulation_communication betaflight_simulation_launch.py 
+
+## Launch gazebo 
+
+ign gazebo world_large.sdf 
+
+## Launch the controller
+
+ros2 run controller_rates_mpc main
