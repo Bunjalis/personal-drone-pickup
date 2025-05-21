@@ -37,12 +37,12 @@ class Controller(Node):
         # Original trajectories
         self.x_traj = np.zeros_like(time_space)
         self.y_traj = np.zeros_like(time_space)
-        self.z_traj = 1.0 * np.ones_like(time_space)
+        #self.z_traj = 1.0 * np.ones_like(time_space)
 
         # New oscillating trajectories
         #self.x_traj = 2.0 * np.sin(2 * np.pi * 1.0 * time_space)  # Sine wave with frequency 0.1 Hz
         #self.y_traj = 2.0 * np.sin(2 * np.pi * 0.5 * time_space)  # Sine wave with frequency 0.2 Hz
-        #self.z_traj = 1.5 + 0.5 * np.sin(2 * np.pi * 0.5 * time_space)  # Sine wave with frequency 0.05 Hz
+        self.z_traj = 1.5 + 0.5 * np.sin(2 * np.pi * 0.5 * time_space)  # Sine wave with frequency 0.05 Hz
 
         roll_traj = np.zeros_like(time_space)  # Roll remains 0
         pitch_traj = np.zeros_like(time_space)  # Pitch remains 0
@@ -76,7 +76,7 @@ class Controller(Node):
         self.initial_solve_state = None
         self.initial_solve_controls = None
 
-        self.pre_start_duration = 10.0  # Duration for the pre-start state in seconds
+        self.pre_start_duration = 2.0  # Duration for the pre-start state in seconds
         self.pre_start_counter = 0  # Counter to track pre-start steps
         self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
 

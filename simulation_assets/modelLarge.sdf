@@ -4,7 +4,7 @@
         <link name="X3/base_link">
             <pose frame="">0 0 0 0 0 0</pose>
             <inertial>
-                <pose frame="">0.0 0.005 0 0 -0 0</pose>
+                <pose frame="">0.0 0.0 0 0 -0 0</pose>
                 <mass>0.596</mass>
                 <inertia>
                     <ixx>0.001744744189</ixx>
@@ -19,7 +19,7 @@
                 <pose frame="">0 0 0 0 0.0 0</pose>
                 <geometry>
                     <box>
-                        <size>0.15 0.03 0.03</size>
+                        <size>0.03 0.03 0.03</size>
                     </box>
                 </geometry>
             </collision>
@@ -28,11 +28,27 @@
                 <pose frame="">0 0 0 0 0.0 0</pose>
                 <geometry>
                     <box>
-                        <size>0.15 0.03 0.03</size>
+                        <size>0.03 0.03 0.03</size>
                     </box>
                 </geometry>
             </visual>
-
+            <sensor name="imu_sensor" type="imu">
+                <always_on>true</always_on>
+                <update_rate>1000</update_rate>
+                <pose>0 0 0 0 0 0</pose>
+                <imu>
+                    <angular_velocity>
+                        <x>true</x>
+                        <y>true</y>
+                        <z>true</z>
+                    </angular_velocity>
+                    <linear_acceleration>
+                        <x>true</x>
+                        <y>true</y>
+                        <z>true</z>
+                    </linear_acceleration>
+                </imu>
+            </sensor>
         </link>
 
 
