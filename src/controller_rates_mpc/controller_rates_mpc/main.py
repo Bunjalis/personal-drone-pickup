@@ -40,9 +40,9 @@ class Controller(Node):
         #self.z_traj = 1.0 * np.ones_like(time_space)
 
         # New oscillating trajectories
-        #self.x_traj = 2.0 * np.sin(2 * np.pi * 1.0 * time_space)  # Sine wave with frequency 0.1 Hz
-        #self.y_traj = 2.0 * np.sin(2 * np.pi * 0.5 * time_space)  # Sine wave with frequency 0.2 Hz
-        self.z_traj = 1.5 + 0.5 * np.sin(2 * np.pi * 0.5 * time_space)  # Sine wave with frequency 0.05 Hz
+        self.x_traj = 0.75 * np.sin(2 * np.pi * 0.1 * time_space)  # Sine wave with frequency 0.1 Hz
+        self.y_traj = 0.75 * np.sin(2 * np.pi * 0.3 * time_space)  # Sine wave with frequency 0.2 Hz
+        self.z_traj = 1.0 + 0.5 * np.sin(2 * np.pi * 0.1 * time_space)  # Sine wave with frequency 0.05 Hz
 
         roll_traj = np.zeros_like(time_space)  # Roll remains 0
         pitch_traj = np.zeros_like(time_space)  # Pitch remains 0

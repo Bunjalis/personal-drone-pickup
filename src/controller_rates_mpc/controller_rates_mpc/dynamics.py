@@ -30,7 +30,7 @@ class QuadDynamics:
         self.x_l = 0.173/2
         self.y_l = 0.146/2
         self.J = np.array([0.001799424313, 0.001522934832, 0.002923509135])
-        self.thrust_constant = 54
+        self.thrust_constant = 40
         self.tau_rate = 0.05
     
     def q_to_rot_mat(self, q):
