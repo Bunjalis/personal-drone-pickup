@@ -16,6 +16,7 @@
     <physics name="1ms" type="ignored">
       <max_step_size>0.001</max_step_size>
       <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>500</real_time_update_rate>
     </physics>
     <plugin
       filename="ignition-gazebo-physics-system"
@@ -80,7 +81,15 @@
       <uri>
         modelLarge.sdf
       </uri>
-      <pose>0 0 0 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
+
+      <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+            <publish_link_pose>true</publish_link_pose>
+            <publish_nested_model_pose>true</publish_nested_model_pose>
+            <use_pose_vector_msg>true</use_pose_vector_msg>
+            <update_frequency>500</update_frequency>
+          </plugin>
+
+      <pose>0 0 0.01 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
       <plugin
         filename="ignition-gazebo-multicopter-motor-model-system"
         name="gz::sim::systems::MulticopterMotorModel">
@@ -88,11 +97,11 @@
         <jointName>X3/rotor_0_joint</jointName>
         <linkName>X3/rotor_0</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0.016</timeConstantUp>
-        <timeConstantDown>0.016</timeConstantDown>
+        <timeConstantUp>0</timeConstantUp>
+        <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
-        <motorConstant>1.62e-06</motorConstant>
-        <momentConstant>0.05</momentConstant>
+        <motorConstant>1.42e-06</motorConstant>
+        <momentConstant>0.2</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>0</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>
@@ -108,11 +117,11 @@
         <jointName>X3/rotor_1_joint</jointName>
         <linkName>X3/rotor_1</linkName>
         <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0.016</timeConstantUp>
-        <timeConstantDown>0.016</timeConstantDown>
+        <timeConstantUp>0</timeConstantUp>
+        <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
-        <motorConstant>1.62e-06</motorConstant>
-        <momentConstant>0.05</momentConstant>
+        <motorConstant>1.42e-06</motorConstant>
+        <momentConstant>0.2</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>1</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>
@@ -128,11 +137,11 @@
         <jointName>X3/rotor_2_joint</jointName>
         <linkName>X3/rotor_2</linkName>
         <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0.016</timeConstantUp>
-        <timeConstantDown>0.016</timeConstantDown>
+        <timeConstantUp>0</timeConstantUp>
+        <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
-        <motorConstant>1.62e-06</motorConstant>
-        <momentConstant>0.05</momentConstant>
+        <motorConstant>1.42e-06</motorConstant>
+        <momentConstant>0.2</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>2</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>
@@ -148,11 +157,11 @@
         <jointName>X3/rotor_3_joint</jointName>
         <linkName>X3/rotor_3</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0.016</timeConstantUp>
-        <timeConstantDown>0.016</timeConstantDown>
+        <timeConstantUp>0</timeConstantUp>
+        <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
-        <motorConstant>1.62e-06</motorConstant>
-        <momentConstant>0.05</momentConstant>
+        <motorConstant>1.42e-06</motorConstant>
+        <momentConstant>0.2</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>3</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>

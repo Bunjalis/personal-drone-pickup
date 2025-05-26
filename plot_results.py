@@ -7,8 +7,16 @@ time_step = 1 / sampling_frequency
 
 
 
-motion_capture_file_path = 'misc/trajectory_results/15_motion_capture_results.csv'
-control_file_path = 'misc/trajectory_results/15_control_results.csv'
+#motion_capture_file_path = 'misc/trajectory_results/15_motion_capture_results.csv'
+#control_file_path = 'misc/trajectory_results/15_control_results.csv'
+
+
+
+
+motion_capture_file_path = 'motion_capture_results.csv'
+control_file_path = 'control_results.csv'
+
+
 
 # Load motion capture results
 motion_capture_results = pd.read_csv(motion_capture_file_path)
