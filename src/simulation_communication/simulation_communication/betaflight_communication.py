@@ -1,134 +1,169 @@
 import socket
 import struct
 import rclpy
+import numpy as np
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
 from sensor_msgs.msg import Imu
 from actuator_msgs.msg import Actuators
 from interfaces.msg import MotionCaptureState, ELRSCommand, Telemetry  # Import the Telemetry message
-
+from actuator_msgs.msg import Actuators
+from geometry_msgs.msg import Twist, PoseArray, Pose, PoseStamped
+from tf_transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_matrix
+from builtin_interfaces.msg import Time
 
 class BetaflightInterfaceNode(Node):
     def __init__(self):
         super().__init__('betaflight_interface')
-        self.declare_parameter('udp_ip', '127.0.0.1')
-        self.declare_parameter('udp_port', 9002)
-        self.declare_parameter('num_motors', 4)
-        self.declare_parameter('imu_udp_port', 9003)  # Port for IMU data to Betaflight
-        self.declare_parameter('cmd_udp_port', 9004)
-        self.udp_ip = self.get_parameter('udp_ip').get_parameter_value().string_value
-        self.udp_port = self.get_parameter('udp_port').get_parameter_value().integer_value
-        self.num_motors = self.get_parameter('num_motors').get_parameter_value().integer_value
-        self.imu_udp_port = self.get_parameter('imu_udp_port').get_parameter_value().integer_value
-        self.cmd_udp_port = self.get_parameter('cmd_udp_port').get_parameter_value().integer_value
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((self.udp_ip, self.udp_port))
-        self.imu_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.cmd_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.publisher = self.create_publisher(Actuators, '/X3/gazebo/command/motor_speed', 10)
-        self.get_logger().info(f"Listening for Betaflight SITL on {self.udp_ip}:{self.udp_port}")
 
+
+
+        self.subscription_motion_capture = self.create_subscription(PoseArray, '/model/x3/pose', self.pose_callback, 10)
         self.subscription_control = self.create_subscription(ELRSCommand, 'ELRSCommand', self.controller_commands_callback, 10)
+        self.publisher = self.create_publisher(Actuators, '/X3/gazebo/command/motor_speed', 10)
 
-        self.last_timestep = 0.0
 
+        self.set_point = None
+        self.current_pose = None
 
-        self.timer = self.create_timer(0.001, self.listen_udp)
-        # Subscribe to IMU topic (bridged to ROS2)
-        self.create_subscription(
-            Imu,
-            '/world/quadcopter/model/x3/link/X3/base_link/sensor/imu_sensor/imu',
-            self.imu_callback,
-            10
+        self.kp = 0.5
+        self.ki = 0.001
+        self.kd = 0.01
+        
+        self.last_pose = None
+        self.last_orientation = None
+        self.last_time = None
+
+        self.databuffer = []
+        
+    def normalize_quaternion_positive_w(self, x, y, z, w):
+        """Normalize quaternion and ensure w is positive."""
+        # If w is negative, negate the quaternion
+        if w < 0:
+            return -x, -y, -z, -w
+        return x, y, z, w
+
+    def pose_callback(self, msg):
+        # Extract current pose and time
+        current_position = msg.poses[5].position
+        current_orientation = msg.poses[5].orientation
+       
+        # Ensure w is positive
+        current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w = self.normalize_quaternion_positive_w(
+            current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w
         )
+        
+        current_time = self.get_clock().now().to_msg()
 
-    def listen_udp(self):
-        self.sock.setblocking(False)
+        if self.last_pose is None:
 
-        try:
-            data, addr = self.sock.recvfrom(1024)
-            if len(data) >= self.num_motors * 4:
-                motors = struct.unpack('<' + 'f'*self.num_motors, data[:self.num_motors*4])
-                motor_speeds = [float(m) for m in motors]
-                max_rot_val = 4631.0
-                self.speed = [motor_speeds[3]*max_rot_val,motor_speeds[0]*max_rot_val,motor_speeds[1]*max_rot_val,motor_speeds[2]*max_rot_val]
-                actuator_msg = Actuators()
-                actuator_msg.header.stamp = self.get_clock().now().to_msg()
-                actuator_msg.velocity = self.speed
+            print("Initializing last pose, orientation, and time.")
+            # Initialize the last pose, orientation, and time
+            self.last_pose = current_position
+            self.last_orientation = current_orientation
+            self.last_time = current_time
+            return
 
-                #print("Actuator command: ", actuator_msg.velocity)
-                self.publisher.publish(actuator_msg)
+        # Calculate time difference (dt)
+        dt = (current_time.sec + current_time.nanosec * 1e-9) - (self.last_time.sec + self.last_time.nanosec * 1e-9)
+        
+        if dt <= 0:
+            print("Time difference is non-positive, skipping callback.")
+            # Skip this callback if the time difference is non-positive
+            self.last_pose = current_position
+            self.last_orientation = current_orientation
+            self.last_time = current_time
+            return
+
+        # Calculate linear velocity in the world frame
+        dx = current_position.x - self.last_pose.x
+        dy = current_position.y - self.last_pose.y
+        dz = current_position.z - self.last_pose.z
+        linear_velocity_world = np.array([dx / dt, dy / dt, dz / dt])
+
+        # Calculate angular velocity
+        q1 = [self.last_orientation.x, self.last_orientation.y, self.last_orientation.z, self.last_orientation.w]
+        q2 = [current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w]
+        q_relative = quaternion_multiply(q2, quaternion_inverse(q1))  # Relative rotation
+        angular_velocity = 2 * np.array([q_relative[0], q_relative[1], q_relative[2]]) / dt  # Angular velocity
+        q_current = [current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w]
+        rotation_matrix = quaternion_matrix(q1)[:3, :3]  # Extract 3x3 rotation part
+
+        # Transform  velocity from world frame to body frame
+        angular_velocity_body = np.dot(rotation_matrix.T, angular_velocity)
+
+      
+        # Update last pose, orientation, and time
+        self.last_pose = current_position
+        self.last_orientation = current_orientation
+        self.last_time = current_time
 
 
-            else:
-                self.get_logger().warn(f"Received packet of unexpected size: {len(data)} bytes")
-        except BlockingIOError:
-            pass
+        #print(f" {dt:.6f}")
 
-    def imu_callback(self, msg: Imu):
-        timestamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        # Print IMU callrate estimation
-        if hasattr(self, 'last_timestep') and self.last_timestep != 0.0:
-            dt = timestamp - self.last_timestep
-            if dt > 0:
-                callrate = 1.0 / dt
-                self.get_logger().info(f"Estimated IMU callrate: {callrate:.2f} Hz")
-        # Convert gyro and accel from ENU (Gazebo) to NED (Betaflight): invert Z
-        gyro_x = float(msg.angular_velocity.x)
-        gyro_y = -float(msg.angular_velocity.y)
-        gyro_z = -float(msg.angular_velocity.z)
-        accel_x = float(msg.linear_acceleration.z)  # Gazebo is already in NED
-        accel_y = -float(msg.linear_acceleration.z)  # Gazebo is already in NED
-        accel_z = -float(msg.linear_acceleration.z)  # Gazebo is already in NED
-        # Correct quaternion mapping: [qy, qx, -qz, qw] (pitch, roll, -yaw, w)
-        qx_enu = float(msg.orientation.x)
-        qy_enu = float(msg.orientation.y)
-        qz_enu = float(msg.orientation.z)
-        qw_enu = float(msg.orientation.w)
-        qw = qw_enu
-        qx = qx_enu  # pitch (inverted to fix pitch direction)
-        qy = -qy_enu   # roll
-        qz = -qz_enu  # yaw
-        vel_x = 0.0
-        vel_y = 0.0
-        vel_z = 0.0
-        pos_x = 0.0
-        pos_y = 0.0
-        pos_z = 0.0
-        pressure = 0.0
-        imu_packet = struct.pack(
-            '<18d',
-            timestamp,
-            gyro_x, gyro_y, gyro_z,
-            accel_x, accel_y, accel_z,
-            qw, qx, qy, qz,  # C++ order: w, x, y, z
-            vel_x, vel_y, vel_z,
-            pos_x, pos_y, pos_z,
-            pressure
-        )
-        self.imu_sock.sendto(imu_packet, (self.udp_ip, self.imu_udp_port))
+        # Convert angular velocity from rad/s to deg/s
+        angular_velocity_body_deg = np.degrees(angular_velocity_body)
+        #print(f"Angular Velocity (Body Frame, deg/s): {angular_velocity_body_deg}")
 
-        self.last_timestep = timestamp
+        # Calculate motor speeds based on angular velocity
+        if self.set_point is not None:
+            motor_speeds = self.calculate_motor_speeds(angular_velocity_body_deg)
 
+            actuator_msg = Actuators()
+            actuator_msg.header.stamp = self.get_clock().now().to_msg()
+            actuator_msg.velocity = motor_speeds.tolist()  # Convert to list for Actuators message
+
+            
+            self.publisher.publish(actuator_msg)
+
+            
+
+
+
+
+    def calculate_motor_speeds(self, angular_velocity_body_deg):
+        # Calculate error (difference between setpoint and current angular velocity)
+        error = [self.set_point[0],self.set_point[1],self.set_point[3]] - angular_velocity_body_deg
+        # PID control
+
+        print(f"Current roll: {angular_velocity_body_deg[0]}, desired roll: {self.set_point[0]}")
+
+        proportional = self.kp * error
+
+        # Integral term
+        if not hasattr(self, 'integral_error'):
+            self.integral_error = np.zeros_like(error)  # Initialize integral error if not present
+        self.integral_error += error  # Accumulate error
+        integral = self.ki * self.integral_error
+
+        # Derivative term
+        if not hasattr(self, 'previous_error'):
+            self.previous_error = np.zeros_like(error)  # Initialize previous error if not present
+        derivative = self.kd * (error - self.previous_error)
+        self.previous_error = error  # Update previous error
+
+        offset = proportional + integral + derivative
+
+        throttle = self.set_point[2]  
+
+        # Quadcopter mixer (assuming X-configuration)
+        motor_speeds = np.zeros(4)
+        motor_speeds[0] = throttle - offset[0] + offset[1] + offset[2]
+        motor_speeds[1] = throttle - offset[0] - offset[1] - offset[2]
+        motor_speeds[2] = throttle + offset[0] + offset[1] - offset[2]
+        motor_speeds[3] = throttle + offset[0] - offset[1] + offset[2]
+
+        # Ensure motor speeds are within a valid range (e.g., 0 to 2000)
+        motor_speeds = np.clip(motor_speeds, 0, 4631)
+
+
+        return motor_speeds
 
 
     def controller_commands_callback(self, msg):
-        channels = [0] * 16
-
-        for i in range(0, 16):
-            channels[i] = 1500
+        self.set_point = [msg.channel_0 * 400, msg.channel_1 * 400, msg.channel_2 * 4000, -msg.channel_3 * 400]
 
 
-        channels[0] = int( msg.channel_0 * 500 )  + 1500  # roll
-        channels[1] = int( msg.channel_1 * 500 )  + 1500  # pitch
-        channels[2] = int( msg.channel_2 * 1000 ) + 1000  # Throttle
-        channels[3] = int( msg.channel_3 * 500 )  + 1500  # yaw
-
-        channels[4] = 2000 if msg.armed else 1000  # aux1 (arming)
-
-
-        cmd_packet = struct.pack('<d16H', self.last_timestep, *channels)
-        self.cmd_sock.sendto(cmd_packet, (self.udp_ip, self.cmd_udp_port))
 
 
 

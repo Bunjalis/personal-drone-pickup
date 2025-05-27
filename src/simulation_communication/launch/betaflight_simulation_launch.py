@@ -20,8 +20,8 @@ def generate_launch_description():
         Node(
             package='ros_gz_bridge',
             executable='parameter_bridge',
-            name='imu_bridge',
-            arguments=['/world/quadcopter/model/x3/link/X3/base_link/sensor/imu_sensor/imu@sensor_msgs/msg/Imu[ignition.msgs.IMU']
+            name='pose_bridgey2',
+            arguments=['/model/x3/pose@geometry_msgs/msg/PoseArray[ignition.msgs.Pose_V']
         ),
         # Motion Capture Emulator
         Node(

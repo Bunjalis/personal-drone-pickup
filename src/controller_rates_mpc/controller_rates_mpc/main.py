@@ -12,6 +12,7 @@ from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller
 from .gui import GUI
+from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory
 from interfaces.msg import MotionCaptureState, ELRSCommand
 from geometry_msgs.msg import Pose, PoseArray
 
@@ -25,46 +26,23 @@ class Controller(Node):
         self.trajectory_publisher_ = self.create_publisher(PoseArray, '/planned_trajectory', 10)
         self.current_pose = None
 
-        self.steps = 90 * 30
+        self.ocp, self.sim_integrator = generate_ocp_controller()
+
         self.dt = 1.0 / 30.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
-        # Get both the OCP solver and the integrator
-        self.ocp, self.sim_integrator = generate_ocp_controller()
+        
 
-        time_space = np.linspace(0, self.steps * self.dt, self.steps)
-        # Original trajectories
-        self.x_traj = np.zeros_like(time_space)
-        self.y_traj = np.zeros_like(time_space)
-        self.z_traj = 1.0 * np.ones_like(time_space)
+        self.traj = circle_trajectory(self.dt)
 
-        # New oscillating trajectories
-        #self.x_traj = 0.75 * np.sin(2 * np.pi * 0.1 * time_space)  # Sine wave with frequency 0.1 Hz
-        #self.y_traj = 0.75 * np.sin(2 * np.pi * 0.3 * time_space)  # Sine wave with frequency 0.2 Hz
-        #self.z_traj = 1.0 + 0.5 * np.sin(2 * np.pi * 0.1 * time_space)  # Sine wave with frequency 0.05 Hz
+        self.steps = self.traj.shape[1] - 1  # Number of steps in the trajectory
 
-        roll_traj = np.zeros_like(time_space)  # Roll remains 0
-        pitch_traj = np.zeros_like(time_space)  # Pitch remains 0
-        yaw_traj = np.zeros_like(time_space)  # Pitch remains 0
 
-        rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
-        quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Converts to [q_x, q_y, q_z, q_w]
 
-        self.qx_traj = quaternions[:, 0]
-        self.qy_traj = quaternions[:, 1]
-        self.qz_traj = quaternions[:, 2]
-        self.qw_traj = quaternions[:, 3]
 
-        # Calculate world frame velocities for the trajectory
-        self.vx_traj = np.gradient(self.x_traj, self.dt)
-        self.vy_traj = np.gradient(self.y_traj, self.dt)
-        self.vz_traj = np.gradient(self.z_traj, self.dt)
 
-        # Calculate desired angular velocities for the orientation trajectory
-        self.ax_traj = np.zeros_like(time_space)  # Roll rate remains 0
-        self.ay_traj = np.zeros_like(time_space)  # Pitch rate remains 0
-        self.az_traj = np.zeros_like(time_space)  # Yaw rate trajectory
+
 
         self.gui = GUI(self)
         self.armed = False
@@ -80,7 +58,7 @@ class Controller(Node):
         self.pre_start_counter = 0  # Counter to track pre-start steps
         self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
 
-        self.N = 20
+        self.N = 30
 
 
         # Initialize CSV file at the start of the program
@@ -152,26 +130,37 @@ class Controller(Node):
             self.pre_start_counter += 1
         elif self.armed and self.current_pose is not None:
 
-            skip_steps = 3
+            skip_steps = 2
+            if self.step_counter + self.N*skip_steps > self.steps:
+                self.step_counter = 0
+                self.executing_actions = False
+                self.armed = False
+                msg.armed = False
+                msg.channel_0 = 0.0
+                msg.channel_1 = 0.0
+                msg.channel_2 = 0.0
+                msg.channel_3 = 0.0
+                self.cmd_publisher_.publish(msg)
+                return
+            
             for j in range(self.N):
-                if self.step_counter + j*skip_steps < self.steps:
-                    yref = np.array([self.x_traj[self.step_counter + j*skip_steps], self.y_traj[self.step_counter + j*skip_steps],
-                                     self.z_traj[self.step_counter + j*skip_steps], self.qw_traj[self.step_counter + j*skip_steps],
-                                     self.qx_traj[self.step_counter + j*skip_steps], self.qy_traj[self.step_counter + j*skip_steps],
-                                     self.qz_traj[self.step_counter + j*skip_steps], 
-                                     self.vx_traj[self.step_counter + j*skip_steps], self.vy_traj[self.step_counter + j*skip_steps], self.vz_traj[self.step_counter + j*skip_steps], 
-                                     self.ax_traj[self.step_counter + j*skip_steps], self.ay_traj[self.step_counter + j*skip_steps], self.az_traj[self.step_counter + j*skip_steps], 
-                                      0.2, 0.2, 0.2, 0.2])
-                else:
-                    yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.2, 0.2, 0.2, 0.2])
+                sc = self.step_counter + j*skip_steps
+
+                yref = np.array([self.traj[0][sc], self.traj[1][sc], self.traj[2][sc],
+                                    self.traj[3][sc],self.traj[4][sc],self.traj[5][sc],self.traj[6][sc],
+                                    self.traj[7][sc], self.traj[8][sc], self.traj[9][sc],
+                                    self.traj[10][sc], self.traj[11][sc], self.traj[12][sc],
+                                    0.2, 0.2, 0.2, 0.2])
                 self.ocp.set(j, "yref", yref)
 
-
-            yref_N = np.array([self.x_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.y_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.z_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
-                                    self.qw_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.qx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
-                                    self.vx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.vy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.vz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], 
-                                    self.ax_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.ay_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.az_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)]])
+            sn = self.step_counter + self.N*skip_steps
+            yref_N = np.array([self.traj[0][sn], self.traj[1][sn], self.traj[2][sn],
+                                    self.traj[3][sn],self.traj[4][sn],self.traj[5][sn],self.traj[6][sn],
+                                    self.traj[7][sn], self.traj[8][sn], self.traj[9][sn],
+                                    self.traj[10][sn], self.traj[11][sn], self.traj[12][sn]])
             self.ocp.set(self.N, "yref", yref_N)
+
+            
 
             self.ocp.set(0, "lbx", self.current_pose)
             self.ocp.set(0, "ubx", self.current_pose)
@@ -204,10 +193,10 @@ class Controller(Node):
                     self.current_pose[3], self.current_pose[4], self.current_pose[5], self.current_pose[6],
                     self.current_pose[7], self.current_pose[8], self.current_pose[9],
                     self.current_pose[10], self.current_pose[11], self.current_pose[12],
-                    self.x_traj[self.step_counter], self.y_traj[self.step_counter], self.z_traj[self.step_counter],
-                    self.qw_traj[self.step_counter], self.qx_traj[self.step_counter], self.qy_traj[self.step_counter], self.qz_traj[self.step_counter],
-                    self.vx_traj[self.step_counter], self.vy_traj[self.step_counter], self.vz_traj[self.step_counter],
-                    self.ax_traj[self.step_counter], self.ay_traj[self.step_counter], self.az_traj[self.step_counter],
+                    self.traj[0][self.step_counter], self.traj[1][self.step_counter], self.traj[2][self.step_counter],
+                    self.traj[3][self.step_counter], self.traj[4][self.step_counter], self.traj[5][self.step_counter], self.traj[6][self.step_counter],
+                    self.traj[7][self.step_counter], self.traj[8][self.step_counter], self.traj[9][self.step_counter],
+                    self.traj[10][self.step_counter], self.traj[11][self.step_counter], self.traj[12][self.step_counter],
                 ])
 
             self.step_counter += 1
