@@ -5,11 +5,11 @@ from scipy.spatial.transform import Rotation as R
 
 
 def takeoff_trajectory(dt):
-    steps = 2 * 30  # 5 seconds of takeoff at 30 Hz
+    steps = 1 * 30  # 5 seconds of takeoff at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
     x_traj = np.zeros_like(time_space)
     y_traj = np.zeros_like(time_space)
-    z_traj = np.linspace(0, 1.0, steps)  # Ascend to 1 meter
+    z_traj = np.linspace(0.0,1.0,steps)
 
     roll_traj = np.zeros_like(time_space)
     pitch_traj = np.zeros_like(time_space)
@@ -32,7 +32,7 @@ def takeoff_trajectory(dt):
 
 def land_trajectory(dt, init_pose):
     steps_move_back = 3 * 30  # 5 seconds of takeoff at 30 Hz
-    steps_descend = 2 * 30  # 5 seconds of takeoff at 30 Hz
+    steps_descend = 3 * 30  # 5 seconds of takeoff at 30 Hz
     time_space_move_back = np.linspace(0, steps_move_back * dt, steps_move_back)
     time_space_descend = np.linspace(0, steps_descend * dt, steps_descend)
 
@@ -101,10 +101,38 @@ def move_to_start_of_main_trajectory(dt, init_pose, final_pose):
 def hover_trajectory(dt):
 
         take_off_traj = takeoff_trajectory(dt)
-        land_traj = land_trajectory(dt, take_off_traj[:, -1])
-        zeros = np.zeros((take_off_traj.shape[0], 2 * 30))
 
-        return np.concatenate((take_off_traj, land_traj,zeros), axis=1)
+
+        steps = 30 * 30  # 5 seconds of takeoff at 30 Hz
+        time_space = np.linspace(0, steps * dt, steps)
+        x_traj = np.zeros_like(time_space)
+        y_traj = np.zeros_like(time_space)
+        z_traj = np.ones_like(time_space)
+
+        roll_traj = np.zeros_like(time_space)
+        pitch_traj = np.zeros_like(time_space)
+        yaw_traj = np.zeros_like(time_space)
+        rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+        quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
+        qx_traj = quaternions[:, 0]
+        qy_traj = quaternions[:, 1]
+        qz_traj = quaternions[:, 2]
+        qw_traj = quaternions[:, 3]
+        vx_traj = np.gradient(x_traj, dt)
+        vy_traj = np.gradient(y_traj, dt)
+        vz_traj = np.gradient(z_traj, dt)
+        ax_traj = np.zeros_like(time_space)
+        ay_traj = np.zeros_like(time_space)
+        az_traj = np.zeros_like(time_space)
+        hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+
+
+        land_traj = land_trajectory(dt, take_off_traj[:, -1])
+        zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
+
+
+        return np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
 
 
 
@@ -115,9 +143,9 @@ def circle_trajectory(dt):
 
     radius = 1.5
     height = 1.5
-    angular_velocity_start = 0.1  # m/s
-    angular_velocity_end = 2.0  # m/s
-    duration = 20  
+    angular_velocity_start = 1.0  # m/s
+    angular_velocity_end = 3.0  # rad/s
+    duration = 15  
     steps = int(duration / dt)
 
 
@@ -150,7 +178,7 @@ def circle_trajectory(dt):
                               vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
 
     land_traj = land_trajectory(dt, circular_traj[:, -1])
-    zeros = np.zeros((take_off_traj.shape[0], 2 * 30))
+    zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
     return np.concatenate((take_off_traj, move_to_start, circular_traj, land_traj, zeros), axis=1)
 

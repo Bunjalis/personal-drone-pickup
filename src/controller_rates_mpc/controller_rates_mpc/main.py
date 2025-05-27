@@ -35,6 +35,7 @@ class Controller(Node):
         
 
         self.traj = circle_trajectory(self.dt)
+        #self.traj = hover_trajectory(self.dt)
 
         self.steps = self.traj.shape[1] - 1  # Number of steps in the trajectory
 
@@ -58,7 +59,7 @@ class Controller(Node):
         self.pre_start_counter = 0  # Counter to track pre-start steps
         self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
 
-        self.N = 30
+        self.N = 20
 
 
         # Initialize CSV file at the start of the program
@@ -130,7 +131,12 @@ class Controller(Node):
             self.pre_start_counter += 1
         elif self.armed and self.current_pose is not None:
 
-            skip_steps = 2
+
+            # load current pose
+            # pass pose into model
+
+
+            skip_steps = 3
             if self.step_counter + self.N*skip_steps > self.steps:
                 self.step_counter = 0
                 self.executing_actions = False
@@ -150,7 +156,7 @@ class Controller(Node):
                                     self.traj[3][sc],self.traj[4][sc],self.traj[5][sc],self.traj[6][sc],
                                     self.traj[7][sc], self.traj[8][sc], self.traj[9][sc],
                                     self.traj[10][sc], self.traj[11][sc], self.traj[12][sc],
-                                    0.2, 0.2, 0.2, 0.2])
+                                    0.0, 0.0, 0.2, 0.0])
                 self.ocp.set(j, "yref", yref)
 
             sn = self.step_counter + self.N*skip_steps

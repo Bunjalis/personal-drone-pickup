@@ -25,7 +25,7 @@ def generate_ocp_controller(dynamics=None):
     ocp = AcadosOcp()
     ocp.model = model
 
-    ocp.solver_options.N_horizon = 30
+    ocp.solver_options.N_horizon = 20
     ocp.solver_options.tf = 2.0
 
     nu = 4  # Number of control inputs
@@ -35,11 +35,11 @@ def generate_ocp_controller(dynamics=None):
     # Cost matrices (tune as needed)
     Q_mat = 2 * np.diag([
         10.0, 10.0, 10.0,    # position
-        5.0, 5.0, 5.0, 5.0,  # quaternion
+        1.0, 1.0, 1.0, 1.0,  # quaternion
         0.1, 0.1, 0.1,      # velocity
-        0.1, 0.1, 0.1      # angular rates
+        1.0, 1.0, 1.0      # angular rates
     ])
-    R_mat = 2 * np.diag([0.1, 0.1, 0.1, 0.1])
+    R_mat = 2 * np.diag([0.5, 0.5, 0.1, 0.5])
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
     ocp.cost.W_e = Q_mat  # Terminal cost only considers the state
 
@@ -50,8 +50,8 @@ def generate_ocp_controller(dynamics=None):
     x0[3] = 1  # Initial quaternion w=1
     ocp.constraints.x0 = x0
 
-    ocp.cost.cost_type = 'LINEAR_LS'
-    ocp.cost.cost_type_e = 'LINEAR_LS'
+    ocp.cost.cost_type = 'NONLINEAR_LS'
+    ocp.cost.cost_type_e = 'NONLINEAR_LS'
 
     ocp.cost.Vx = np.zeros((ny, nx))
     ocp.cost.Vx[:nx, :nx] = 1 * np.eye(nx)
@@ -80,9 +80,12 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.nlp_solver_tol_comp = 1e-4
     ocp.solver_options.levenberg_marquardt = 1e-3
 
+
+    rate_limit = 0.4
+
     # Set input constraints (tune as needed)
-    ocp.constraints.lbu = np.array([-0.7, -0.7, 0.05, -0.7])  # throttle, roll_rate, pitch_rate, yaw_rate
-    ocp.constraints.ubu = np.array([0.7, 0.7, 0.6, 0.7])
+    ocp.constraints.lbu = np.array([-rate_limit, -rate_limit, 0.0, -0.4])  # throttle, roll_rate, pitch_rate, yaw_rate
+    ocp.constraints.ubu = np.array([rate_limit, rate_limit, 0.5, 0.4])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver
