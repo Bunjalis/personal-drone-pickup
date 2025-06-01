@@ -34,8 +34,8 @@ class Controller(Node):
 
         
 
-        self.traj = circle_trajectory(self.dt)
-        #self.traj = hover_trajectory(self.dt)
+        #self.traj = circle_trajectory(self.dt)
+        self.traj = hover_trajectory(self.dt)
 
         self.steps = self.traj.shape[1] - 1  # Number of steps in the trajectory
 
@@ -116,7 +116,7 @@ class Controller(Node):
         msg.armed = False
         msg.channel_0 = 0.0
         msg.channel_1 = 0.0
-        msg.channel_2 = 0.0
+        msg.channel_2 = -1.0
         msg.channel_3 = 0.0
 
         # Pre-start state: Send 0.1 on all channels for one second
@@ -124,7 +124,7 @@ class Controller(Node):
             msg.armed = True
             msg.channel_0 = 0.0
             msg.channel_1 = 0.0
-            msg.channel_2 = 0.0
+            msg.channel_2 = -1.0
             msg.channel_3 = 0.0
             self.cmd_publisher_.publish(msg)
 
@@ -144,7 +144,7 @@ class Controller(Node):
                 msg.armed = False
                 msg.channel_0 = 0.0
                 msg.channel_1 = 0.0
-                msg.channel_2 = 0.0
+                msg.channel_2 = -1.0
                 msg.channel_3 = 0.0
                 self.cmd_publisher_.publish(msg)
                 return
@@ -181,12 +181,10 @@ class Controller(Node):
             msg.armed = True
             msg.channel_0 = round(u[0], 3)
             msg.channel_1 = round(u[1], 3)
-            msg.channel_2 = round(u[2], 3)
+            msg.channel_2 = round((u[2]*2)-1, 3)
             msg.channel_3 = round(u[3], 3)
             
             self.cmd_publisher_.publish(msg)
-
-            print(f"U = {np.round(u, 3)}")
 
 
             # Store current state and control for next step prediction

@@ -156,8 +156,8 @@ class ELRSInterface(Node):
 
         self.packet[0] = self.idle + int(max(-1.0, min(1.0, msg.channel_0)) * self.range)
         self.packet[1] = self.idle + int(max(-1.0, min(1.0, msg.channel_1)) * self.range)
-        #self.packet[2] = self.idle + int(max(-1.0, min(1.0, msg.channel_2)) * self.range)
-        self.packet[2] = self.idle - self.range + int(max(0.0, min(1.0, msg.channel_2)) * 2 * self.range) #betaflight throttle
+        self.packet[2] = self.idle + int(max(-1.0, min(1.0, msg.channel_2)) * self.range)
+        #self.packet[2] = self.idle - self.range + int(max(0.0, min(1.0, msg.channel_2)) * 2 * self.range) #betaflight throttle
 
 
         self.packet[3] = self.idle + int(max(-1.0, min(1.0, msg.channel_3)) * self.range)
@@ -165,7 +165,7 @@ class ELRSInterface(Node):
         self.packet[6] = self.idle + int(max(-1.0, min(1.0, msg.channel_5)) * self.range)
         self.packet[7] = self.idle + int(max(-1.0, min(1.0, msg.channel_6)) * self.range)
         self.packet[8] = self.idle + int(max(-1.0, min(1.0, msg.channel_7)) * self.range)
-        self.packet[8] = self.idle + int(max(-1.0, min(1.0, msg.channel_8)) * self.range)
+        self.packet[9] = self.idle + int(max(-1.0, min(1.0, msg.channel_8)) * self.range)
         self.packet[10] = self.idle + int(max(-1.0, min(1.0, msg.channel_9)) * self.range)
         self.packet[11] = self.idle + int(max(-1.0, min(1.0, msg.channel_10)) * self.range)
 
@@ -253,8 +253,6 @@ class ELRSInterface(Node):
             if self.ser and self.ser.in_waiting > 0:
                 self.input.extend(self.ser.read(self.ser.in_waiting))
             elif self.ser:
-
-                
                 self.ser.write(channelsCrsfToChannelsPacket(self.packet))
 
             while len(self.input) > 2:
