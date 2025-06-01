@@ -34,9 +34,9 @@ def generate_ocp_controller(dynamics=None):
 
     # Cost matrices (tune as needed)
     Q_mat = 2 * np.diag([
-        10.0, 10.0, 10.0,    # position
-        1.0, 1.0, 1.0, 1.0,  # quaternion
-        0.1, 0.1, 0.1,      # velocity
+        5.0, 5.0, 5.0,    # position
+        5.0, 5.0, 5.0, 5.0,  # quaternion
+        1.0, 1.0, 1.0,      # velocity
         1.0, 1.0, 1.0      # angular rates
     ])
     R_mat = 2 * np.diag([0.5, 0.5, 0.1, 0.5])
@@ -84,7 +84,7 @@ def generate_ocp_controller(dynamics=None):
     rate_limit = 0.4
 
     # Set input constraints (tune as needed)
-    ocp.constraints.lbu = np.array([-rate_limit, -rate_limit, 0.0, -0.4])  # throttle, roll_rate, pitch_rate, yaw_rate
+    ocp.constraints.lbu = np.array([-rate_limit, -rate_limit, 0.05, -0.4])  # throttle, roll_rate, pitch_rate, yaw_rate
     ocp.constraints.ubu = np.array([rate_limit, rate_limit, 0.5, 0.4])
     ocp.constraints.idxbu = np.arange(nu)
 
@@ -94,7 +94,7 @@ def generate_ocp_controller(dynamics=None):
     # Create simulation configuration
     sim = AcadosSim()
     sim.model = ocp.model
-    sim.solver_options.T = ocp.solver_options.tf / ocp.solver_options.N_horizon
+    sim.solver_options.T = 1.0 / 30.0  # Set integrator to run at 30Hz
     sim_solver = AcadosSimSolver(sim)
 
     return ocp_solver, sim_solver

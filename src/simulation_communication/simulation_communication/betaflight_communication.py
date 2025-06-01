@@ -154,6 +154,7 @@ class BetaflightInterfaceNode(Node):
         motor_speeds[3] = throttle + offset[0] - offset[1] + offset[2]
 
         # Ensure motor speeds are within a valid range (e.g., 0 to 2000)
+        print(f"Motor speeds before clipping: {motor_speeds}")
         motor_speeds = np.clip(motor_speeds, 0, 4631)
 
 
@@ -161,7 +162,7 @@ class BetaflightInterfaceNode(Node):
 
 
     def controller_commands_callback(self, msg):
-        self.set_point = [msg.channel_0 * 400, msg.channel_1 * 400, msg.channel_2 * 4000, -msg.channel_3 * 400]
+        self.set_point = [msg.channel_0 * 400, msg.channel_1 * 400, (msg.channel_2 + 1)/2 * 4000, -msg.channel_3 * 400]
 
 
 

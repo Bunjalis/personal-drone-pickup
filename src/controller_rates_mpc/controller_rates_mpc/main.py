@@ -13,6 +13,7 @@ import time
 from .acados import generate_ocp_controller
 from .gui import GUI
 from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory
+from .l1_augmentation import L1Controller
 from interfaces.msg import MotionCaptureState, ELRSCommand
 from geometry_msgs.msg import Pose, PoseArray
 
@@ -20,6 +21,8 @@ from geometry_msgs.msg import Pose, PoseArray
 class Controller(Node):
     def __init__(self):
         super().__init__('controller')
+
+        self.enable_L1_augmentation = False  # Enable L1 augmentation by default
 
         self.cmd_publisher_ = self.create_publisher(ELRSCommand, '/ELRSCommand', 10)
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
@@ -35,31 +38,21 @@ class Controller(Node):
         
 
         #self.traj = circle_trajectory(self.dt)
-        self.traj = hover_trajectory(self.dt)
+        self.traj = hover_trajectory(self.dt)   
+
 
         self.steps = self.traj.shape[1] - 1  # Number of steps in the trajectory
 
 
-
-
-
-
-
         self.gui = GUI(self)
         self.armed = False
-        self.executing_actions = False
-        self.executed_steps = 0
-        self.saved_states = []
-        self.saved_controls = []
-        self.recorded_states = []  # To store the recorded states
-        self.initial_solve_state = None
-        self.initial_solve_controls = None
-
-        self.pre_start_duration = 2.0  # Duration for the pre-start state in seconds
-        self.pre_start_counter = 0  # Counter to track pre-start steps
-        self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
+        
+        self.pre_start_duration = 2.0
+        self.pre_start_counter = 0 
+        self.pre_start_steps = int(self.pre_start_duration / self.dt)
 
         self.N = 20
+        self.skip_steps = 3
 
 
         # Initialize CSV file at the start of the program
@@ -69,144 +62,99 @@ class Controller(Node):
             self.csv_writer = csv.writer(self.csv_file)
             # Write header row
             self.csv_writer.writerow([
-                    'Step', 'u0', 'u1', 'u2', 'u3',
-                        'px', 'py', 'pz',
-                        'rw', 'rx', 'ry', 'rz',
-                        'vx', 'vy', 'vz',
-                        'wx', 'wy', 'wz',
-                        'sp_px', 'sp_py', 'sp_pz',
-                        'sp_rw', 'sp_rx', 'sp_ry', 'sp_rz',
-                        'sp_vx', 'sp_vy', 'sp_vz',
-                        'sp_wx', 'sp_wy', 'sp_wz',
+                'Step', 'u0', 'u1', 'u2', 'u3',
+                'px', 'py', 'pz', 'rw', 'rx', 'ry', 'rz',
+                'vx', 'vy', 'vz', 'wx', 'wy', 'wz',
+                'sp_px', 'sp_py', 'sp_pz', 'sp_rw', 'sp_rx', 'sp_ry', 'sp_rz',
+                'sp_vx', 'sp_vy', 'sp_vz', 'sp_wx', 'sp_wy', 'sp_wz',
         ])
 
+        self.predicted_state = None  # Initialize in the constructor
 
-        if not hasattr(self, 'motion_capture_csv_initialized'):
-            self.motion_capture_csv_initialized = True
-            self.motion_capture_csv_file = open('motion_capture_results.csv', mode='w', newline='')
-            self.motion_capture_csv_writer = csv.writer(self.motion_capture_csv_file)
-            # Write header row
-            self.motion_capture_csv_writer.writerow([
-                        'px', 'py', 'pz',
-                        'rw', 'rx', 'ry', 'rz',
-                        'vx', 'vy', 'vz',
-                        'wx', 'wy', 'wz',
-        ])
-
+        self.l1_controller = L1Controller(filter_size=2, adaptation_gain=0.01, dt=self.dt)
 
     def pose_callback(self, msg: MotionCaptureState):
-        position = msg.pose.position
-        orientation = msg.pose.orientation
-        linear_velocity = msg.twist.linear
-        angular_velocity = msg.twist.angular
-
-        noisy_position = np.array([position.x, position.y, position.z]) #+ noise_pos
-        noisy_orientation = np.array([orientation.w, orientation.x, orientation.y, orientation.z]) #+ noise_rot
-        noisy_linear_velocity = np.array([linear_velocity.x, linear_velocity.y, linear_velocity.z]) #+ noise_lin_vel
-        noisy_angular_velocity = np.array([angular_velocity.x, angular_velocity.y, angular_velocity.z]) #+ noise_rot_vel
-
-        # Combine all components into the current pose
-        self.current_pose = np.round(np.concatenate((noisy_position, noisy_orientation, noisy_linear_velocity, noisy_angular_velocity)), 3)
-
-        if self.armed:
-            self.motion_capture_csv_writer.writerow(np.round(np.concatenate(( noisy_position, noisy_orientation, noisy_linear_velocity, noisy_angular_velocity  )), 3))
+        p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
+        self.current_pose = np.round(np.array([
+            p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
+        ]), 3)
 
     def control_loop(self):
-        msg = ELRSCommand()
-        msg.armed = False
-        msg.channel_0 = 0.0
-        msg.channel_1 = 0.0
-        msg.channel_2 = -1.0
-        msg.channel_3 = 0.0
 
-        # Pre-start state: Send 0.1 on all channels for one second
         if self.armed and self.pre_start_counter < self.pre_start_steps:
-            msg.armed = True
-            msg.channel_0 = 0.0
-            msg.channel_1 = 0.0
-            msg.channel_2 = -1.0
-            msg.channel_3 = 0.0
+            print(f"Pre-start phase: {self.pre_start_counter + 1}/{self.pre_start_steps}")
+            msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
             self.cmd_publisher_.publish(msg)
-
             self.pre_start_counter += 1
+
         elif self.armed and self.current_pose is not None:
 
-
-            # load current pose
-            # pass pose into model
-
-
-            skip_steps = 3
-            if self.step_counter + self.N*skip_steps > self.steps:
+            if self.step_counter + self.N * self.skip_steps > self.steps:
                 self.step_counter = 0
-                self.executing_actions = False
                 self.armed = False
-                msg.armed = False
-                msg.channel_0 = 0.0
-                msg.channel_1 = 0.0
-                msg.channel_2 = -1.0
-                msg.channel_3 = 0.0
+                msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
                 self.cmd_publisher_.publish(msg)
-                return
-            
-            for j in range(self.N):
-                sc = self.step_counter + j*skip_steps
+                self.on_close()
 
-                yref = np.array([self.traj[0][sc], self.traj[1][sc], self.traj[2][sc],
-                                    self.traj[3][sc],self.traj[4][sc],self.traj[5][sc],self.traj[6][sc],
-                                    self.traj[7][sc], self.traj[8][sc], self.traj[9][sc],
-                                    self.traj[10][sc], self.traj[11][sc], self.traj[12][sc],
-                                    0.0, 0.0, 0.2, 0.0])
+            for j in range(self.N):
+                sc = self.step_counter + j * self.skip_steps
+                yref = np.concatenate((self.traj[:, sc], [0.0, 0.0, 0.2, 0.0]))
                 self.ocp.set(j, "yref", yref)
 
-            sn = self.step_counter + self.N*skip_steps
-            yref_N = np.array([self.traj[0][sn], self.traj[1][sn], self.traj[2][sn],
-                                    self.traj[3][sn],self.traj[4][sn],self.traj[5][sn],self.traj[6][sn],
-                                    self.traj[7][sn], self.traj[8][sn], self.traj[9][sn],
-                                    self.traj[10][sn], self.traj[11][sn], self.traj[12][sn]])
+            sn = self.step_counter + self.N * self.skip_steps
+            yref_N = self.traj[:, sn]
             self.ocp.set(self.N, "yref", yref_N)
-
-            
 
             self.ocp.set(0, "lbx", self.current_pose)
             self.ocp.set(0, "ubx", self.current_pose)
 
-            # Solve the OCP
             status = self.ocp.solve()
             if status != 0:
                 raise Exception(f'acados returned status {status}.')
 
-            # Retrieve the control inputs
             u = self.ocp.get(0, "u")
-            msg.armed = True
-            msg.channel_0 = round(u[0], 3)
-            msg.channel_1 = round(u[1], 3)
-            msg.channel_2 = round((u[2]*2)-1, 3)
-            msg.channel_3 = round(u[3], 3)
-            
+
+            # Use L1 adaptive augmentation to adjust the control output
+            if self.predicted_state is not None and self.enable_L1_augmentation:
+                error = self.current_pose - self.predicted_state
+                velocity_error = error[7:10]  # Extract velocity components (vx, vy, vz)
+                rounded_velocity_error = np.round(velocity_error, 3)
+                print(f"Error between observed and previous predicted state (velocity): {rounded_velocity_error}")
+
+
+                augmented_u = self.l1_controller.update(error)  # Pass only the error
+                print(f"Augmented control output: {augmented_u}")
+                u[2] -= augmented_u  # Adjust the throttle (channel 2)
+
+                
+            msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
             self.cmd_publisher_.publish(msg)
 
 
-            # Store current state and control for next step prediction
+            # Predict the next state using the integrator
+            self.sim_integrator.set("x", self.current_pose)
+            self.sim_integrator.set("u", u)
+            self.sim_integrator.solve()
+            self.predicted_state = self.sim_integrator.get("x")
+
+
+
             if self.step_counter > 0 and self.step_counter < self.steps:
 
-                self.csv_writer.writerow([
-                    self.step_counter,
-                    msg.channel_0, msg.channel_1, msg.channel_2, msg.channel_3,
-                    self.current_pose[0], self.current_pose[1], self.current_pose[2],
-                    self.current_pose[3], self.current_pose[4], self.current_pose[5], self.current_pose[6],
-                    self.current_pose[7], self.current_pose[8], self.current_pose[9],
-                    self.current_pose[10], self.current_pose[11], self.current_pose[12],
-                    self.traj[0][self.step_counter], self.traj[1][self.step_counter], self.traj[2][self.step_counter],
-                    self.traj[3][self.step_counter], self.traj[4][self.step_counter], self.traj[5][self.step_counter], self.traj[6][self.step_counter],
-                    self.traj[7][self.step_counter], self.traj[8][self.step_counter], self.traj[9][self.step_counter],
-                    self.traj[10][self.step_counter], self.traj[11][self.step_counter], self.traj[12][self.step_counter],
-                ])
+                self.csv_writer.writerow(
+                    [self.step_counter,
+                     msg.channel_0,
+                     msg.channel_1,
+                     msg.channel_2,
+                     msg.channel_3] +
+                    list(self.current_pose) +
+                    list(self.traj[:, self.step_counter])
+                )
 
             self.step_counter += 1
 
-
         else:
+            msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
             self.cmd_publisher_.publish(msg)
             self.step_counter = 0
 
