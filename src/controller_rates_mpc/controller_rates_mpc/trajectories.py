@@ -103,7 +103,7 @@ def hover_trajectory(dt):
         take_off_traj = takeoff_trajectory(dt)
 
 
-        steps = 30 * 30  # 5 seconds of takeoff at 30 Hz
+        steps = 10 * 30  # 10 seconds of hover at 30 Hz
         time_space = np.linspace(0, steps * dt, steps)
         x_traj = np.zeros_like(time_space)
         y_traj = np.zeros_like(time_space)

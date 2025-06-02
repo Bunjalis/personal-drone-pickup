@@ -26,11 +26,11 @@ class QuadDynamics:
         yaw_rate_cmd = cs.MX.sym('yaw_rate_cmd')
         self.u = cs.vertcat(throttle, roll_rate_cmd, pitch_rate_cmd, yaw_rate_cmd)
 
-        self.mass = 0.6
+        self.mass = 0.65
         self.x_l = 0.173/2
         self.y_l = 0.146/2
         self.J = np.array([0.001799424313, 0.001522934832, 0.002923509135])
-        self.thrust_constant = 54
+        self.thrust_constant = 46
         self.tau_rate = 0.07
     
     def q_to_rot_mat(self, q):

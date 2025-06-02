@@ -13,11 +13,11 @@ time_step = 1 / sampling_frequency
 
 
 
-motion_capture_file_path = 'motion_capture_results.csv'
+#motion_capture_file_path = 'motion_capture_results.csv'
 control_file_path = 'control_results.csv'
 
 
-
+'''
 # Load motion capture results
 motion_capture_results = pd.read_csv(motion_capture_file_path)
 time_motion = motion_capture_results.index * time_step
@@ -55,6 +55,8 @@ axs1[3].plot(time_motion, motion_capture_results['wz'], label='wz')
 axs1[3].set_ylabel('Angular Velocity')
 axs1[3].set_xlabel('Time (s)')
 axs1[3].legend()
+'''
+
 
 # Load control results
 

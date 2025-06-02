@@ -35,7 +35,7 @@ def generate_ocp_controller(dynamics=None):
     # Cost matrices (tune as needed)
     Q_mat = 2 * np.diag([
         5.0, 5.0, 5.0,    # position
-        5.0, 5.0, 5.0, 5.0,  # quaternion
+        4.0, 4.0, 4.0, 4.0,  # quaternion
         1.0, 1.0, 1.0,      # velocity
         1.0, 1.0, 1.0      # angular rates
     ])
@@ -81,11 +81,11 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.levenberg_marquardt = 1e-3
 
 
-    rate_limit = 0.4
+    rate_limit = 0.1
 
     # Set input constraints (tune as needed)
-    ocp.constraints.lbu = np.array([-rate_limit, -rate_limit, 0.05, -0.4])  # throttle, roll_rate, pitch_rate, yaw_rate
-    ocp.constraints.ubu = np.array([rate_limit, rate_limit, 0.5, 0.4])
+    ocp.constraints.lbu = np.array([-rate_limit, -rate_limit, 0.05, -rate_limit])  # throttle, roll_rate, pitch_rate, yaw_rate
+    ocp.constraints.ubu = np.array([rate_limit, rate_limit, 0.4, rate_limit])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

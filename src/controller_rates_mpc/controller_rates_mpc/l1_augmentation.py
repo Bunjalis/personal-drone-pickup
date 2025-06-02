@@ -12,7 +12,7 @@ class L1Controller:
         self.sigma_hat_m = np.zeros(1)
         self.u_l1 = np.zeros(1)
 
-        self.As = np.eye(1) * -0.2  # Change to a 1x1 matrix for compatibility with z_error
+        self.As = np.eye(1) * -0.25  # Change to a 1x1 matrix for compatibility with z_error
         self.g = np.array([[1.0]])  # Adjust g to match the dimensionality of As
 
     def rolling_average_filter(self, new_u_l1):
