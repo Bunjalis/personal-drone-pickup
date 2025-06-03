@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'controller_inverted_pendulum'
+package_name = 'controller_inv_pen'
 
 setup(
     name=package_name,
@@ -17,10 +17,9 @@ setup(
     maintainer_email='mitch.torok@gmail.com',
     description='TODO: Package description',
     license='Apache-2.0',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'main = controller_inverted_pendulum.main:main'
+            'main = controller_inv_pen.main:main'
         ],
     },
 )

@@ -20,7 +20,6 @@ setup(
     maintainer_email='your_email@example.com',
     description='A ROS 2 package for quadcopter communication.',
     license='Apache License 2.0',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'elrs_interface = drone_communication.elrs_interface:main',

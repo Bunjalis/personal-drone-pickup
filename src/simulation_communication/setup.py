@@ -19,7 +19,6 @@ setup(
     maintainer_email='mitch.torok@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'ELRS_pass_through = simulation_communication.ELRS_pass_through:main',

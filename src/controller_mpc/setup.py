@@ -17,7 +17,6 @@ setup(
     maintainer_email='mitch.torok@gmail.com',
     description='TODO: Package description',
     license='Apache-2.0',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'main = controller_mpc.main:main'
