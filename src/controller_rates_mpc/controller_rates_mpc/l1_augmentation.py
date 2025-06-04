@@ -12,8 +12,8 @@ class L1Controller:
         self.sigma_hat_m = np.zeros(1)
         self.u_l1 = np.zeros(1)
 
-        self.As = np.eye(1) * -0.25  # Change to a 1x1 matrix for compatibility with z_error
-        self.g = np.array([[1.0]])  # Adjust g to match the dimensionality of As
+        self.As = np.eye(1) * -0.25 
+        
 
     def rolling_average_filter(self, new_u_l1):
         self.u_l1_buffer = np.roll(self.u_l1_buffer, -1, axis=0)
@@ -21,19 +21,16 @@ class L1Controller:
         return np.mean(self.u_l1_buffer, axis=0)
 
     def update(self, error):
-        # Use only the z velocity component of the error
-        z_error = np.array([error[9]])  # Create a 1D vector with only the z velocity component
+        z_error = np.array([error[9]])
 
-        # Compute Phi and mu for the 1D case
-        Phi = (1 / self.As) * (np.exp(self.As * self.dt) - 1)  # Simplified for 1x1 As
-        mu = np.exp(self.As * self.dt) * z_error  # Simplified for 1D case
+        Phi = (1 / self.As) * (np.exp(self.As * self.dt) - 1) 
+        mu = np.exp(self.As * self.dt) * z_error 
 
-        # Compute sigma_hat for the 1D case
+
         sigma_hat = -self.adaptation_gain * (1 / Phi) * mu
-
         self.sigma_hat_m = sigma_hat 
 
-        # Apply physical limiter to the augmentation term
+
         self.u_l1 = np.clip(-self.sigma_hat_m, -0.2, 0.2)  # Limit to [-0.2, 0.2]
 
         # Apply rolling average filter
