@@ -6,6 +6,7 @@ from rclpy.node import Node
 from .gui import GUI
 from interfaces.msg import MotionCaptureState, ELRSCommand
 from geometry_msgs.msg import Pose, PoseArray
+from tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_matrix
 
 
 class Controller(Node):
@@ -33,9 +34,16 @@ class Controller(Node):
     def pose_callback(self, msg: MotionCaptureState):
         position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
         orientation =  np.array([msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z])
+        
         linear_velocity = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z])
         angular_velocity = np.array([msg.twist.angular.x, msg.twist.angular.y, msg.twist.angular.z])
-        self.current_pose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
+
+        rotation_matrix = quaternion_matrix(np.array([orientation[1],orientation[2],orientation[3],orientation[0]]))[:3, :3]
+        linear_velocity_body = np.dot(rotation_matrix.T, linear_velocity)
+
+        print(f'linear_velocity_body: {linear_velocity_body}')
+
+        self.current_pose = np.concatenate((position, orientation, linear_velocity_body, angular_velocity))
 
     def control_loop(self):
 
