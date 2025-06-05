@@ -239,23 +239,12 @@ class MotionCapturePublisher(Node):
             dx, dy, dz = r_x - self.last_pose[0], r_y - self.last_pose[1], r_z - self.last_pose[2]
             linear_velocity_world = np.array([dx / dt, dy / dt, dz / dt])
 
-            r_vx, r_vy, r_vz = linear_velocity_world
-
-
-            # Apply rolling average filter to velocity
-            # rolling_vx, rolling_vy, rolling_vz = self.apply_rolling_average(
-            #    self.rolling_velocity_buffers, *linear_velocity_world
-            #)
 
             # Apply low-pass filter to velocity
             low_pass_vx, low_pass_vy, low_pass_vz = self.apply_low_pass_filter(
                 self.low_pass_velocity_buffers, *linear_velocity_world
             )
 
-            # Apply Butterworth filter to velocity
-            #butter_vx, butter_vy, butter_vz = self.apply_butterworth_filter(
-            #    self.butter_velocity_buffers, *linear_velocity_world
-            #)
 
             # Calculate angular velocity
             q1 = self.last_orientation
@@ -267,29 +256,11 @@ class MotionCapturePublisher(Node):
             # Transform velocity from world frame to body frame
             angular_velocity_body = np.dot(rotation_matrix.T, angular_velocity)
 
-            r_avx, r_avy, r_avz = angular_velocity_body
-            # Apply low-pass filter to angular velocity
-            #f_avx, f_avy, f_avz = self.apply_low_pass_filter(self.angular_velocity_buffers, *angular_velocity_body)
-            f_avx, f_avy, f_avz = self.apply_butterworth_filter(self.butter_angular_velocity_buffers, *angular_velocity_body)      
-            
-
-            # Apply rolling average filter to angular velocity
-            #f_avx, f_avy, f_avz = self.apply_rolling_average(self.angular_velocity_buffers, *angular_velocity_body)
-
-            # Apply rolling average filter to angular velocity
-            #rolling_wx, rolling_wy, rolling_wz = self.apply_rolling_average(
-            #    self.rolling_angular_velocity_buffers, *angular_velocity_body
-            #)
-
-            # Apply low-pass filter to angular velocity
+           
             low_pass_wx, low_pass_wy, low_pass_wz = self.apply_low_pass_filter(
                 self.low_pass_angular_velocity_buffers, *angular_velocity_body
             )
-
-            # Apply Butterworth filter to angular velocity
-            #butter_wx, butter_wy, butter_wz = self.apply_butterworth_filter(
-            #    self.butter_angular_velocity_buffers, *angular_velocity_body
-            #)
+  
 
             # Update last pose, orientation, and time
             self.last_pose = np.array([r_x, r_y, r_z])
