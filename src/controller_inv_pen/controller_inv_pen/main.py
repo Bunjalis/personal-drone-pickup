@@ -104,6 +104,16 @@ class Controller(Node):
             self.pError_prev = pd-p
             self.yawError_prev = yawd-yaw
 
+            #force = math.tanh(force) # 1/(1+np.exp(-force))
+            if force > 1:
+                force = 1.0
+            elif force < 0:
+                force = 0
+            rTau = math.tanh(rTau)
+            pTau = math.tanh(pTau)
+            yawTau = math.tanh(yawTau)
+            
+
             u = [rTau,pTau,force,yawTau]  # [aetr] [w_x (-1.0,1.0), w_y, throttle (0,1), w_z]
 
             print(f"control output {u[0]}, {u[1]}, {u[2]}, {u[3]}")
