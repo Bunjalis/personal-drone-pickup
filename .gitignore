@@ -9,3 +9,10 @@ install/
 
 c_generated_code/
 acados_ocp.json
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+**/__pycache__/
+**/*.pyc
