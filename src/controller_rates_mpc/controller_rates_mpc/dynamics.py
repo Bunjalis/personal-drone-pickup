@@ -29,7 +29,7 @@ class QuadDynamics:
         self.mass = 0.65
         self.x_l = 0.173/2
         self.y_l = 0.146/2
-        self.J = np.array([0.001799424313, 0.001522934832, 0.002923509135])
+        self.J = np.diag([0.001799424313, 0.001522934832, 0.002923509135])
         self.thrust_constant = 46
         self.tau_rate = 0.07
     
@@ -81,7 +81,10 @@ class QuadDynamics:
         return 1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
 
     def v_dynamics(self):
-        f_thrust = self.thrust_constant * self.u[2]
+        #f_thrust = self.thrust_constant * self.u[2]
+        f_thrust = 4 * 1.42e-06 * (self.u[2] *4631)**2
+
+
         a_thrust = cs.vertcat(0.0, 0.0, f_thrust) / self.mass
         g = cs.vertcat(0.0, 0.0, 9.81)
         v_dynamics = self.v_dot_q(a_thrust, self.q) - g

@@ -162,7 +162,7 @@ class BetaflightInterfaceNode(Node):
 
 
     def controller_commands_callback(self, msg):
-        self.set_point = [msg.channel_0 * 400, msg.channel_1 * 400, (msg.channel_2 + 1)/2 * 4000, -msg.channel_3 * 400]
+        self.set_point = [msg.channel_0 * 400, msg.channel_1 * 400, (msg.channel_2 + 1)/2 * 4631, -msg.channel_3 * 400]
 
 
 

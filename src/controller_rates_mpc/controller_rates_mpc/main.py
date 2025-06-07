@@ -53,6 +53,7 @@ class Controller(Node):
 
         self.N = 20
         self.skip_steps = 3
+        self.augmented_u = 0.0  # Initialize the augmented control input
 
 
         # Initialize CSV file at the start of the program
@@ -70,9 +71,8 @@ class Controller(Node):
                 'err_z','aug_u',
         ])
 
-        self.predicted_state = None  # Initialize in the constructor
 
-        self.l1_controller = L1Controller(filter_size=12, adaptation_gain=0.012, dt=self.dt)
+        self.l1_controller = L1Controller(dt=self.dt)
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
@@ -84,7 +84,7 @@ class Controller(Node):
 
         if self.armed and self.pre_start_counter < self.pre_start_steps:
             print(f"Pre-start phase: {self.pre_start_counter + 1}/{self.pre_start_steps}")
-            msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
+            msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-0.8, channel_3=0.0)
             self.cmd_publisher_.publish(msg)
             self.pre_start_counter += 1
 
@@ -116,21 +116,12 @@ class Controller(Node):
             u = self.ocp.get(0, "u")
 
             # Use L1 adaptive augmentation to adjust the control output
-            if self.predicted_state is not None and self.enable_L1_augmentation:
-                error = self.current_pose - self.predicted_state
-                augmented_u = self.l1_controller.update(error)  # Pass only the error
-                print(f"Augmented control output: {augmented_u}")
-                u[2] -= augmented_u  # Adjust the throttle (channel 2)
+            if self.enable_L1_augmentation:
+                
+                u[2] += self.augmented_u
+                self.augmented_u = self.l1_controller.update(self.current_pose, u)
 
-            else:
-                error = np.zeros(13)
-                augmented_u = 0.0
 
-            #Predict the next state using the integrator
-            self.sim_integrator.set("x", self.current_pose)
-            self.sim_integrator.set("u", u)
-            self.sim_integrator.solve()
-            self.predicted_state = self.sim_integrator.get("x")
 
                 
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
@@ -150,7 +141,7 @@ class Controller(Node):
                      msg.channel_3] +
                     list(self.current_pose) +
                     list(self.traj[:, self.step_counter])+
-                    [error[9] , augmented_u]
+                    [0.0 , self.augmented_u]
                 )
 
             self.step_counter += 1
