@@ -1,18 +1,18 @@
 <sdf version="1.6">
     <model name="x3">
-        <pose>0 0 0.2 0 0 0</pose>
+        <pose>0 0 0 0 0 0</pose>
         <link name="X3/base_link">
             <pose frame="">0 0 0 0 0 0</pose>
             <inertial>
-            <pose frame="">0.0 0.0 0 0 -0 0</pose>
+            <pose frame="">0 0 0 0 0 0</pose>
             <mass>1.0</mass>
             <inertia>
-                <ixx>0.001744744189</ixx>
+                <ixx>0.03</ixx>
                 <ixy>0</ixy>
                 <ixz>0</ixz>
-                <iyy>0.001400539551</iyy>
+                <iyy>0.03</iyy>
                 <iyz>0</iyz>
-                <izz>0.002782410904</izz>
+                <izz>0.03</izz>
             </inertia>
             </inertial>
             <collision name="X3/base_link_inertia_collision">
@@ -39,7 +39,7 @@
 
 
         <link name="X3/rotor_0">
-            <pose frame="X3/base_link">0.15 0.15 0.15 -0.788675  0.211325   0.57735</pose>
+            <pose frame="X3/base_link">0.1 0.1 0.1 -0.350879 -0.908651  0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <mass>0.01</mass>
@@ -74,7 +74,7 @@
             <child>X3/rotor_0</child>
             <parent>X3/base_link</parent>
             <axis>
-                <xyz>0 0 1</xyz>
+                <xyz>-0.788675  0.211325   0.57735</xyz>
                 <limit>
                 <lower>-1e+16</lower>
                 <upper>1e+16</upper>
@@ -83,13 +83,13 @@
                 <spring_reference>0</spring_reference>
                 <spring_stiffness>0</spring_stiffness>
                 </dynamics>
-                <use_parent_model_frame>0</use_parent_model_frame>
+                <use_parent_model_frame>1</use_parent_model_frame>
             </axis>
         </joint>
 
 
         <link name="X3/rotor_1">
-            <pose frame="X3/base_link">-0.15 0.15 0.15 0.211325 0.788675 -0.57735</pose>
+            <pose frame="X3/base_link">-0.1 0.1 0.1 -2.20271 0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <mass>0.01</mass>
@@ -124,7 +124,7 @@
             <child>X3/rotor_1</child>
             <parent>X3/base_link</parent>
             <axis>
-                <xyz>0 0 1</xyz>
+                <xyz>0.211325 0.788675 -0.57735</xyz>
                 <limit>
                 <lower>-1e+16</lower>
                 <upper>1e+16</upper>
@@ -133,12 +133,12 @@
                 <spring_reference>0</spring_reference>
                 <spring_stiffness>0</spring_stiffness>
                 </dynamics>
-                <use_parent_model_frame>0</use_parent_model_frame>
+                <use_parent_model_frame>1</use_parent_model_frame>
             </axis>
         </joint>
 
         <link name="X3/rotor_2">
-            <pose frame="X3/base_link">0.15 -0.15 0.15 -0.211325 -0.788675  -0.57735</pose>
+            <pose frame="X3/base_link">0.1 -0.1 0.1 2.20271  -0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <mass>0.01</mass>
@@ -173,7 +173,7 @@
             <child>X3/rotor_2</child>
             <parent>X3/base_link</parent>
             <axis>
-                <xyz>0 0 1</xyz>
+                <xyz>-0.211325 -0.788675  -0.57735</xyz>
                 <limit>
                 <lower>-1e+16</lower>
                 <upper>1e+16</upper>
@@ -182,12 +182,12 @@
                 <spring_reference>0</spring_reference>
                 <spring_stiffness>0</spring_stiffness>
                 </dynamics>
-                <use_parent_model_frame>0</use_parent_model_frame>
+                <use_parent_model_frame>1</use_parent_model_frame>
             </axis>
         </joint>
 
         <link name="X3/rotor_3">
-            <pose frame="X3/base_link">-0.15 -0.15 0.15 0.788675 -0.211325   0.57735</pose>
+            <pose frame="X3/base_link">-0.1 -0.1 0.1 0.350879 0.908651 0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <mass>0.01</mass>
@@ -222,7 +222,7 @@
             <child>X3/rotor_3</child>
             <parent>X3/base_link</parent>
             <axis>
-                <xyz>0 0 1</xyz>
+                <xyz>0.788675 -0.211325   0.57735</xyz>
                 <limit>
                 <lower>-1e+16</lower>
                 <upper>1e+16</upper>
@@ -231,14 +231,14 @@
                 <spring_reference>0</spring_reference>
                 <spring_stiffness>0</spring_stiffness>
                 </dynamics>
-                <use_parent_model_frame>0</use_parent_model_frame>
+                <use_parent_model_frame>1</use_parent_model_frame>
             </axis>
         </joint>
 
 
 
         <link name="X3/rotor_4">
-            <pose frame="X3/base_link">0.15 0.15 -0.15 0.788675 -0.211325 0.57735</pose>
+            <pose frame="X3/base_link">0.1 0.1 -0.1 0.350879 0.908651 0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <mass>0.01</mass>
@@ -273,7 +273,7 @@
             <child>X3/rotor_4</child>
             <parent>X3/base_link</parent>
             <axis>
-                <xyz>0 0 1</xyz>
+                <xyz>0.788675 -0.211325 0.57735</xyz>
                 <limit>
                 <lower>-1e+16</lower>
                 <upper>1e+16</upper>
@@ -282,14 +282,14 @@
                 <spring_reference>0</spring_reference>
                 <spring_stiffness>0</spring_stiffness>
                 </dynamics>
-                <use_parent_model_frame>0</use_parent_model_frame>
+                <use_parent_model_frame>1</use_parent_model_frame>
             </axis>
         </joint>
 
 
 
         <link name="X3/rotor_5">
-            <pose frame="X3/base_link">-0.15 0.15 -0.15 -0.211325 -0.788675  -0.57735</pose>
+            <pose frame="X3/base_link">-0.1 0.1 -0.1 2.20271 -0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <mass>0.01</mass>
@@ -324,7 +324,7 @@
             <child>X3/rotor_5</child>
             <parent>X3/base_link</parent>
             <axis>
-                <xyz>0 0 1</xyz>
+                <xyz>-0.211325 -0.788675  -0.57735</xyz>
                 <limit>
                 <lower>-1e+16</lower>
                 <upper>1e+16</upper>
@@ -333,7 +333,7 @@
                 <spring_reference>0</spring_reference>
                 <spring_stiffness>0</spring_stiffness>
                 </dynamics>
-                <use_parent_model_frame>0</use_parent_model_frame>
+                <use_parent_model_frame>1</use_parent_model_frame>
             </axis>
         </joint>
 
@@ -341,7 +341,7 @@
 
 
         <link name="X3/rotor_6">
-            <pose frame="X3/base_link">0.15 -0.15 -0.15 0.211325 0.788675 -0.57735</pose>
+            <pose frame="X3/base_link">0.1 -0.1 -0.1 -2.20271   0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <mass>0.01</mass>
@@ -376,7 +376,7 @@
             <child>X3/rotor_6</child>
             <parent>X3/base_link</parent>
             <axis>
-                <xyz>0 0 1</xyz>
+                <xyz>0.211325 0.788675 -0.57735</xyz>
                 <limit>
                 <lower>-1e+16</lower>
                 <upper>1e+16</upper>
@@ -385,14 +385,14 @@
                 <spring_reference>0</spring_reference>
                 <spring_stiffness>0</spring_stiffness>
                 </dynamics>
-                <use_parent_model_frame>0</use_parent_model_frame>
+                <use_parent_model_frame>1</use_parent_model_frame>
             </axis>
         </joint>
 
 
 
         <link name="X3/rotor_7">
-            <pose frame="X3/base_link">-0.15 -0.15 -0.15 -0.788675  0.211325   0.57735</pose>
+            <pose frame="X3/base_link">-0.1 -0.1 -0.1 -0.350879 -0.908651  0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <mass>0.01</mass>
@@ -427,7 +427,7 @@
             <child>X3/rotor_7</child>
             <parent>X3/base_link</parent>
             <axis>
-                <xyz>0 0 1</xyz>
+                <xyz>-0.788675  0.211325   0.57735</xyz>
                 <limit>
                 <lower>-1e+16</lower>
                 <upper>1e+16</upper>
@@ -436,7 +436,7 @@
                 <spring_reference>0</spring_reference>
                 <spring_stiffness>0</spring_stiffness>
                 </dynamics>
-                <use_parent_model_frame>0</use_parent_model_frame>
+                <use_parent_model_frame>1</use_parent_model_frame>
             </axis>
         </joint>
 

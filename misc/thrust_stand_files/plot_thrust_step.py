@@ -28,7 +28,7 @@ import matplotlib.ticker as ticker
 # thrust_data_step_19 3" prop with lots of step changes for first order model identification 
 
 
-filename = 'thrust_data_step_17.csv'
+filename = 'thrust_data_step_18.csv'
 # Load the thrust data CSV file
 data_thrust = pd.read_csv(filename, names=['Throttle', 'Thrust'])
 
