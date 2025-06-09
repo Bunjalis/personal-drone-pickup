@@ -12,7 +12,7 @@ from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller
 from .gui import GUI
-from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory
+from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory, hover_and_rotate
 from interfaces.msg import MotionCaptureState, ELRSCommand
 from geometry_msgs.msg import Pose, PoseArray
 
@@ -32,6 +32,9 @@ class Controller(Node):
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
+
+        #self.timer_test_angular = self.create_timer(self.dt, self.angular_velocity_test)  # Adjust the timer frequency as needed
+
         
 
         #self.traj = circle_trajectory(self.dt)
@@ -48,11 +51,13 @@ class Controller(Node):
         self.pre_start_counter = 0 
         self.pre_start_steps = int(self.pre_start_duration / self.dt)
 
-        self.N = 60
+        self.N = 15
         self.skip_steps = 1
         self.predicted_next_state = None
         self.last_pose = None
         self.last_control = None
+
+        self.sent_command = False
 
 
         # Initialize CSV file at the start of the program
@@ -72,15 +77,51 @@ class Controller(Node):
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
-        self.current_pose = np.round(np.array([
+        self.current_pose = np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
-        ]), 3)
+        ]) + np.random.normal(0, 0.01, 13)
+
+
+
+    def angular_velocity_test(self):
+
+
+
+        if self.armed and self.sent_command == False:
+            print("Sending initial command to arm the controller.")
+            print(f"Current pose: {self.current_pose[10:13]}")
+            # Convert the list 'u' to a NumPy array before passing it to self.sim_integrator.set
+            u = np.array([0.1, -0.11, -0.11, -0.11, 0.14, 0.0, 0.1, 0.0])
+
+            u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
+            msg = ELRSCommand(armed=True, channel_0=u_sqrt[0], channel_1=u_sqrt[1], channel_2=u_sqrt[2], channel_3=u_sqrt[3], channel_4=u_sqrt[4], channel_5=u_sqrt[5], channel_6=u_sqrt[6], channel_7=u_sqrt[7])
+            self.cmd_publisher_.publish(msg)
+            self.sent_command = True
+
+            self.sim_integrator.set("x", self.current_pose)
+            self.sim_integrator.set("u", u)
+            self.sim_integrator.solve()
+            predicted_state = self.sim_integrator.get("x")
+            print("Predicted state:", predicted_state[10:13])
+
+        elif self.armed and self.sent_command == True:
+            print(f"Current pose: {self.current_pose[10:13]}")
+            self.armed = False
+            self.on_close()
+        else:
+            u = np.array([0.1, -0.1, -0.1, 0.1, 0.1, -0.1, -0.1, 0.1])
+            u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
+            msg = ELRSCommand(armed=True, channel_0=u_sqrt[0], channel_1=u_sqrt[1], channel_2=u_sqrt[2], channel_3=u_sqrt[3], channel_4=u_sqrt[4], channel_5=u_sqrt[5], channel_6=u_sqrt[6], channel_7=u_sqrt[7])
+            self.cmd_publisher_.publish(msg)
+
+
+
 
     def control_loop(self):
 
         if self.armed and self.pre_start_counter < self.pre_start_steps:
             print(f"Pre-start phase: {self.pre_start_counter + 1}/{self.pre_start_steps}")
-            msg = ELRSCommand(armed=True, channel_0=0.05, channel_1=0.05, channel_2=0.05, channel_3=0.05, channel_4=0.05, channel_5=0.05, channel_6=0.05, channel_7=0.05)
+            msg = ELRSCommand(armed=True, channel_0=0.1, channel_1=-0.1, channel_2=-0.1, channel_3=0.1, channel_4=0.1, channel_5=-0.1, channel_6=-0.1, channel_7=0.1)
             self.cmd_publisher_.publish(msg)
             self.pre_start_counter += 1
 
@@ -117,7 +158,7 @@ class Controller(Node):
 
             u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
 
-            msg = ELRSCommand(armed=True, channel_0=round(u_sqrt[0], 3), channel_1=round(u_sqrt[1], 3), channel_2=round(u_sqrt[2], 3), channel_3=round(u_sqrt[3], 3), channel_4=round(u_sqrt[0], 3), channel_5=round(u_sqrt[1], 3), channel_6=round(u_sqrt[2], 3), channel_7=round(u_sqrt[3], 3))
+            msg = ELRSCommand(armed=True, channel_0=u_sqrt[0], channel_1=u_sqrt[1], channel_2=u_sqrt[2], channel_3=u_sqrt[3], channel_4=u_sqrt[0], channel_5=u_sqrt[1], channel_6=u_sqrt[2], channel_7=u_sqrt[3])
             self.cmd_publisher_.publish(msg)
 
 
@@ -152,12 +193,12 @@ class Controller(Node):
 
 
 
-            
-
         else:
+            print("Controller is not armed or current pose is not available.")
             msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=0.0, channel_3=0.0, channel_4=0.0, channel_5=0.0, channel_6=0.0, channel_7=0.0)
             self.cmd_publisher_.publish(msg)
             self.step_counter = 0
+
 
     def signal_handler(self, sig, frame):
         self.on_close()

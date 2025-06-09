@@ -22,7 +22,7 @@ from interfaces.msg import MotionCaptureState
 class PentaVerify(Node):
     def __init__(self):
         super().__init__('penta_verify')
-        self.worldPoseSub_ = self.create_subscription(PoseArray, '/world/quadcopter/dynamic_pose/info', self.worldPoseCallback, 10)
+        self.worldPoseSub_ = self.create_subscription(PoseArray, '/model/x3/pose', self.worldPoseCallback, 10)
         self.publisher = self.create_publisher(MotionCaptureState, '/motion_capture_state', 10)
         self.pose_publisher = self.create_publisher(PoseStamped, '/rviz_pose', 10)
 
@@ -42,15 +42,15 @@ class PentaVerify(Node):
     def worldPoseCallback(self, msg):
         print("START")
         # Extract current pose and time
-        current_position = msg.poses[0].position
-        current_orientation = msg.poses[0].orientation
+        current_position = msg.poses[9].position
+        current_orientation = msg.poses[9].orientation
        
         # Ensure w is positive
         current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w = self.normalize_quaternion_positive_w(
             current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w
         )
         
-        current_time = msg.header.stamp
+        current_time = self.get_clock().now().to_msg()
 
         if self.last_pose is None:
             # Initialize the last pose, orientation, and time
@@ -94,55 +94,31 @@ class PentaVerify(Node):
         # Publish MotionCaptureState
         mcs = MotionCaptureState()
         mcs.pose = Pose()
-        mcs.pose.position.x = round(float(current_position.x), 3)
-        mcs.pose.position.y = round(float(current_position.y), 3)
-        mcs.pose.position.z = round(float(current_position.z), 3)
-        mcs.pose.orientation.x = round(float(current_orientation.x), 3)
-        mcs.pose.orientation.y = round(float(current_orientation.y), 3)
-        mcs.pose.orientation.z = round(float(current_orientation.z), 3)
-        mcs.pose.orientation.w = round(float(current_orientation.w), 3)
+        mcs.pose.position.x = float(current_position.x)
+        mcs.pose.position.y = float(current_position.y)
+        mcs.pose.position.z = float(current_position.z)
+        mcs.pose.orientation.x = float(current_orientation.x)
+        mcs.pose.orientation.y = float(current_orientation.y)
+        mcs.pose.orientation.z = float(current_orientation.z)
+        mcs.pose.orientation.w = float(current_orientation.w)
 
         mcs.twist = Twist()
-        mcs.twist.linear.x = round(float(linear_velocity_world[0]), 3)  # Use body frame velocity
-        mcs.twist.linear.y = round(float(linear_velocity_world[1]), 3)  # Use body frame velocity
-        mcs.twist.linear.z = round(float(linear_velocity_world[2]), 3)  # Use body frame velocity
-        mcs.twist.angular.x = round(float(angular_velocity_body[0]), 3)
-        mcs.twist.angular.y = round(float(angular_velocity_body[1]), 3)
-        mcs.twist.angular.z = round(float(angular_velocity_body[2]), 3)
+        mcs.twist.linear.x = float(linear_velocity_world[0])
+        mcs.twist.linear.y = float(linear_velocity_world[1])
+        mcs.twist.linear.z = float(linear_velocity_world[2])
+        mcs.twist.angular.x = float(angular_velocity_body[0])
+        mcs.twist.angular.y = float(angular_velocity_body[1])
+        mcs.twist.angular.z = float(angular_velocity_body[2])
 
         # Print mcs in a nicely formatted and normalized spacing
-        print(f"Pose: Position(x={mcs.pose.position.x:7.3f}, y={mcs.pose.position.y:7.3f}, z={mcs.pose.position.z:7.3f}), ")
-        print(f"Orientation(x={mcs.pose.orientation.x:7.3f}, y={mcs.pose.orientation.y:7.3f}, z={mcs.pose.orientation.z:7.3f}, w={mcs.pose.orientation.w:7.3f})")
-        print(f"Twist: Linear(x={mcs.twist.linear.x:7.3f}, y={mcs.twist.linear.y:7.3f}, z={mcs.twist.linear.z:7.3f}), ")
-        print(f"Angular(x={mcs.twist.angular.x:7.3f}, y={mcs.twist.angular.y:7.3f}, z={mcs.twist.angular.z:7.3f})")
+        #print(f"Pose: Position(x={mcs.pose.position.x:7.3f}, y={mcs.pose.position.y:7.3f}, z={mcs.pose.position.z:7.3f}), ")
+        #print(f"Orientation(x={mcs.pose.orientation.x:7.3f}, y={mcs.pose.orientation.y:7.3f}, z={mcs.pose.orientation.z:7.3f}, w={mcs.pose.orientation.w:7.3f})")
+        #print(f"Twist: Linear(x={mcs.twist.linear.x:7.3f}, y={mcs.twist.linear.y:7.3f}, z={mcs.twist.linear.z:7.3f}), ")
+        #print(f"Angular(x={mcs.twist.angular.x:7.3f}, y={mcs.twist.angular.y:7.3f}, z={mcs.twist.angular.z:7.3f})")
 
-        # Create a PoseStamped message for RViz visualization
-        pose_for_rviz = PoseStamped()
-        pose_for_rviz.header.stamp = self.get_clock().now().to_msg()
-        pose_for_rviz.header.frame_id = "map"
-        pose_for_rviz.pose.position.x = float(current_position.x)
-        pose_for_rviz.pose.position.y = float(current_position.y)
-        pose_for_rviz.pose.position.z = float(current_position.z)
-        pose_for_rviz.pose.orientation.x = float(current_orientation.x)
-        pose_for_rviz.pose.orientation.y = float(current_orientation.y)
-        pose_for_rviz.pose.orientation.z = float(current_orientation.z)
-        pose_for_rviz.pose.orientation.w = float(current_orientation.w)
 
-        self.pose_publisher.publish(pose_for_rviz)
+        self.publisher.publish(mcs)
 
-        simulate_delay = False  # Set to True to simulate delay
-        if simulate_delay == True:
-
-            self.databuffer.append(mcs)
-            if len(self.databuffer) > 5 :
-                mcs = self.databuffer.pop(0)
-                self.publisher.publish(mcs)
-        else:
-            self.publisher.publish(mcs)
-
-        
-
-        print("END")
 
         # Update last pose, orientation, and time
         self.last_pose = current_position

@@ -24,8 +24,6 @@ class ELRSPassThrough(Node):
         actuator_msg = Actuators()
         actuator_msg.header.stamp = self.get_clock().now().to_msg()
         actuator_msg.velocity = self.speed
-
-        print("Actuator command: ", actuator_msg.velocity)
         self.publisher.publish(actuator_msg)
 
 

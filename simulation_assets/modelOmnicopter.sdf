@@ -7,12 +7,12 @@
             <pose frame="">0 0 0 0 0 0</pose>
             <mass>1.0</mass>
             <inertia>
-                <ixx>0.03</ixx>
+                <ixx>0.0003</ixx>
                 <ixy>0</ixy>
                 <ixz>0</ixz>
-                <iyy>0.03</iyy>
+                <iyy>0.0003</iyy>
                 <iyz>0</iyz>
-                <izz>0.03</izz>
+                <izz>0.0003</izz>
             </inertia>
             </inertial>
             <collision name="X3/base_link_inertia_collision">
@@ -35,14 +35,19 @@
             </visual>
         </link>
 
-
+        <!--
+        <joint name="fixed_base_joint" type="ball">
+            <parent>world</parent>
+            <child>X3/base_link</child>
+        </joint>
+        -->
 
 
         <link name="X3/rotor_0">
             <pose frame="X3/base_link">0.1 0.1 0.1 -0.350879 -0.908651  0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.01</mass>
+                <mass>0.001</mass>
                 <inertia>
                     <ixx>9.75e-08</ixx>
                     <ixy>0</ixy>
@@ -92,7 +97,7 @@
             <pose frame="X3/base_link">-0.1 0.1 0.1 -2.20271 0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.01</mass>
+                <mass>0.001</mass>
                 <inertia>
                     <ixx>9.75e-08</ixx>
                     <ixy>0</ixy>
@@ -141,7 +146,7 @@
             <pose frame="X3/base_link">0.1 -0.1 0.1 2.20271  -0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.01</mass>
+                <mass>0.001</mass>
                 <inertia>
                     <ixx>9.75e-08</ixx>
                     <ixy>0</ixy>
@@ -190,7 +195,7 @@
             <pose frame="X3/base_link">-0.1 -0.1 0.1 0.350879 0.908651 0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.01</mass>
+                <mass>0.001</mass>
                 <inertia>
                     <ixx>9.75e-08</ixx>
                     <ixy>0</ixy>
@@ -241,7 +246,7 @@
             <pose frame="X3/base_link">0.1 0.1 -0.1 0.350879 0.908651 0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.01</mass>
+                <mass>0.001</mass>
                 <inertia>
                     <ixx>9.75e-08</ixx>
                     <ixy>0</ixy>
@@ -292,7 +297,7 @@
             <pose frame="X3/base_link">-0.1 0.1 -0.1 2.20271 -0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.01</mass>
+                <mass>0.001</mass>
                 <inertia>
                     <ixx>9.75e-08</ixx>
                     <ixy>0</ixy>
@@ -344,7 +349,7 @@
             <pose frame="X3/base_link">0.1 -0.1 -0.1 -2.20271   0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.01</mass>
+                <mass>0.001</mass>
                 <inertia>
                     <ixx>9.75e-08</ixx>
                     <ixy>0</ixy>
@@ -395,7 +400,7 @@
             <pose frame="X3/base_link">-0.1 -0.1 -0.1 -0.350879 -0.908651  0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.01</mass>
+                <mass>0.001</mass>
                 <inertia>
                     <ixx>9.75e-08</ixx>
                     <ixy>0</ixy>

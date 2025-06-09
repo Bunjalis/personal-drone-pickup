@@ -120,8 +120,8 @@
         <jointName>X3/rotor_1_joint</jointName>
         <linkName>X3/rotor_1</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0.0</timeConstantUp>
-        <timeConstantDown>0.0</timeConstantDown>
+        <timeConstantUp>0</timeConstantUp>
+        <timeConstantDown>0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
         <momentConstant>0.0</momentConstant>
@@ -167,7 +167,7 @@
         <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
-        <momentConstant>0.0</momentConstant>
+        <momentConstant>0.00</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>3</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>
@@ -189,7 +189,7 @@
         <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
-        <momentConstant>0.0</momentConstant>
+        <momentConstant>0.00</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>4</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>
@@ -211,7 +211,7 @@
         <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
-        <momentConstant>0.0</momentConstant>
+        <momentConstant>0.00</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>5</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>
@@ -233,7 +233,7 @@
         <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
-        <momentConstant>0.0</momentConstant>
+        <momentConstant>0.00</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>6</motorNumber>
         <rotorDragCoefficient>0.0</rotorDragCoefficient>

@@ -23,6 +23,7 @@ def generate_launch_description():
             name='pose_bridgey2',
             arguments=['/model/x3/pose@geometry_msgs/msg/PoseArray[ignition.msgs.Pose_V']
         ),
+
         # ELRS Pass Through
         Node(
             package='simulation_communication',

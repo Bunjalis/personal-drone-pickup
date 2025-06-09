@@ -147,6 +147,55 @@ def hover_trajectory(dt):
 
 
 
+
+def hover_and_rotate(dt):
+
+
+
+        steps_hover = 10 * 30  # 2 seconds of hover at 30 Hz
+        time_space_hover = np.linspace(0, steps_hover * dt, steps_hover)
+        x_traj_hover = np.zeros_like(time_space_hover)
+        y_traj_hover = np.zeros_like(time_space_hover)
+        z_traj_hover = np.ones_like(time_space_hover)
+
+
+        steps_hover = 10 * 30  # 2 seconds of hover at 30 Hz
+        time_space_move_x = np.linspace(0, steps_hover * dt, steps_hover)
+        x_traj_move_x = np.ones_like(time_space_hover)
+        y_traj_move_x = np.zeros_like(time_space_hover)
+        z_traj_move_x = np.ones_like(time_space_hover)
+
+
+
+        time_space = np.concatenate((time_space_hover, time_space_move_x))
+        x_traj = np.concatenate((x_traj_hover, x_traj_move_x))
+        y_traj = np.concatenate((y_traj_hover, y_traj_move_x))
+        z_traj = np.concatenate((z_traj_hover, z_traj_move_x))
+
+        roll_traj = np.zeros_like(time_space)
+        pitch_traj = np.zeros_like(time_space)
+        yaw_traj = np.zeros_like(time_space)
+        rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+        quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
+        qx_traj = quaternions[:, 0]
+        qy_traj = quaternions[:, 1]
+        qz_traj = quaternions[:, 2]
+        qw_traj = quaternions[:, 3]
+        vx_traj = np.gradient(x_traj, dt)
+        vy_traj = np.gradient(y_traj, dt)
+        vz_traj = np.gradient(z_traj, dt)
+        ax_traj = np.zeros_like(time_space)
+        ay_traj = np.zeros_like(time_space)
+        az_traj = np.zeros_like(time_space)
+        hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+
+
+
+        return hover_traj
+
+
+
 def circle_trajectory(dt):
     take_off_traj = takeoff_trajectory(dt)
     move_to_start = move_to_start_of_main_trajectory(dt, take_off_traj[:, -1], np.array([1.5, 0.0, 1.5]))

@@ -33,18 +33,18 @@ class QuadDynamics:
 
         self.mass = 1.0
 
-        self.J = np.array([0.03, 0.03, 0.03])
+        self.J = np.array([0.0003, 0.0003, 0.0003])
         self.thrust_constant = 1.42e-06
         self.moment_constant = 0.2
 
-        self.mot_pos_vec = np.array([[0.1, 0.1, 0.1],
-                                    [-0.1, 0.1, 0.1], 
-                                    [0.1, -0.1, 0.1],
-                                    [-0.1, -0.1, 0.1],
-                                    [0.1, 0.1, -0.1],
-                                    [-0.1, 0.1, -0.1],
-                                    [0.1, -0.1, -0.1],
-                                    [-0.1, -0.1, -0.1]])
+        self.mot_pos_vec = 0.1 * np.array([[1, 1, 1],
+                                    [-1, 1, 1], 
+                                    [1, -1, 1],
+                                    [-1, -1, 1],
+                                    [1, 1, -1],
+                                    [-1, 1, -1],
+                                    [1, -1, -1],
+                                    [-1, -1, -1]])
 
         self.mot_rot_vec = np.array([[-0.788675,  0.211325,   0.57735],     # CW
                                     [0.211325, 0.788675, -0.57735],         # CW
@@ -128,9 +128,8 @@ class QuadDynamics:
         for i in range(8):
             torque += thrusts[i] * cs.cross(self.mot_pos_vec[i], self.mot_rot_vec[i])
 
-        # Compute angular acceleration
+        # Compute angular acceleration in the world frame
         J_inv = cs.diag(1 / self.J)  # Inverse of inertia matrix
         angular_acceleration = cs.mtimes(J_inv, torque - cs.cross(self.r, cs.mtimes(cs.diag(self.J), self.r)))
-
 
         return angular_acceleration
