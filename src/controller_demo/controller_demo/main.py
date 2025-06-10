@@ -77,7 +77,7 @@ class Controller(Node):
             r, p, yaw = self.quaternion_to_euler(*state[3:7])
             vx, vy, vz = state[7:10]
             vr, vp, vyaw = state[10:13]
-            kpz, kiz, kdz = 15.0, 10.0, 10.0#75.0, 42.857, 32.8125
+            kpz, kiz, kdz = 15.0, 10.0, 10.0 #75.0, 42.857, 32.8125
             kpx, kix, kdx = 0.00414, 0.0000345, 0.1242
             kpy, kiy, kdy = 0.00414, 0.0000345, 0.1242
 
@@ -131,24 +131,40 @@ class Controller(Node):
 
             Cf = 1.42e-6
             Ct = 2.84e-7
-            l = 0.11
+
+            l_x = 0.0865
+            l_y = 0.073
+
             max_motor_speed = 4631.0# 1755*25.2
             '''u1 = sqrt(abs(force/(4*Cf) - rTau/(2*Cf*l) + yawTau/(4*Ct)))/max_motor_speed
             u2 = sqrt(abs(force/(4*Cf) + pTau/(2*Cf*l) - yawTau/(4*Ct)))/max_motor_speed
             u3 = sqrt(abs(force/(4*Cf) + rTau/(2*Cf*l) + yawTau/(4*Ct)))/max_motor_speed
             u4 = sqrt(abs(force/(4*Cf) - pTau/(2*Cf*l) - yawTau/(4*Ct)))/max_motor_speed'''
+
+
+            #f = 1.42e-6 * (4631 * u ) ** 2
+
             if force/(4*Cf) - rTau/(2*Cf*l) + yawTau/(4*Ct) < 0:
                 u1 = 0.0
             else:
-                u1 = sqrt(force/(4*Cf) - rTau/(2*Cf*l) + yawTau/(4*Ct))/max_motor_speed
+                #u1 = sqrt(force/(4*Cf) - rTau/(2*Cf*l) + yawTau/(4*Ct))/max_motor_speed
+
+                u1 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+
+
             if force/(4*Cf) + pTau/(2*Cf*l) - yawTau/(4*Ct) < 0:
                 u2 = 0.0
             else:
                 u2 = sqrt(force/(4*Cf) + pTau/(2*Cf*l) - yawTau/(4*Ct))/max_motor_speed
+
+
             if force/(4*Cf) + rTau/(2*Cf*l) + yawTau/(4*Ct) < 0:
                 u3 = 0.0
             else:
                 u3 = sqrt(force/(4*Cf) + rTau/(2*Cf*l) + yawTau/(4*Ct))/max_motor_speed
+
+
+
             if force/(4*Cf) - pTau/(2*Cf*l) - yawTau/(4*Ct) < 0:
                 u4 = 0.0
             else:
