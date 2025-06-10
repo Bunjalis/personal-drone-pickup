@@ -52,10 +52,18 @@ class Controller(Node):
         self.current_pose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
 
     def control_loop(self):
-
+        #print(self.current_pose)
+        #print(self.setpoint)
         # Pre-start state: Send 0.05 on all channels for one second before starting control loop.
         if self.armed and self.pre_start_counter < self.pre_start_steps:
-            msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
+            #msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
+            
+            msg.armed = True
+            msg.channel_0 = 0.05
+            msg.channel_1 = 0.05
+            msg.channel_2 = 0.05
+            msg.channel_3 = 0.05
+            self.pre_start_counter += 1
             self.cmd_publisher_.publish(msg)
             self.pre_start_counter += 1
 
@@ -63,39 +71,46 @@ class Controller(Node):
             
             
             xd, yd, zd, yawd = self.setpoint
+
             state = self.current_pose
+            dt = self.dt
             x, y, z = state[0:3]
             r, p, yaw = self.quaternion_to_euler(*state[3:7])
+            vx, vy, vz = state[7:10]
+            vr, vp, vyaw = state[10:13]
+            kpz, kiz, kdz = 75.0, 42.857, 32.8125
+            kpx, kix, kdx = 0.00414, 0.0000345, 0.1242
+            kpy, kiy, kdy = 0.00414, 0.0000345, 0.1242
+
+            kpp, kip, kdp =2.4, 0.48, 3.09
+            kpr, kir, kdr = 2.1, 0.84, 1.3125
+            kpyaw, kiyaw, kdyaw = 0.804, 0.29236, 0.55275
+
+        
             
-
-
-            kpz, kpr, kpp, kpyaw = 75, 2.1, 2.4, 0.804 #185, 0.88,0.62, 0.99# #27, 0.5, 0.5, 1.9
-            kiz, kir, kip, kiyaw = 42.8571, 0.84, 0.48, 0.29236 #105, 0.9, 0.8, 0.5#42.8571, 0.84, 0.48, 0.29236 #17,0.1, 0.1, 1 
-            kdz, kdr, kdp, kdyaw = 32.8125, 1.3125, 3.09, 0.55275 #22.5, 0.3, 0.05, 0.56 #32.8125, 1.3125, 3.09, 0.55275 #15,6,5, 6.95 
-
-            kpx, kpy = 0.00414, 0.00414 #0.28, 0.36# #0.02, 0.025 #0.09, 0.07 #0.1, 0.1 #0.03,0.04 #0.1,0.1 #0.00414, 0.00414
-            kix, kiy = 0.0000345, 0.0000345 #2.73e-6, 1.56e-5#0.0000345, 0.0000345 #0.00004, 0.00004 #0.00001, 0.00001 #0.7,0.01 #0.1,0.1 #0.0000345, 0.0000345
-            kdx, kdy = 0.1242, 0.1242 #0.63, 0.88#0.1242, 0.1242 # 0.03,0.03#0.16, 0.16  # 0.1, 0.1 #0.11,0.11 #0.1,0.1 #0.1242, 0.1242 
-            
-            xd_dotdot = xd/(self.dt*self.dt)
-            yd_dotdot = yd/(self.dt*self.dt)
-            Ux = kpx*(xd-x) + kix*(xd-x)*self.dt + kdx*((xd-x) - self.xError_prev)/self.dt #+ xd_dotdot
-            Uy = kpy*(yd-y) + kiy*(yd-y)*self.dt + kdy*((yd-y) - self.yError_prev)/self.dt #+ yd_dotdot
+            #kpyaw, kdyaw, kiyaw = 1.9, 1.0, 6.95
+        
+            #chromosomes= [np.float64(0.0), np.float64(0.06274605548265022), np.float64(0.00012207403790398877), 0.003173924985503708, np.float64(0.31025116733298747), np.float64(0.0020142216254158147), np.float64(0.0037384318422839535), np.float64(0.8886786550800712), np.float64(0.010223466670735709), 0.40703130364458956, np.float64(0.7386073196969583), np.float64(6.613819990692068), np.float64(34.52121212121212), 47.895934959349596, np.float64(32.540390530005006)]
+            #[kpx, kix, kdx, kpy, kiy, kdy, kpr, kir, kdr, kpp, kip, kdp, kpz, kiz, kdz] = chromosomes
+            xd_dotdot = xd/(dt*dt)
+            yd_dotdot = yd/(dt*dt)
+            Ux = kpx*(xd-x) + kix*(xd-x)*dt + kdx*((xd-x) - self.xError_prev)/dt #+ xd_dotdot
+            Uy = kpy*(yd-y) + kiy*(yd-y)*dt + kdy*((yd-y) - self.yError_prev)/dt #+ yd_dotdot
 
             #rd = Ux*sin(yaw) - Uy*cos(yaw)
             #pd = Ux*cos(yaw) + Uy*sin(yaw)
+            
+            #force = (self.g + kpz*(zd-z) + kiz*(zd-z)*dt + kdz*((zd-z) - self.zError_prev)/dt)*self.M/(cos(r)*cos(p)) #depends of roll and pitch
+            #force = (self.g -kpz*(z-zd) - kdz*(vz-0))*self.M
+            force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M*(cos(r)*cos(p))
+            Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx#+ xd_dotdot
+            Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy #+ yd_dotdot
+            rd = 0 # (Ux*sin(yaw) - Uy*cos(yaw))*self.M/force#(self.M/force)
+            pd = 0 #(Ux*cos(yaw) + Uy*sin(yaw))*self.M/force#(self.M/force)
+            rTau = (kpr*(rd-r) + kir*(rd-r)*dt - kdr*vr)*self.Ixx
+            pTau= (kpp*(pd-p) + kip*(pd-p)*dt - kdp*vp)*self.Iyy
+            yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
 
-            force = (self.g + kpz*(zd-z) + kiz*(zd-z)*self.dt + kdz*((zd-z) - self.zError_prev)/self.dt)*self.M/(cos(r)*cos(p)) #depends of roll and pitch
-            print(f"force: {force}")
-
-
-            #rd = (-Ux*sin(yaw) + Uy*cos(yaw))*(self.M/force)
-            #pd = (-Ux*cos(yaw) - Uy*sin(yaw))*(self.M/force)
-            rd = (Ux*sin(yaw) - Uy*cos(yaw))*(self.M/force)
-            pd = (Ux*cos(yaw) + Uy*sin(yaw))*(self.M/force)
-            rTau = (kpr*(rd-r) + kir*(rd-r)*self.dt + kdr*((rd-r) - self.rError_prev)/self.dt)*self.Ixx
-            pTau = (kpp*(pd-p) + kip*(pd-p)*self.dt + kdp*((pd-p)-self.pError_prev)/self.dt)*self.Iyy
-            yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*self.dt + kdyaw*((yawd-yaw)-self.yawError_prev)/self.dt)*self.Izz
 
             self.xError_prev = xd-x
             self.yError_prev = yd-y
@@ -103,27 +118,62 @@ class Controller(Node):
             self.rError_prev = rd-r
             self.pError_prev = pd-p
             self.yawError_prev = yawd-yaw
-
-            #force = math.tanh(force) # 1/(1+np.exp(-force))
-            if force > 1:
+            #print(f"f:{force}, rTau: {rTau}, pTau:{pTau}, yawTau{yawTau}")
+            
+            #force = 1/(1+np.exp(-force)) #math.tanh(force) #
+            
+            self.xError_prev = xd-x
+            self.yError_prev = yd-y
+            self.zError_prev = zd-z
+            self.rError_prev = rd-r
+            self.pError_prev = pd-p
+            self.yawError_prev = yawd-yaw
+            '''if force > 1:
                 force = 1.0
             elif force < 0:
-                force = 0
-            rTau = math.tanh(rTau)
-            pTau = math.tanh(pTau)
-            yawTau = math.tanh(yawTau)
-            
+                force = 0.0
 
+            if rTau> 1:
+                rTau = 1.0
+            elif rTau < -1:
+                rTau = -1.0
+            if pTau> 1:
+                pTau = 1.0
+            elif pTau< -1:
+                pTau = -1.0
+            if yawTau > 1:
+                yawTau = 1.0
+            elif yawTau < -1:
+                yawTau = -1.0'''
+                
+            Cf = 1.42e-6
+            Ct = 2.84e-7
+            l = 0.11
+            max_motor_speed = 1755*25.2
+            u1 = sqrt(abs(force/(4*Cf) - rTau/(2*Cf*l) + yawTau/(4*Ct)))/max_motor_speed
+            u2 = sqrt(abs(force/(4*Cf) + pTau/(2*Cf*l) - yawTau/(4*Ct)))/max_motor_speed
+            u3 = sqrt(abs(force/(4*Cf) + rTau/(2*Cf*l) + yawTau/(4*Ct)))/max_motor_speed
+            u4 = sqrt(abs(force/(4*Cf) - pTau/(2*Cf*l) - yawTau/(4*Ct)))/max_motor_speed
+            #u = [u1, u2, u3, u4]
             u = [rTau,pTau,force,yawTau]  # [aetr] [w_x (-1.0,1.0), w_y, throttle (0,1), w_z]
 
             print(f"control output {u[0]}, {u[1]}, {u[2]}, {u[3]}")
-
+        
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
+            #msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]), 3), channel_3=round(u[3], 3))
             self.cmd_publisher_.publish(msg)
 
         else:         
-            msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
+            #msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
+            msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=0.0, channel_3=0.0)
+ 
+            msg.channel_0 = 0.05
+            msg.channel_1 = 0.05
+            msg.channel_2 = 0.05
+            msg.channel_3 = 0.05
+            self.pre_start_counter += 1
             self.cmd_publisher_.publish(msg)
+      
             self.step_counter = 0
             print(f"control output {msg.channel_0}, {msg.channel_1}, {msg.channel_2}, {msg.channel_3}")
 
