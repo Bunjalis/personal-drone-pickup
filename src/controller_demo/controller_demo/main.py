@@ -141,34 +141,40 @@ class Controller(Node):
             u3 = sqrt(abs(force/(4*Cf) + rTau/(2*Cf*l) + yawTau/(4*Ct)))/max_motor_speed
             u4 = sqrt(abs(force/(4*Cf) - pTau/(2*Cf*l) - yawTau/(4*Ct)))/max_motor_speed'''
 
-
+            #u1 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+            '''u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+            u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+            u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+            u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
             #f = 1.42e-6 * (4631 * u ) ** 2
 
-            if force/(4*Cf) - rTau/(2*Cf*l) + yawTau/(4*Ct) < 0:
+            if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
                 u1 = 0.0
             else:
                 #u1 = sqrt(force/(4*Cf) - rTau/(2*Cf*l) + yawTau/(4*Ct))/max_motor_speed
 
-                u1 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+                #u1 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+                u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
 
-
-            if force/(4*Cf) + pTau/(2*Cf*l) - yawTau/(4*Ct) < 0:
+            if (force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct)) < 0:
                 u2 = 0.0
             else:
-                u2 = sqrt(force/(4*Cf) + pTau/(2*Cf*l) - yawTau/(4*Ct))/max_motor_speed
+                #u2 = sqrt(force/(4*Cf) + pTau/(2*Cf*l) - yawTau/(4*Ct))/max_motor_speed
+                u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
 
 
-            if force/(4*Cf) + rTau/(2*Cf*l) + yawTau/(4*Ct) < 0:
+            if force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct) < 0:
                 u3 = 0.0
             else:
-                u3 = sqrt(force/(4*Cf) + rTau/(2*Cf*l) + yawTau/(4*Ct))/max_motor_speed
+                #u3 = sqrt(force/(4*Cf) + rTau/(2*Cf*l) + yawTau/(4*Ct))/max_motor_speed
+                u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
 
 
-
-            if force/(4*Cf) - pTau/(2*Cf*l) - yawTau/(4*Ct) < 0:
+            if force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
                 u4 = 0.0
             else:
-                u4 = sqrt(force/(4*Cf) - pTau/(2*Cf*l) - yawTau/(4*Ct))/max_motor_speed
+                #u4 = sqrt(force/(4*Cf) - pTau/(2*Cf*l) - yawTau/(4*Ct))/max_motor_speed
+                 u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
 
 
             '''u1 = sqrt(force/(4*Cf) - rTau/(2*Cf*l) + yawTau/(4*Ct))/max_motor_speed
@@ -194,8 +200,8 @@ class Controller(Node):
             elif u4 <= 0:
                 u4 = 0.0
             # u1 u3 = CW, u2 u4 = CCW
-            #u = [u1,u2,u4, u3]
-            u = [u3, u4, u2, u1]
+            u = [u1,u2, u3, u4]
+            #u = [u3, u4, u2, u1]
             
 
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
