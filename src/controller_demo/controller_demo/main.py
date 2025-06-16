@@ -8,6 +8,7 @@ from interfaces.msg import MotionCaptureState, ELRSCommand
 from geometry_msgs.msg import Pose, PoseArray
 from math import cos, sin, sqrt, hypot, pi
 import math
+import matplotlib.pyplot as plt
 
 
 class Controller(Node):
@@ -17,7 +18,7 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
 
         self.current_pose = None
-        self.setpoint = np.array([0.0, 0.0, 1.0])
+        self.setpoint = np.array([-1.0, -1.0, 1.0])
 
         # Set up control loop
         self.control_frequency = 30.0
@@ -36,6 +37,16 @@ class Controller(Node):
 
         self.gui = GUI(self)
 
+        self.xError = []
+        self.yError = []
+        self.zError = []
+        self.rollError = []
+        self.pitchError = []
+        self.yawError = []
+        self.timePoints = []
+        self.t = 0
+
+        self.exitGUI = False
 
     # Recieve motion capture data
     def pose_callback(self, msg: MotionCaptureState):
@@ -54,6 +65,7 @@ class Controller(Node):
         msg.channel_1 = 0.0
         msg.channel_2 = 0.0
         msg.channel_3 = 0.0
+        self.t += self.dt
 
         # Pre-start state: Send 0.05 on all channels for one second before starting control loop.
         if self.armed and self.pre_start_counter < self.pre_start_steps:
@@ -78,21 +90,21 @@ class Controller(Node):
             vx, vy, vz = state[7:10]
             vr, vp, vyaw = state[10:13]
             kpz, kiz, kdz = 15.0, 10.0, 10.0 #75.0, 42.857, 32.8125
-            kpx, kix, kdx = 0.00414, 0.0000345, 0.1242
-            kpy, kiy, kdy = 0.00414, 0.0000345, 0.1242
+            kpx, kix, kdx = 6.0, 0, 12.0 #0.6, 0, 1.2#0.5, 0,0.4
+            kpy, kiy, kdy = 6.0, 0, 12.0 #0.6, 0, 1.2#0.36, 0, 0.45
 
-            kpp, kip, kdp = 5.0, 3.0, 3.0 # 2.4, 0.48, 3.09 #
-            kpr, kir, kdr = 6.0, 1.5, 1.75 # 2.1, 0.84, 1.3125 #
-            kpyaw, kiyaw, kdyaw = 6.0, 1.5, 1.75 # #0.804, 0.29236, 0.55275
+            kpp, kip, kdp = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 #5.0, 3.0, 3.0 # 2.4, 0.48, 3.09 #
+            kpr, kir, kdr = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # 2.1, 0.84, 1.3125 #
+            kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # #0.804, 0.29236, 0.55275
 
-        
+            
             
             #kpyaw, kdyaw, kiyaw = 1.9, 1.0, 6.95
         
             #chromosomes= [np.float64(0.0), np.float64(0.06274605548265022), np.float64(0.00012207403790398877), 0.003173924985503708, np.float64(0.31025116733298747), np.float64(0.0020142216254158147), np.float64(0.0037384318422839535), np.float64(0.8886786550800712), np.float64(0.010223466670735709), 0.40703130364458956, np.float64(0.7386073196969583), np.float64(6.613819990692068), np.float64(34.52121212121212), 47.895934959349596, np.float64(32.540390530005006)]
             #[kpx, kix, kdx, kpy, kiy, kdy, kpr, kir, kdr, kpp, kip, kdp, kpz, kiz, kdz] = chromosomes
-            xd_dotdot = xd/(dt*dt)
-            yd_dotdot = yd/(dt*dt)
+            #xd_dotdot = xd/(dt*dt)
+            #yd_dotdot = yd/(dt*dt)
             #Ux = kpx*(xd-x) + kix*(xd-x)*dt + kdx*((xd-x) - self.xError_prev)/dt #+ xd_dotdot
             #Uy = kpy*(yd-y) + kiy*(yd-y)*dt + kdy*((yd-y) - self.yError_prev)/dt #+ yd_dotdot
 
@@ -104,31 +116,31 @@ class Controller(Node):
             force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M*(cos(r)*cos(p))
             Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx#+ xd_dotdot
             Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy #+ yd_dotdot
-            rd = 0 #(Ux*sin(yaw) - Uy*cos(yaw))*self.M/force#(self.M/force)
-            pd = 0 #(Ux*cos(yaw) + Uy*sin(yaw))*self.M/force#(self.M/force)
+            rd = (Ux*sin(yaw) - Uy*cos(yaw))*self.M/force
+            pd = (Ux*cos(yaw) + Uy*sin(yaw))*self.M/force
+            #rd = (Ux*cos(yaw) - Uy*sin(yaw))*self.M/force#(self.M/force)
+            #pd = (Ux*sin(yaw) + Uy*cos(yaw))*self.M/force#(self.M/force)
             rTau = (kpr*(rd-r) + kir*(rd-r)*dt - kdr*vr)*self.Ixx
             pTau= (kpp*(pd-p) + kip*(pd-p)*dt - kdp*vp)*self.Iyy
             yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
 
-
+            
+            
+            #print(f"Ux: {Ux}, Uy: {Uy}")
             self.xError_prev = xd-x
             self.yError_prev = yd-y
             self.zError_prev = zd-z
             self.rError_prev = rd-r
             self.pError_prev = pd-p
             self.yawError_prev = yawd-yaw
-            #print(f"f:{force}, rTau: {rTau}, pTau:{pTau}, yawTau{yawTau}")
+            self.xError.append(xd-x)
+            self.yError.append(yd-y)
+            self.zError.append(zd-z)
+            self.rollError.append(rd-r)
+            self.pitchError.append(pd-p)
+            self.yawError.append(yawd-yaw)
+            self.timePoints.append(self.t)
             
-            #force = 1/(1+np.exp(-force)) #math.tanh(force) #
-            
-            self.xError_prev = xd-x
-            self.yError_prev = yd-y
-            self.zError_prev = zd-z
-            self.rError_prev = rd-r
-            self.pError_prev = pd-p
-            self.yawError_prev = yawd-yaw
-            
-
             Cf = 1.42e-6
             Ct = 2.84e-7
 
@@ -136,87 +148,84 @@ class Controller(Node):
             l_y = 0.073
 
             max_motor_speed = 4631.0# 1755*25.2
-            '''u1 = sqrt(abs(force/(4*Cf) - rTau/(2*Cf*l) + yawTau/(4*Ct)))/max_motor_speed
-            u2 = sqrt(abs(force/(4*Cf) + pTau/(2*Cf*l) - yawTau/(4*Ct)))/max_motor_speed
-            u3 = sqrt(abs(force/(4*Cf) + rTau/(2*Cf*l) + yawTau/(4*Ct)))/max_motor_speed
-            u4 = sqrt(abs(force/(4*Cf) - pTau/(2*Cf*l) - yawTau/(4*Ct)))/max_motor_speed'''
 
-            #u1 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
-            '''u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
-            u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
-            u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
-            u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
-            #f = 1.42e-6 * (4631 * u ) ** 2
-
+            
             if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
                 u1 = 0.0
             else:
-                #u1 = sqrt(force/(4*Cf) - rTau/(2*Cf*l) + yawTau/(4*Ct))/max_motor_speed
-
-                #u1 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
                 u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
 
             if (force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct)) < 0:
                 u2 = 0.0
             else:
-                #u2 = sqrt(force/(4*Cf) + pTau/(2*Cf*l) - yawTau/(4*Ct))/max_motor_speed
                 u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
-
 
             if force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct) < 0:
                 u3 = 0.0
             else:
-                #u3 = sqrt(force/(4*Cf) + rTau/(2*Cf*l) + yawTau/(4*Ct))/max_motor_speed
                 u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
 
 
             if force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
                 u4 = 0.0
             else:
-                #u4 = sqrt(force/(4*Cf) - pTau/(2*Cf*l) - yawTau/(4*Ct))/max_motor_speed
                  u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
 
 
-            '''u1 = sqrt(force/(4*Cf) - rTau/(2*Cf*l) + yawTau/(4*Ct))/max_motor_speed
-            u2 = sqrt(force/(4*Cf) + pTau/(2*Cf*l) - yawTau/(4*Ct))/max_motor_speed
-            u3 = sqrt(force/(4*Cf) + rTau/(2*Cf*l) + yawTau/(4*Ct))/max_motor_speed
-            u4 = sqrt(force/(4*Cf) - pTau/(2*Cf*l) - yawTau/(4*Ct))/max_motor_speed'''
-            #print(u1)
-            if u1 > 1:
-                u1 = 1.0
-            elif u1 <= 0:
-                u1 = 0.0
-
-            if u2 > 1:
-                u2 = 1.0
-            elif u2 <= 0:
-                u2 = 0.0
-            if u3 > 1:
-                u3 = 1.0
-            elif u3 <= 0:
-                u3 = 0.0
-            if u4 > 1:
-                u4 = 1.0
-            elif u4 <= 0:
-                u4 = 0.0
-            # u1 u3 = CW, u2 u4 = CCW
-            u = [u1,u2, u3, u4]
-            #u = [u3, u4, u2, u1]
+            ########################################################
+            '''u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+            u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+            u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+            u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
             
-
+            u = [u1,u2,u3,u4]
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
             self.cmd_publisher_.publish(msg)
-            '''msg.armed = True
-            msg.channel_0 = 0.1
-            msg.channel_1 = 0.1
-            msg.channel_2 = 0.1
-            msg.channel_3 = 0.1'''
             
         else:         
             self.pre_start_counter = 0
 
         self.cmd_publisher_.publish(msg)
         print(f"control output {msg.channel_0}, {msg.channel_1}, {msg.channel_2}, {msg.channel_3}")
+
+    def plotSystemResponse(self):
+        figure2, ax2 = plt.subplots(4,1)
+        time = self.timePoints
+        ax2[0].plot(time, self.xError)
+        ax2[0].set_title('x position error over time')
+        ax2[0].set_ylabel('x position error')
+        ax2[0].set_xlabel('time (s)')
+
+        ax2[1].plot(time, self.yError)
+        ax2[1].set_title('y position error over time')
+        ax2[1].set_ylabel('y position error')
+        ax2[1].set_xlabel('time (s)')
+
+        ax2[2].plot(time, self.zError)
+        ax2[2].set_title('z position error over time')
+        ax2[2].set_ylabel('z position error')
+        ax2[2].set_xlabel('time (s)')
+
+        ax2[3].plot(time, self.yawError)
+        ax2[3].set_title('yaw position error over time')
+        ax2[3].set_ylabel('yaw position error')
+        ax2[3].set_xlabel('time (s)')
+        plt.tight_layout()
+
+        figure, ax3 = plt.subplots(2,1)
+        ax3[0].plot(time, self.rollError)
+        ax3[0].set_title('roll position error over time')
+        ax3[0].set_ylabel('roll position error')
+        ax3[0].set_xlabel('time (s)')
+
+        ax3[1].plot(time, self.pitchError)
+        ax3[1].set_title('pitch position error over time')
+        ax3[1].set_ylabel('pitch position error')
+        ax3[1].set_xlabel('time (s)')
+        plt.tight_layout()
+        plt.show()
+
+
     def quaternion_to_euler(self, w, x, y, z):
         # Roll (x-axis rotation)
         t0 = +2.0 * (w * x + y * z)
@@ -240,6 +249,7 @@ class Controller(Node):
         self.on_close()
 
     def on_close(self):
+        self.plotSystemResponse()
         self.gui.quit()
         rclpy.shutdown()
         sys.exit(0)
@@ -254,6 +264,7 @@ def main(args=None):
     while rclpy.ok():
         rclpy.spin_once(controller, timeout_sec=0.1)
         controller.gui.handle_events()
+  
     controller.destroy_node()
     rclpy.shutdown()
 
