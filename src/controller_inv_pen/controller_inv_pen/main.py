@@ -46,7 +46,7 @@ class Controller(Node):
         self.timePoints = []
         self.t = 0
 
-        self.testInvPen = True
+        self.testInvPen = False
         self.pen_length = 0.3
         self.pen_mass =  0.0
         self.a = 0.01
