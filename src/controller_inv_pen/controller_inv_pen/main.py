@@ -6,8 +6,8 @@ import math
 from math import cos, sin, sqrt, hypot, pi
 from rclpy.node import Node
 from .gui import GUI
-from interfaces.msg import MotionCaptureState, ELRSCommand
-from geometry_msgs.msg import Pose, PoseArray
+from interfaces.msg import MotionCaptureState, ELRSCommand, InvertedPendulumStates
+from geometry_msgs.msg import Pose, PoseArray, PoseStamped, TwistStamped
 import matplotlib.pyplot as plt
 
 class Controller(Node):
@@ -15,10 +15,11 @@ class Controller(Node):
         super().__init__('controller')
         self.cmd_publisher_ = self.create_publisher(ELRSCommand, '/ELRSCommand', 10)
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
-
+        self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
         self.current_pose = None
         self.setpoint = np.array([0.5, 0.0, 1.0])
-
+        self.currentPenPose = None
+        #self.pendulumVelocity = None
         # Set up control loop
         self.control_frequency = 30.0
         self.dt = 1.0 / self.control_frequency
@@ -49,7 +50,7 @@ class Controller(Node):
         self.testInvPen = False
         self.pen_length = 0.3
         self.pen_mass =  0.0
-        self.a = 0.01
+        self.a = 0.0
         self.b = 0.0
         self.a_dot = 0.0
         self.b_dot = 0.0
@@ -77,6 +78,18 @@ class Controller(Node):
         linear_velocity = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z])
         angular_velocity = np.array([msg.twist.angular.x, msg.twist.angular.y, msg.twist.angular.z])
         self.current_pose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
+    
+    def IP_state_callback(self, msg:InvertedPendulumStates):
+        position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
+        orientation =  np.array([msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z])
+        linear_velocity = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z])
+        angular_velocity = np.array([msg.twist.angular.x, msg.twist.angular.y, msg.twist.angular.z])
+        self.currentPenPose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
+        
+        
+        #print(f"penAngle: {self.currentPenPose}")
+
+    
 
     def navController(self):
         state = self.current_pose

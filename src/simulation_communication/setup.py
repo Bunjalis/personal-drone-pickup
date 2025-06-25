@@ -23,7 +23,8 @@ setup(
         'console_scripts': [
             'ELRS_pass_through = simulation_communication.ELRS_pass_through:main',
             'motion_capture_emulator = simulation_communication.motion_capture_emulator:main',
-            'betaflight_communication = simulation_communication.betaflight_communication:main'
+            'betaflight_communication = simulation_communication.betaflight_communication:main',
+            'pendulum_state_listener = simulation_communication.pendulum_state_listener:main'
         ],
     },
 )

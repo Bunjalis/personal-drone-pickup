@@ -29,4 +29,18 @@ def generate_launch_description():
             executable='motion_capture_emulator',
             name='motion_capture_emulator'
         ),
+        Node(
+            package='simulation_communication',
+            executable='pendulum_state_listener',
+            name='pendulum_state_listener'       
+        ),
+        Node(
+            package='ros_ign_bridge',
+            executable='parameter_bridge',
+            arguments=['imu@sensor_msgs/msg/Imu[ignition.msgs.IMU']
+           
+                
+        )
+
+        
     ])

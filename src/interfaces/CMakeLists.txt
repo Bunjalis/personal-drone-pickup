@@ -27,6 +27,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MotionCaptureState.msg"
   "msg/ELRSCommand.msg"
   "msg/Telemetry.msg"
+  "msg/InvertedPendulumStates.msg"
   DEPENDENCIES std_msgs geometry_msgs  # Specify dependencies here
 )
 
