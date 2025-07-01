@@ -9,6 +9,9 @@ from .gui import GUI
 from interfaces.msg import MotionCaptureState, ELRSCommand, InvertedPendulumStates
 from geometry_msgs.msg import Pose, PoseArray, PoseStamped, TwistStamped
 import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation as R
+import time
+from .acados import generate_ocp_controller
 
 class Controller(Node):
     def __init__(self):
@@ -17,7 +20,7 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
         self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
         self.current_pose = None
-        self.setpoint = np.array([0.2, 0.2, 0.2])
+        self.setpoint = np.array([0.0, 0.0, 0.2])
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
@@ -47,7 +50,8 @@ class Controller(Node):
         self.timePoints = []
         self.t = 0
 
-        self.testInvPen = True
+        self.testInvPen = False
+        self.testMPC = True
         self.pen_length = 0.2
         self.pen_mass =  0.0
         self.a = 0.0
@@ -70,6 +74,63 @@ class Controller(Node):
         self.vy_approx = 0.0
         self.vz_approx = 0.0
 
+        ######################## MPC variables #######################
+        self.steps = 90 * 30
+        self.dt = 1.0 / 30.0
+        self.step_counter = 0
+        self.timer = self.create_timer(self.dt, self.control_loop)
+
+        # Get both the OCP solver and the integrator
+        self.ocp, self.sim_integrator = generate_ocp_controller()
+
+        time_space = np.linspace(0, self.steps * self.dt, self.steps)
+        # Original trajectories
+        self.x_traj = np.zeros_like(time_space)
+        self.y_traj = np.zeros_like(time_space)
+        self.z_traj = 1.0 * np.ones_like(time_space)
+
+        # New oscillating trajectories
+        #self.x_traj = 2.0 * np.sin(2 * np.pi * 1.0 * time_space)  # Sine wave with frequency 0.1 Hz
+        #self.y_traj = 2.0 * np.sin(2 * np.pi * 0.5 * time_space)  # Sine wave with frequency 0.2 Hz
+        #self.z_traj = 1.5 + 0.5 * np.sin(2 * np.pi * 0.5 * time_space)  # Sine wave with frequency 0.05 Hz
+
+        roll_traj = np.zeros_like(time_space)  # Roll remains 0
+        pitch_traj = np.zeros_like(time_space)  # Pitch remains 0
+        yaw_traj = np.zeros_like(time_space)  # Pitch remains 0
+
+        rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+        quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Converts to [q_x, q_y, q_z, q_w]
+
+        self.qx_traj = quaternions[:, 0]
+        self.qy_traj = quaternions[:, 1]
+        self.qz_traj = quaternions[:, 2]
+        self.qw_traj = quaternions[:, 3]
+
+        # Calculate world frame velocities for the trajectory
+        self.vx_traj = np.gradient(self.x_traj, self.dt)
+        self.vy_traj = np.gradient(self.y_traj, self.dt)
+        self.vz_traj = np.gradient(self.z_traj, self.dt)
+
+        # Calculate desired angular velocities for the orientation trajectory
+        self.ax_traj = np.zeros_like(time_space)  # Roll rate remains 0
+        self.ay_traj = np.zeros_like(time_space)  # Pitch rate remains 0
+        self.az_traj = np.zeros_like(time_space)  # Yaw rate trajectory
+
+        self.executing_actions = False
+        self.executed_steps = 0
+        self.saved_states = []
+        self.saved_controls = []
+        self.recorded_states = []  # To store the recorded states
+        self.initial_solve_state = None
+        self.initial_solve_controls = None
+
+        self.omega_est = np.array([0.1,0.1,0.1,0.1])  # Initialize omega_est if not already present
+
+        self.pre_start_duration = 1.0  # Duration for the pre-start state in seconds
+        self.pre_start_counter = 0  # Counter to track pre-start steps
+        self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
+
+        self.N = 20
 
     # Recieve motion capture data
     def pose_callback(self, msg: MotionCaptureState):
@@ -92,17 +153,26 @@ class Controller(Node):
     
 
     def navController(self):
+
         state = self.current_pose
         xd, yd, zd = self.setpoint
+        penState = self.currentPenPose
+        a, b, eta = penState[0:3]
+        a_dot, b_dot, eta_dot = penState[7:10]
+        
         yawd = 0.0
         dt = self.dt
         x, y, z = state[0:3]
         r, p, yaw = self.quaternion_to_euler(*state[3:7])
         vx, vy, vz = state[7:10]
         vr, vp, vyaw = state[10:13]
+        print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
+        print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
         
-        pTau = -1*np.array([0.0034,0.0490,0.0071,0.0140])@np.array([[x-xd],[p],[vx],[vp]]) 
-        rTau = -1*np.array([-0.0043, 0.0611, -0.0089, 0.0174])@np.array([[y-yd],[r],[vy],[vr]])
+        pd = 0
+        rd = 0
+        pTau = -1*np.array([0.0034,0.0490,0.0071,0.0140])@np.array([[x-xd],[p-pd],[vx],[vp]]) 
+        rTau = -1*np.array([-0.0043, 0.0611, -0.0089, 0.0174])@np.array([[y-yd],[r-rd],[vy],[vr]])
         kpz, kiz, kdz = 15.0, 10.0, 10.0 
         force =  (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M /(cos(r)*cos(p))
         self.prevForce = force
@@ -122,20 +192,33 @@ class Controller(Node):
         vr, vp, vyaw = state[10:13]
         
         penState = self.currentPenPose
-        a, b = penState[0:2]
-        a_dot, b_dot = penState[7:9]
-        print(f"a:{a}, b:{b}, a_dot:{a_dot}, b_dot:{b_dot}")
-        #a,b,a_dot,b_dot = self.computePenPosition()
-        
+        a, b, eta = penState[0:3]
+        a_dot, b_dot, eta_dot = penState[7:10]
+        print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
+        print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
         self.aError.append(a)
         self.bError.append(b)
         
          
         #pTau = -1*np.array([-0.1320,0.9669,-10.0866,-0.1314,0.0546,-1.2473])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
         #rTau = -1*np.array([0.1645, 1.2046, 12.5655 , 0.1638, 0.0680, 1.5538])@np.array([[y-yd],[r],[b],[vy],[vr], [b_dot]])
-       
+        
         pTau = -1*np.array([ -0.0031, 0.2909, -1.2046, -0.0077,0.0294,-0.2107])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
         rTau = -1*np.array([-0.0039,0.3624,1.5007, 0.0096,0.0366,0.2624])@np.array([[y-yd],[r],[b],[vy],[vr], [b_dot]])
+        K1 = np.array([-0.02236068,  0.57570456, -2.82160465, -0.04164618,  0.04596296, -0.49391721])
+        K2= np.array([0.02236068, 0.62340629, 2.99827868, 0.04193528, 0.05172397, 0.52478407])
+        
+        '''pTau = -1*K1@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        rTau = -1*K2@np.array([[y-yd],[r],[b],[vy],[vr], [b_dot]])
+        pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        rTau = -1*np.array([ 0.0040,0.2926,1.1953,0.0079, 0.0314,0.2086])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])'''
+        #a = 0
+        #a_dot = 0
+        
+        pTau = -1*np.array([ 0.0032,0.2349,-0.9595, 0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        pTau = -1*np.array([ -0.0051,    0.2676,   -1.1351,   -0.0094,    0.0273,   -0.1983,])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        #rTau = -1*np.array([ -0.2611,    1.0446,    7.4118,    -0.2667,    0.0646,    1.2961])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
+        rTau = -1*np.array([-0.0043, 0.0611, -0.0089, 0.0174])@np.array([[y-yd],[r],[vy],[vr]])
         #pTau = -1*np.array([-0.0021,0.2293,-0.9119,-0.0048,0.0252,-0.1593])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
         #rTau = -1*np.array([0.0026,0.2856, 1.1361, 0.0060,0.0314,0.1985])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
         
@@ -147,7 +230,54 @@ class Controller(Node):
         yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt + kdyaw*(-vyaw))*self.Izz
         return force, rTau[0], pTau[0], yawTau
 
+    def MPC(self):
+        skip_steps = 3
+        for j in range(self.N):
+            if self.step_counter + j*skip_steps < self.steps:
+                yref = np.array([self.x_traj[self.step_counter + j*skip_steps], self.y_traj[self.step_counter + j*skip_steps],
+                                    self.z_traj[self.step_counter + j*skip_steps], self.qw_traj[self.step_counter + j*skip_steps],
+                                    self.qx_traj[self.step_counter + j*skip_steps], self.qy_traj[self.step_counter + j*skip_steps],
+                                    self.qz_traj[self.step_counter + j*skip_steps], 
+                                    self.vx_traj[self.step_counter + j*skip_steps], self.vy_traj[self.step_counter + j*skip_steps], self.vz_traj[self.step_counter + j*skip_steps], 
+                                    self.ax_traj[self.step_counter + j*skip_steps], self.ay_traj[self.step_counter + j*skip_steps], self.az_traj[self.step_counter + j*skip_steps], 
+                                    0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2])
+            else:
+                yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2])
+            self.ocp.set(j, "yref", yref)
 
+
+        yref_N = np.array([self.x_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.y_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.z_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
+                                self.qw_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.qx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
+                                self.vx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.vy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.vz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], 
+                                self.ax_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.ay_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.az_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
+                                0.0, 0.0, 0.0, 0.0 ])
+        self.ocp.set(self.N, "yref", yref_N)
+
+        current_state_with_omega = np.concatenate((self.current_pose, self.omega_est))
+
+        self.ocp.set(0, "lbx", current_state_with_omega)
+        self.ocp.set(0, "ubx", current_state_with_omega)
+
+        # Solve the OCP
+        status = self.ocp.solve()
+        if status != 0:
+            raise Exception(f'acados returned status {status}.')
+
+        # Retrieve the control inputs
+        u = self.ocp.get(0, "u")
+        '''msg.armed = True
+        msg.channel_0 = round(u[0], 3)
+        msg.channel_1 = round(u[1], 3)
+        msg.channel_2 = round(u[2], 3)
+        msg.channel_3 = round(u[3], 3)'''
+        
+        self.cmd_publisher_.publish(msg)
+        self.omega_est = self.ocp.get(1,"x")[-4:]
+        self.step_counter += 1
+
+        print(f"U = {np.round(u, 3)} omega_est = {np.round(self.omega_est, 3)}")
+        return u
+         
     def control_loop(self):
         msg = ELRSCommand()
         msg.armed = False
@@ -186,47 +316,49 @@ class Controller(Node):
             # CONTROL CODE GOES HERE
             if self.testInvPen:
                 force, rTau, pTau, yawTau = self.FIPController()
-            else:
+            elif not self.testMPC:
                 force, rTau, pTau, yawTau = self.navController()
-            
-            
-            
-            Cf = 1.42e-6
-            Ct = 2.84e-7
-
-            l_x = 0.0865
-            l_y = 0.073
-
-            max_motor_speed = 4631.0# 1755*25.2
-            
-            if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
-                u1 = 0.0
             else:
-                u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+                u1,u2,u3,u4 = self.MPC()
+            
+            
+            
+            if not self.testMPC:
+                Cf = 1.42e-6
+                Ct = 2.84e-7
 
-            if (force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct)) < 0:
-                u2 = 0.0
-            else:
+                l_x = 0.0865
+                l_y = 0.073
+
+                max_motor_speed = 4631.0# 1755*25.2
+                
+                if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
+                    u1 = 0.0
+                else:
+                    u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+
+                if (force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct)) < 0:
+                    u2 = 0.0
+                else:
+                    u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+
+                if force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct) < 0:
+                    u3 = 0.0
+                else:
+                    u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+
+                if force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
+                    u4 = 0.0
+                else:
+                    u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+
+
+                ########################################################
+                print(f"force: {force}, rTau: {rTau}, pTau: {pTau}, yawTau: {yawTau}")
+                '''u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
                 u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
-
-            if force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct) < 0:
-                u3 = 0.0
-            else:
                 u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
-
-
-            if force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
-                u4 = 0.0
-            else:
-                 u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
-
-
-            ########################################################
-            print(f"force: {force}, rTau: {rTau}, pTau: {pTau}, yawTau: {yawTau}")
-            '''u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
-            u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
-            u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
-            u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
+                u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
             
             u = [u1,u2,u3,u4]
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
