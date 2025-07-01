@@ -51,8 +51,8 @@ class Controller(Node):
         self.pre_start_counter = 0 
         self.pre_start_steps = int(self.pre_start_duration / self.dt)
 
-        self.N = 15
-        self.skip_steps = 1
+        self.N = 20
+        self.skip_steps = 3
         self.predicted_next_state = None
         self.last_pose = None
         self.last_control = None
@@ -67,7 +67,7 @@ class Controller(Node):
             self.csv_writer = csv.writer(self.csv_file)
             # Write header row
             self.csv_writer.writerow([
-                'Step', 'u0', 'u1', 'u2', 'u3','u4', 'u5', 'u6', 'u7',
+                'Step', 'u0', 'u1', 'create_timeru2', 'u3','u4', 'u5', 'u6', 'u7',
                 'px', 'py', 'pz', 'rw', 'rx', 'ry', 'rz',
                 'vx', 'vy', 'vz', 'wx', 'wy', 'wz',
                 'sp_px', 'sp_py', 'sp_pz', 'sp_rw', 'sp_rx', 'sp_ry', 'sp_rz',
@@ -79,40 +79,10 @@ class Controller(Node):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
         self.current_pose = np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
-        ]) + np.random.normal(0, 0.01, 13)
+        ])
 
 
 
-    def angular_velocity_test(self):
-
-
-
-        if self.armed and self.sent_command == False:
-            print("Sending initial command to arm the controller.")
-            print(f"Current pose: {self.current_pose[10:13]}")
-            # Convert the list 'u' to a NumPy array before passing it to self.sim_integrator.set
-            u = np.array([0.1, -0.11, -0.11, -0.11, 0.14, 0.0, 0.1, 0.0])
-
-            u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
-            msg = ELRSCommand(armed=True, channel_0=u_sqrt[0], channel_1=u_sqrt[1], channel_2=u_sqrt[2], channel_3=u_sqrt[3], channel_4=u_sqrt[4], channel_5=u_sqrt[5], channel_6=u_sqrt[6], channel_7=u_sqrt[7])
-            self.cmd_publisher_.publish(msg)
-            self.sent_command = True
-
-            self.sim_integrator.set("x", self.current_pose)
-            self.sim_integrator.set("u", u)
-            self.sim_integrator.solve()
-            predicted_state = self.sim_integrator.get("x")
-            print("Predicted state:", predicted_state[10:13])
-
-        elif self.armed and self.sent_command == True:
-            print(f"Current pose: {self.current_pose[10:13]}")
-            self.armed = False
-            self.on_close()
-        else:
-            u = np.array([0.1, -0.1, -0.1, 0.1, 0.1, -0.1, -0.1, 0.1])
-            u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
-            msg = ELRSCommand(armed=True, channel_0=u_sqrt[0], channel_1=u_sqrt[1], channel_2=u_sqrt[2], channel_3=u_sqrt[3], channel_4=u_sqrt[4], channel_5=u_sqrt[5], channel_6=u_sqrt[6], channel_7=u_sqrt[7])
-            self.cmd_publisher_.publish(msg)
 
 
 
@@ -198,6 +168,43 @@ class Controller(Node):
             msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=0.0, channel_3=0.0, channel_4=0.0, channel_5=0.0, channel_6=0.0, channel_7=0.0)
             self.cmd_publisher_.publish(msg)
             self.step_counter = 0
+
+
+
+
+
+
+
+
+    def angular_velocity_test(self):
+
+        if self.armed and self.sent_command == False:
+            print("Sending initial command to arm the controller.")
+            print(f"Current pose: {self.current_pose[10:13]}")
+            # Convert the list 'u' to a NumPy array before passing it to self.sim_integrator.set
+            u = np.array([0.1, -0.11, -0.11, -0.11, 0.14, 0.0, 0.1, 0.0])
+
+            u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
+            msg = ELRSCommand(armed=True, channel_0=u_sqrt[0], channel_1=u_sqrt[1], channel_2=u_sqrt[2], channel_3=u_sqrt[3], channel_4=u_sqrt[4], channel_5=u_sqrt[5], channel_6=u_sqrt[6], channel_7=u_sqrt[7])
+            self.cmd_publisher_.publish(msg)
+            self.sent_command = True
+
+            self.sim_integrator.set("x", self.current_pose)
+            self.sim_integrator.set("u", u)
+            self.sim_integrator.solve()
+            predicted_state = self.sim_integrator.get("x")
+            print("Predicted state:", predicted_state[10:13])
+
+        elif self.armed and self.sent_command == True:
+            print(f"Current pose: {self.current_pose[10:13]}")
+            self.armed = False
+            self.on_close()
+        else:
+            u = np.array([0.1, -0.1, -0.1, 0.1, 0.1, -0.1, -0.1, 0.1])
+            u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
+            msg = ELRSCommand(armed=True, channel_0=u_sqrt[0], channel_1=u_sqrt[1], channel_2=u_sqrt[2], channel_3=u_sqrt[3], channel_4=u_sqrt[4], channel_5=u_sqrt[5], channel_6=u_sqrt[6], channel_7=u_sqrt[7])
+            self.cmd_publisher_.publish(msg)
+
 
 
     def signal_handler(self, sig, frame):

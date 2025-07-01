@@ -25,8 +25,8 @@ def generate_ocp_controller(dynamics=None):
     ocp = AcadosOcp()
     ocp.model = model
 
-    ocp.solver_options.N_horizon = 15
-    ocp.solver_options.tf = 0.5
+    ocp.solver_options.N_horizon = 20
+    ocp.solver_options.tf = 2.0
 
     nu = 8  # Number of control inputs
     nx = 13  # New state dimension (no omega)
@@ -34,8 +34,8 @@ def generate_ocp_controller(dynamics=None):
 
     # Cost matrices (tune as needed)
     Q_mat = 2 * np.diag([
-        1.0, 1.0, 1.0,    # position
-        1.0, 1.0, 1.0, 1.0,  # quaternion
+        0.1, 0.1, 1.0,    # position
+        0.1, 0.1, 0.1, 0.1,  # quaternion
         0.001, 0.001, 0.001,      # velocity
         0.001, 0.001, 0.001      # angular rates
     ])
@@ -70,18 +70,18 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
     ocp.solver_options.nlp_solver_max_iter = 500
     ocp.solver_options.qp_solver_iter_max = 200
-    ocp.solver_options.qp_solver_tol_stat = 1e-5
-    ocp.solver_options.qp_solver_tol_eq = 1e-5
-    ocp.solver_options.qp_solver_tol_ineq = 1e-5
-    ocp.solver_options.qp_solver_tol_comp = 1e-5
-    ocp.solver_options.nlp_solver_tol_stat = 1e-5
-    ocp.solver_options.nlp_solver_tol_eq = 1e-5
-    ocp.solver_options.nlp_solver_tol_ineq = 1e-5
-    ocp.solver_options.nlp_solver_tol_comp = 1e-5
-    ocp.solver_options.levenberg_marquardt = 1e-5
+    ocp.solver_options.qp_solver_tol_stat = 1e-3
+    ocp.solver_options.qp_solver_tol_eq = 1e-3
+    ocp.solver_options.qp_solver_tol_ineq = 1e-3
+    ocp.solver_options.qp_solver_tol_comp = 1e-3
+    ocp.solver_options.nlp_solver_tol_stat = 1e-3
+    ocp.solver_options.nlp_solver_tol_eq = 1e-3
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-3
+    ocp.solver_options.nlp_solver_tol_comp = 1e-3
+    ocp.solver_options.levenberg_marquardt = 1e-3
 
 
-    rl = 0.5
+    rl = 0.6
     # Set input constraints (tune as needed)
     ocp.constraints.lbu = np.array([-rl, -rl, -rl, -rl, -rl, -rl, -rl, -rl])  # throttle, roll_rate, pitch_rate, yaw_rate
     ocp.constraints.ubu = np.array([rl, rl, rl, rl, rl, rl, rl, rl])

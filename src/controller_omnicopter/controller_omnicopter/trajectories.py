@@ -103,22 +103,11 @@ def hover_trajectory(dt):
         take_off_traj = takeoff_trajectory(dt)
 
 
-        steps_hover = 2 * 30  # 2 seconds of hover at 30 Hz
-        time_space_hover = np.linspace(0, steps_hover * dt, steps_hover)
-        x_traj_hover = np.zeros_like(time_space_hover)
-        y_traj_hover = np.zeros_like(time_space_hover)
-        z_traj_hover = np.ones_like(time_space_hover)
-
-        steps_move_x = 1 * 30  # 1 second to move to x = 0.5m at 30 Hz
-        time_space_move_x = np.linspace(0, steps_move_x * dt, steps_move_x)
-        x_traj_move_x = np.linspace(0, 0.5, steps_move_x)
-        y_traj_move_x = np.zeros_like(time_space_move_x)
-        z_traj_move_x = np.ones_like(time_space_move_x)
-
-        time_space = np.concatenate((time_space_hover, time_space_move_x))
-        x_traj = np.concatenate((x_traj_hover, x_traj_move_x))
-        y_traj = np.concatenate((y_traj_hover, y_traj_move_x))
-        z_traj = np.concatenate((z_traj_hover, z_traj_move_x))
+        steps = 10 * 30  # 10 seconds of hover at 30 Hz
+        time_space = np.linspace(0, steps * dt, steps)
+        x_traj = np.zeros_like(time_space)
+        y_traj = np.zeros_like(time_space)
+        z_traj = np.ones_like(time_space)
 
         roll_traj = np.zeros_like(time_space)
         pitch_traj = np.zeros_like(time_space)
@@ -144,6 +133,8 @@ def hover_trajectory(dt):
 
 
         return np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+
+
 
 
 

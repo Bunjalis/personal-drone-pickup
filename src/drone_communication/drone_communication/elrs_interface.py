@@ -106,7 +106,7 @@ class ELRSInterface(Node):
         self.input = bytearray()
 
         self.idle = 993 # may be 993 for ardupilot (this is strange)
-        self.range = 805
+        self.range = 820
         self.armed = False
         self.packet = np.full(16, self.idle, dtype=np.uint16)
         self.packet[4] = 0
@@ -158,7 +158,7 @@ class ELRSInterface(Node):
         self.packet[1] = self.idle + int(max(-1.0, min(1.0, msg.channel_1)) * self.range)
         self.packet[2] = self.idle + int(max(-1.0, min(1.0, msg.channel_2)) * self.range)
         #self.packet[2] = self.idle - self.range + int(max(0.0, min(1.0, msg.channel_2)) * 2 * self.range) #betaflight throttle
-
+        print(f"Channel 2: {self.packet[2]} (msg.channel_2: {msg.channel_2})")
 
         self.packet[3] = self.idle + int(max(-1.0, min(1.0, msg.channel_3)) * self.range)
         self.packet[5] = self.idle + int(max(-1.0, min(1.0, msg.channel_4)) * self.range)

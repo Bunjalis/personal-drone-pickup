@@ -85,7 +85,7 @@ def generate_ocp_controller(dynamics=None):
 
     # Set input constraints (tune as needed)
     ocp.constraints.lbu = np.array([-rate_limit, -rate_limit, 0.05, -rate_limit])  # throttle, roll_rate, pitch_rate, yaw_rate
-    ocp.constraints.ubu = np.array([rate_limit, rate_limit, 0.4, rate_limit])
+    ocp.constraints.ubu = np.array([rate_limit, rate_limit, 0.5, rate_limit])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

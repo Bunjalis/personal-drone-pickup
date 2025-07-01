@@ -22,27 +22,26 @@ class Controller(Node):
     def __init__(self):
         super().__init__('controller')
 
-        self.enable_L1_augmentation = True  # Enable L1 augmentation by default
+        self.enable_L1_augmentation = False  # Enable L1 augmentation by default
 
         self.cmd_publisher_ = self.create_publisher(ELRSCommand, '/ELRSCommand', 10)
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
+        self.orb_slam_state_subscription_ = self.create_subscription(MotionCaptureState, '/orb_slam_state', self.orb_slam_state_callback, 10)
         self.trajectory_publisher_ = self.create_publisher(PoseArray, '/planned_trajectory', 10)
         self.current_pose = None
+        self.orb_slam_state = None
 
         self.ocp, self.sim_integrator = generate_ocp_controller()
 
         self.dt = 1.0 / 30.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
-
+        self.data_record_timer = self.create_timer(self.dt, self.data_record_loop)
         
-
         #self.traj = circle_trajectory(self.dt)
         self.traj = hover_trajectory(self.dt)   
 
-
         self.steps = self.traj.shape[1] - 1  # Number of steps in the trajectory
-
 
         self.gui = GUI(self)
         self.armed = False
@@ -70,7 +69,16 @@ class Controller(Node):
                 'sp_vx', 'sp_vy', 'sp_vz', 'sp_wx', 'sp_wy', 'sp_wz',
                 'err_z','aug_u',
         ])
+            
+        self.motion_csv_file = open('motion_comparison.csv', mode='w', newline='')
+        self.motion_csv_writer = csv.writer(self.motion_csv_file)
 
+        self.motion_csv_writer.writerow([
+                'm_px', 'm_py', 'm_pz', 'm_rw', 'm_rx', 'm_ry', 'm_rz',
+                'm_vx', 'm_vy', 'm_vz', 'm_wx', 'm_wy', 'm_wz',
+                'o_px', 'o_py', 'o_pz', 'o_rw', 'o_rx', 'o_ry', 'o_rz',
+                'o_vx', 'o_vy', 'o_vz', 'o_wx', 'o_wy', 'o_wz',
+        ])
 
         self.l1_controller = L1Controller(dt=self.dt)
 
@@ -80,11 +88,30 @@ class Controller(Node):
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
         ]), 3)
 
+
+    def orb_slam_state_callback(self, msg: MotionCaptureState):
+        p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
+        self.orb_slam_state = np.round(np.array([
+            p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
+        ]), 3)
+
+
+    def data_record_loop(self):
+
+        if self.current_pose is not None and self.orb_slam_state is not None:
+            self.motion_csv_writer.writerow(
+                        list(self.current_pose) +
+                        list(self.orb_slam_state)
+                    )
+
+
+
+
     def control_loop(self):
 
         if self.armed and self.pre_start_counter < self.pre_start_steps:
             print(f"Pre-start phase: {self.pre_start_counter + 1}/{self.pre_start_steps}")
-            msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-0.8, channel_3=0.0)
+            msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
             self.cmd_publisher_.publish(msg)
             self.pre_start_counter += 1
 
@@ -114,7 +141,7 @@ class Controller(Node):
                 raise Exception(f'acados returned status {status}.')
 
             u = self.ocp.get(0, "u")
-
+            print(f"Step {self.step_counter}, Control Output: {u}")
             # Use L1 adaptive augmentation to adjust the control output
             if self.enable_L1_augmentation:
                 

@@ -14,9 +14,9 @@
 <sdf version="1.6">
   <world name="quadcopter">
     <physics name="1ms" type="ignored">
-      <max_step_size>0.001</max_step_size>
+      <max_step_size>0.02</max_step_size>
       <real_time_factor>1.0</real_time_factor>
-      <real_time_update_rate>500</real_time_update_rate>
+      <real_time_update_rate>50</real_time_update_rate>
     </physics>
     <plugin
       filename="ignition-gazebo-physics-system"
@@ -98,7 +98,7 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_0_joint</jointName>
         <linkName>X3/rotor_0</linkName>
-        <turningDirection>cw</turningDirection>
+        <turningDirection>ccw</turningDirection>
         <timeConstantUp>0.0</timeConstantUp>
         <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
@@ -120,8 +120,8 @@
         <jointName>X3/rotor_1_joint</jointName>
         <linkName>X3/rotor_1</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <timeConstantUp>0.0</timeConstantUp>
+        <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
         <momentConstant>0.0</momentConstant>
@@ -162,7 +162,7 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_3_joint</jointName>
         <linkName>X3/rotor_3</linkName>
-        <turningDirection>cw</turningDirection>
+        <turningDirection>ccw</turningDirection>
         <timeConstantUp>0.0</timeConstantUp>
         <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
@@ -206,7 +206,7 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_5_joint</jointName>
         <linkName>X3/rotor_5</linkName>
-        <turningDirection>ccw</turningDirection>
+        <turningDirection>cw</turningDirection>
         <timeConstantUp>0.0</timeConstantUp>
         <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
@@ -228,7 +228,7 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_6_joint</jointName>
         <linkName>X3/rotor_6</linkName>
-        <turningDirection>ccw</turningDirection>
+        <turningDirection>cw</turningDirection>
         <timeConstantUp>0.0</timeConstantUp>
         <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
