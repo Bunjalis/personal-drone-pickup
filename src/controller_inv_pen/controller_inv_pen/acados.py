@@ -34,7 +34,7 @@ def generate_ocp_controller(dynamics=None):
     nu = 4  # Number of control inputs (throttle for 4 motors)
 
     # Update the state vector to include omega_est (estimated motor speeds)
-    nx = 17  # Updated number of states to include motor speeds
+    nx = 17 + 4 # Updated number of states to include motor speeds
     model.x = quad_dynamics.x  # Full state vector including omega_est
 
     # Update the cost function dimensions
@@ -42,7 +42,7 @@ def generate_ocp_controller(dynamics=None):
 
     # Update the cost matrices to match the new state dimension
 
-    Q_mat = 2 * np.diag([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0])
+    Q_mat = 2 * np.diag([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0, 1.0,1.0,1.0,1.0])
     R_mat = 2 * np.diag([1.0, 1.0, 1.0, 1.0])
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
     ocp.cost.W_e = Q_mat[:nx, :nx]  # Terminal cost only considers the state

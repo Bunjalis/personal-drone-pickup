@@ -14,10 +14,12 @@ class QuadDynamics:
         self.q = cs.MX.sym('a', 4)  # angle quaternion (wxyz)
         self.v = cs.MX.sym('v', 3)  # velocity
         self.r = cs.MX.sym('r', 3)  # angular velocity
+        self.penPos = cs.MX.sym('penPos', 2) #a and b
+        self.penVel = cs.MX.sym('penVel', 2)
 
         # Update full state vector to include motor speeds
         self.omega = cs.MX.sym('omega', 4)  # Motor speeds
-        self.x = cs.vertcat(self.p, self.q, self.v, self.r, self.omega)
+        self.x = cs.vertcat(self.p, self.q, self.v, self.r, self.omega, self.penPos, self.penVel)
         self.state_dim = 17  # Updated state dimension to include motor speeds
 
         # Control input vector (throttle, roll, pitch, yaw)
@@ -111,10 +113,28 @@ class QuadDynamics:
         omega_dot = (1 / self.tau_motor) * (-self.omega + self.K_motor * self.u)
         return omega_dot
 
+    def IP_dynamics(self):
+        # Add inverted pendulum dynamics here and return  a_dot, b_dot, a_ddot, b_ddot,
+        #self.q_dynamics() returns roll, pitch yaw 
+        w = self.w_dynamics()
+        roll = w[0]
+        pitch = w[1]
+        penPos = self.penPos
+        a = penPos[0]
+        b = penPos[1]
+        g = 9.81
+        L = 0.6/2
+        dt = 1.0 / 30.0
+        a_ddot = a*g/L - pitch*g
+        b_ddot = b*g/L + roll*g
+        a_dot = a_ddot*dt
+        b_dot = b_ddot*dt
+        return cs.vertcat(a_dot, b_dot, a_ddot, b_ddot)
+
     def quad_dynamics(self):
         # Include motor dynamics in the overall dynamics
-        x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(), self.v_dynamics(), self.w_dynamics(), self.motor_dynamics())
-        return cs.Function('x_dot', [self.x, self.u], [x_dot], ['x', 'u'], ['x_dot'])
+        x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(), self.v_dynamics(), self.w_dynamics(), self.motor_dynamics(), self.IP_dynamics())
+        return cs.Function('x_dot', [self.x, self.u], [x_dot], ['x', 'u'], ['x_dot']) # Function('function name', inputs, outputs, symbolic inputs, symbolic outputs)
 
     def p_dynamics(self):
         return self.v

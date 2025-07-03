@@ -11,7 +11,7 @@ from geometry_msgs.msg import Pose, PoseArray, PoseStamped, TwistStamped
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 import time
-from .acados import generate_ocp_controller
+#from .acados import generate_ocp_controller
 
 class Controller(Node):
     def __init__(self):
@@ -20,7 +20,7 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
         self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
         self.current_pose = None
-        self.setpoint = np.array([0.0, 0.0, 0.2])
+        self.setpoint = np.array([0.0, 0.0, 0.4])
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
@@ -50,10 +50,10 @@ class Controller(Node):
         self.timePoints = []
         self.t = 0
 
-        self.testInvPen = False
-        self.testMPC = True
-        self.pen_length = 0.2
-        self.pen_mass =  0.0
+        self.testInvPen = True
+        self.testMPC = False
+        self.pen_length = 0.6
+        self.pen_mass =  0.000001
         self.a = 0.0
         self.b = 0.0
         self.a_dot = 0.0
@@ -61,6 +61,8 @@ class Controller(Node):
         self.a_ddot = 0.0
         self.b_ddot = 0.0
         self.eta = math.sqrt(self.pen_length**2 - self.a**2 -self.b**2)
+        self.bErrorSum = 0
+        self.prev_bError = 0
 
         self.vx_prev = 0.0
         self.vy_prev = 0.0
@@ -74,6 +76,9 @@ class Controller(Node):
         self.vy_approx = 0.0
         self.vz_approx = 0.0
 
+        self.rd = 0
+        self.pd = 0
+
         ######################## MPC variables #######################
         self.steps = 90 * 30
         self.dt = 1.0 / 30.0
@@ -81,7 +86,7 @@ class Controller(Node):
         self.timer = self.create_timer(self.dt, self.control_loop)
 
         # Get both the OCP solver and the integrator
-        self.ocp, self.sim_integrator = generate_ocp_controller()
+        self.ocp, self.sim_integrator = None, None#generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         # Original trajectories
@@ -139,6 +144,7 @@ class Controller(Node):
         linear_velocity = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z])
         angular_velocity = np.array([msg.twist.angular.x, msg.twist.angular.y, msg.twist.angular.z])
         self.current_pose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
+        
     
     def IP_state_callback(self, msg:InvertedPendulumStates):
         position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
@@ -146,7 +152,11 @@ class Controller(Node):
         linear_velocity = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z])
         angular_velocity = np.array([msg.twist.angular.x, msg.twist.angular.y, msg.twist.angular.z])
         self.currentPenPose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
-        
+        penState = self.currentPenPose
+        a, b, eta = penState[0:3]
+        a_dot, b_dot, eta_dot = penState[7:10]
+        print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
+       
         
         #print(f"penAngle: {self.currentPenPose}")
 
@@ -169,7 +179,7 @@ class Controller(Node):
         print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
         print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
         
-        pd = 0
+        '''pd = 0
         rd = 0
         pTau = -1*np.array([0.0034,0.0490,0.0071,0.0140])@np.array([[x-xd],[p-pd],[vx],[vp]]) 
         rTau = -1*np.array([-0.0043, 0.0611, -0.0089, 0.0174])@np.array([[y-yd],[r-rd],[vy],[vr]])
@@ -178,8 +188,28 @@ class Controller(Node):
         self.prevForce = force
         #force = force/self.M
         kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0#6.0, 1.5, 1.75
-        yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt + kdyaw*(-vyaw))*self.Izz
-        return force, rTau[0], pTau[0], yawTau
+        yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt + kdyaw*(-vyaw))*self.Izz'''
+        kpz, kiz, kdz = 15.0, 10.0, 10.0 #75.0, 42.857, 32.8125
+        kpx, kix, kdx = 6.0, 0, 12.0 #0.6, 0, 1.2#0.5, 0,0.4
+        kpy, kiy, kdy = 6.0, 0, 12.0 #0.6, 0, 1.2#0.36, 0, 0.45
+
+        kpp, kip, kdp = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 #5.0, 3.0, 3.0 # 2.4, 0.48, 3.09 #
+        kpr, kir, kdr = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # 2.1, 0.84, 1.3125 #
+        kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0 
+        force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M*(cos(r)*cos(p))
+        Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx#+ xd_dotdot
+        Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy #+ yd_dotdot
+        rd = (Ux*sin(yaw) - Uy*cos(yaw))*self.M/force
+        pd = (Ux*cos(yaw) + Uy*sin(yaw))*self.M/force
+        #rd = (Ux*cos(yaw) - Uy*sin(yaw))*self.M/force#(self.M/force)
+        #pd = (Ux*sin(yaw) + Uy*cos(yaw))*self.M/force#(self.M/force)
+        rTau = (kpr*(rd-r) + kir*(rd-r)*dt - kdr*vr)*self.Ixx
+        pTau= (kpp*(pd-p) + kip*(pd-p)*dt - kdp*vp)*self.Iyy
+        yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
+
+
+
+        return force, rTau, pTau, yawTau
 
     def FIPController(self):
         state = self.current_pose
@@ -194,8 +224,8 @@ class Controller(Node):
         penState = self.currentPenPose
         a, b, eta = penState[0:3]
         a_dot, b_dot, eta_dot = penState[7:10]
-        print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
-        print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
+        #print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
+        #print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
         self.aError.append(a)
         self.bError.append(b)
         
@@ -203,11 +233,9 @@ class Controller(Node):
         #pTau = -1*np.array([-0.1320,0.9669,-10.0866,-0.1314,0.0546,-1.2473])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
         #rTau = -1*np.array([0.1645, 1.2046, 12.5655 , 0.1638, 0.0680, 1.5538])@np.array([[y-yd],[r],[b],[vy],[vr], [b_dot]])
         
-        pTau = -1*np.array([ -0.0031, 0.2909, -1.2046, -0.0077,0.0294,-0.2107])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        rTau = -1*np.array([-0.0039,0.3624,1.5007, 0.0096,0.0366,0.2624])@np.array([[y-yd],[r],[b],[vy],[vr], [b_dot]])
-        K1 = np.array([-0.02236068,  0.57570456, -2.82160465, -0.04164618,  0.04596296, -0.49391721])
-        K2= np.array([0.02236068, 0.62340629, 2.99827868, 0.04193528, 0.05172397, 0.52478407])
         
+       
+       
         '''pTau = -1*K1@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
         rTau = -1*K2@np.array([[y-yd],[r],[b],[vy],[vr], [b_dot]])
         pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
@@ -215,20 +243,65 @@ class Controller(Node):
         #a = 0
         #a_dot = 0
         
-        pTau = -1*np.array([ 0.0032,0.2349,-0.9595, 0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        pTau = -1*np.array([ -0.0051,    0.2676,   -1.1351,   -0.0094,    0.0273,   -0.1983,])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        #rTau = -1*np.array([ -0.2611,    1.0446,    7.4118,    -0.2667,    0.0646,    1.2961])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
-        rTau = -1*np.array([-0.0043, 0.0611, -0.0089, 0.0174])@np.array([[y-yd],[r],[vy],[vr]])
-        #pTau = -1*np.array([-0.0021,0.2293,-0.9119,-0.0048,0.0252,-0.1593])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        #rTau = -1*np.array([0.0026,0.2856, 1.1361, 0.0060,0.0314,0.1985])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
         
+        
+
+        #rTau = -1*np.array([0.0064,    0.3333,   -1.4141,   0.0118,    0.0340,   -0.2471])@np.array([[y-yd],[r],[b],[vy],[vr], [b_dot]])
+        '''kpr, kir, kdr = 80.0, 10.0, 50.0
+        rTau = (kpr*(rd-r) + kir*(rd-r)*dt - kdr*vr)*self.Ixx
+        pTau = -1*np.array([0.0034,0.0490,0.0071,0.0140])@np.array([[x-xd],[p],[vx],[vp]]) '''
+        
+        '''vr, vp, vyaw = state[10:13]
+        kpz, kiz, kdz = 15.0, 10.0, 10.0 #75.0, 42.857, 32.8125
+        kpx, kix, kdx = 6.0, 0, 12.0 #0.6, 0, 1.2#0.5, 0,0.4
+        kpy, kiy, kdy = 6.0, 0, 12.0 #0.6, 0, 1.2#0.36, 0, 0.45
+
+        kpp, kip, kdp = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 #5.0, 3.0, 3.0 # 2.4, 0.48, 3.09 #
+        kpr, kir, kdr = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # 2.1, 0.84, 1.3125 #
+        kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # #0.804, 0.29236, 0.55275
+        force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt )*(self.M + self.pen_mass)*(cos(r)*cos(p))
+        K1= np.array([-4.73384185e+01, -2.23606798e-02,  1.26778474e+01, -8.27830464e+00, -8.62906201e-02])
+        K2= np.array([4.73384185e+01, 2.23606798e-02, 1.26778474e+01, 8.27830464e+00, 8.62906201e-02])
+        vpd = -K1@np.array([[a],[x-xd],[p],[a_dot],[vx]]) #-1*np.array([-0.0341,0.6168, -5.4842,-0.0409,0.0420,-0.6779])@np.array([[x-xd],[pitch],[a],[vx],[vp],[a_dot]]) 
+        vrd = -K2@np.array([[b],[y-yd],[r],[b_dot],[vy]])#-1*np.array([0.0020,0.4194,3.0870,0.0048,0.0366,0.3798])@np.array([[y-yd],[roll],[b],[vy],[vr],[b_dot]])
+        vpd = math.atan(vpd[0])
+        vrd = math.atan(vrd[0])
+        self.rd += vrd*dt
+        self.pd += vpd*dt
+        rd = self.rd
+        pd = self.pd'''
+
+        '''pd = -np.array([-24.3912,   -2.0574,   -4.9252,   -1.7571])@np.array([[a],[x-xd],[a_dot],[vx]]) # vrd*dt
+        pd = math.atan(pd[0])
+        rd = -np.array([24.3912,   2.0574,   4.9252,   1.7571])@np.array([[a],[x-xd],[a_dot],[vx]]) #vpd*dt
+        rd = math.atan(rd[0])'''
+
+        '''ad_ddot = 3/4*self.g*(1/0.3*a-p)*20
+        Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx #+ ad_ddot#+ xd_dotdot
+        Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy #+ yd_dotdot
+        
+        rd =8*((-5*b) + (-b_dot)) # (Ux*sin(yaw) - Uy*cos(yaw))*(self.M+self.pen_mass)/force # =2*((-5*b) + (-b_dot))
+        pd = (Ux*cos(yaw) + Uy*sin(yaw))*(self.M+self.pen_mass)/force'''
+        
+        #rTau = (kpr*(rd-r) + kir*(rd-r)*dt + kdr*(vrd-vr))*self.Ixx
+        #pTau= (kpp*(pd-p) + kip*(pd-p)*dt + kdp*(vpd-vp))*self.Iyy
+        #pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        #rTau = -1*np.array([0.0085,    0.3191,    1.4704,    0.0157,    0.0340,    0.2969])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
+        
+        kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # #0.804, 0.29236, 0.55275
         kpz, kiz, kdz = 15.0, 10.0, 10.0 
-        force =  (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M /(cos(r)*cos(p))
-        self.prevForce = force
-        #force = force/self.M
-        kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0#6.0, 1.5, 1.75
-        yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt + kdyaw*(-vyaw))*self.Izz
-        return force, rTau[0], pTau[0], yawTau
+        force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt )*(self.M + self.pen_mass)*(cos(r)*cos(p))
+        yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
+        pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        rTau = -1*np.array([ 0.0040,0.2926,1.1953,0.0079, 0.0314,0.2086])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
+       
+        '''pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        rTau = -1*np.array([ 0.0040,0.2926,1.1953,0.0079, 0.0314,0.2086])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
+        pTau = pTau[0]
+        rTau = rTau[0]
+        self.prevForce = force'''
+        
+        return force, rTau, pTau, yawTau
 
     def MPC(self):
         skip_steps = 3
@@ -240,9 +313,9 @@ class Controller(Node):
                                     self.qz_traj[self.step_counter + j*skip_steps], 
                                     self.vx_traj[self.step_counter + j*skip_steps], self.vy_traj[self.step_counter + j*skip_steps], self.vz_traj[self.step_counter + j*skip_steps], 
                                     self.ax_traj[self.step_counter + j*skip_steps], self.ay_traj[self.step_counter + j*skip_steps], self.az_traj[self.step_counter + j*skip_steps], 
-                                    0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2])
+                                    0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2, 0,0,0,0])
             else:
-                yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2])
+                yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2,0,0,0,0])
             self.ocp.set(j, "yref", yref)
 
 
@@ -250,10 +323,12 @@ class Controller(Node):
                                 self.qw_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.qx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
                                 self.vx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.vy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.vz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], 
                                 self.ax_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.ay_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.az_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
-                                0.0, 0.0, 0.0, 0.0 ])
+                                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ])
         self.ocp.set(self.N, "yref", yref_N)
 
-        current_state_with_omega = np.concatenate((self.current_pose, self.omega_est))
+        # merge current_pose with currentPenPose
+        current_state_with_omega = np.concatenate((self.current_pose, self.omega_est, self.currentPenPose[0:2], self.currentPenPose[7:9])) #add pen a,b,a_dot and b_dot  to current pose
+        
 
         self.ocp.set(0, "lbx", current_state_with_omega)
         self.ocp.set(0, "ubx", current_state_with_omega)
@@ -271,7 +346,7 @@ class Controller(Node):
         msg.channel_2 = round(u[2], 3)
         msg.channel_3 = round(u[3], 3)'''
         
-        self.cmd_publisher_.publish(msg)
+        #self.cmd_publisher_.publish(msg)
         self.omega_est = self.ocp.get(1,"x")[-4:]
         self.step_counter += 1
 
