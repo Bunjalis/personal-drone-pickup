@@ -9,6 +9,7 @@ from geometry_msgs.msg import Pose, PoseArray
 from math import cos, sin, sqrt, hypot, pi
 import math
 import matplotlib.pyplot as plt
+import csv 
 
 
 class Controller(Node):
@@ -47,6 +48,12 @@ class Controller(Node):
         self.t = 0
 
         self.exitGUI = False
+        
+        self.dataFileName = "dataFile.csv"
+        self.dataFile =  open(self.dataFileName,'w', newline="")
+        self.dataWriter = csv.DictWriter(self.dataFile, fieldnames=['xError', 'yError', 'zError', 'rollError', 'pitchError', 'yawError'])
+        self.dataWriter.writeheader()
+
 
     # Recieve motion capture data
     def pose_callback(self, msg: MotionCaptureState):
@@ -140,6 +147,8 @@ class Controller(Node):
             self.pitchError.append(pd-p)
             self.yawError.append(yawd-yaw)
             self.timePoints.append(self.t)
+            
+            self.dataWriter.writerow({'xError': xd-x, 'yError': yd-y, 'zError': zd-z, 'rollError': rd-r, 'pitchError':pd-p, 'yawError': yawd-yaw})
             
             Cf = 1.42e-6
             Ct = 2.84e-7
