@@ -11,7 +11,7 @@ from geometry_msgs.msg import Pose, PoseArray, PoseStamped, TwistStamped
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 import time
-#from .acados import generate_ocp_controller
+from .acados import generate_ocp_controller
 
 class Controller(Node):
     def __init__(self):
@@ -50,8 +50,8 @@ class Controller(Node):
         self.timePoints = []
         self.t = 0
 
-        self.testInvPen = True
-        self.testMPC = False
+        self.testInvPen = False
+        self.testMPC = True
         self.pen_length = 0.6
         self.pen_mass =  0.000001
         self.a = 0.0
@@ -86,7 +86,7 @@ class Controller(Node):
         self.timer = self.create_timer(self.dt, self.control_loop)
 
         # Get both the OCP solver and the integrator
-        self.ocp, self.sim_integrator = None, None#generate_ocp_controller()
+        self.ocp, self.sim_integrator = generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         # Original trajectories
