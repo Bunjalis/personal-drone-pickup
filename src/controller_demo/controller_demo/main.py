@@ -46,7 +46,12 @@ class Controller(Node):
         self.yawError = []
         self.timePoints = []
         self.t = 0
-
+        self.xError_prev = 0.0
+        self.yError_prev = 0.0
+        self.zError_prev = 0.0
+        self.rError_prev = 0.0
+        self.pError_prev = 0.0
+        self.yawError_prev = 0.0
         self.exitGUI = False
         
         self.dataFileName = "dataFile.csv"
@@ -96,40 +101,52 @@ class Controller(Node):
             r, p, yaw = self.quaternion_to_euler(*state[3:7])
             vx, vy, vz = state[7:10]
             vr, vp, vyaw = state[10:13]
-            kpz, kiz, kdz = 15.0, 10.0, 10.0 #75.0, 42.857, 32.8125
-            kpx, kix, kdx = 6.0, 0, 12.0 #0.6, 0, 1.2#0.5, 0,0.4
-            kpy, kiy, kdy = 6.0, 0, 12.0 #0.6, 0, 1.2#0.36, 0, 0.45
 
-            kpp, kip, kdp = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 #5.0, 3.0, 3.0 # 2.4, 0.48, 3.09 #
-            kpr, kir, kdr = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # 2.1, 0.84, 1.3125 #
-            kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # #0.804, 0.29236, 0.55275
+            kpz, kiz, kdz = 15.0, 10.0, 10.0 
+            kpx, kix, kdx = 0.06938, 0.0, 0.14488#0.006, 0.0, 0.0 #6.0, 0, 12.0 
+            kpy, kiy, kdy = 0.07, 0.0, 0.1456 #0.06, 0.0, 0.001#0.006, 0.0, 0.0 #6.0, 0, 12.0 
 
-            
-            
-            #kpyaw, kdyaw, kiyaw = 1.9, 1.0, 6.95
-        
-            #chromosomes= [np.float64(0.0), np.float64(0.06274605548265022), np.float64(0.00012207403790398877), 0.003173924985503708, np.float64(0.31025116733298747), np.float64(0.0020142216254158147), np.float64(0.0037384318422839535), np.float64(0.8886786550800712), np.float64(0.010223466670735709), 0.40703130364458956, np.float64(0.7386073196969583), np.float64(6.613819990692068), np.float64(34.52121212121212), 47.895934959349596, np.float64(32.540390530005006)]
-            #[kpx, kix, kdx, kpy, kiy, kdy, kpr, kir, kdr, kpp, kip, kdp, kpz, kiz, kdz] = chromosomes
-            #xd_dotdot = xd/(dt*dt)
-            #yd_dotdot = yd/(dt*dt)
-            #Ux = kpx*(xd-x) + kix*(xd-x)*dt + kdx*((xd-x) - self.xError_prev)/dt #+ xd_dotdot
-            #Uy = kpy*(yd-y) + kiy*(yd-y)*dt + kdy*((yd-y) - self.yError_prev)/dt #+ yd_dotdot
+            kpp, kip, kdp = 28.8235, 0.0, 8.235 #90.0, 10.0, 20.0 #30.0 # 80.0, 10.0, 50.0 note derivative term is very sensitive to noise (reduce as much as possible)
+            kpr, kir, kdr = 43.64, 0.0, 12.43 #60.0, 10.0, 40.0 # 80.0, 10.0, 50.0 
+            kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0 
 
-            #rd = Ux*sin(yaw) - Uy*cos(yaw)
-            #pd = Ux*cos(yaw) + Uy*sin(yaw)
-            
-            #force = (self.g + kpz*(zd-z) + kiz*(zd-z)*dt + kdz*((zd-z) - self.zError_prev)/dt)*self.M/(cos(r)*cos(p)) #depends of roll and pitch
-            #force = (self.g -kpz*(z-zd) - kdz*(vz-0))*self.M
+            '''kpx, kix, kdx = 0.00414, 0.0000345, 0.1242
+            kpy, kiy, kdy = 0.00414, 0.0000345, 0.1242
+
+            kpp, kip, kdp = 2.4, 0.48, 3.09
+            kpr, kir, kdr = 2.1, 0.84, 1.3125'''
+ 
             force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M*(cos(r)*cos(p))
-            Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx#+ xd_dotdot
-            Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy #+ yd_dotdot
-            rd = (Ux*sin(yaw) - Uy*cos(yaw))*self.M/force
-            pd = (Ux*cos(yaw) + Uy*sin(yaw))*self.M/force
-            #rd = (Ux*cos(yaw) - Uy*sin(yaw))*self.M/force#(self.M/force)
-            #pd = (Ux*sin(yaw) + Uy*cos(yaw))*self.M/force#(self.M/force)
+            Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx
+            Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy 
+            rd = (Ux*sin(yaw) - Uy*cos(yaw)) #*self.M/force
+            pd = (Ux*cos(yaw) + Uy*sin(yaw)) #*self.M/force
             rTau = (kpr*(rd-r) + kir*(rd-r)*dt - kdr*vr)*self.Ixx
             pTau= (kpp*(pd-p) + kip*(pd-p)*dt - kdp*vp)*self.Iyy
             yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
+
+            
+
+            '''rd = 0.0
+            pd = 0.0
+            sumEz = sum(self.zError) + zd-z
+            sumEx = sum(self.xError) + xd-x
+            sumEy = sum(self.yError) + yd-y
+            sumERoll = sum(self.rollError) + rd-r
+            sumEPitch= sum(self.pitchError) + pd-p
+            sumEYaw = sum(self.yawError) + yawd - yaw
+            
+            U1 = (self.g + kpz*(zd-z) + kiz*sumEz*dt + kdz*(zd-z - self.zError_prev)/dt)*self.M*(cos(r)*cos(p))
+            #Ux = kpx*(xd-x) + kix*sumEx*dt + kdx*(xd-x - self.xError_prev)/dt
+            #Uy = kpy*(yd-y) + kiy*sumEy*dt + kdy*(yd-y - self.yError_prev)/dt
+            Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx
+            Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy 
+            rd = (Ux*sin(yawd) - Uy*cos(yawd))*self.M/U1
+            pd = (Ux*cos(yawd) + Uy*sin(yawd))*self.M/U1
+            U2 = (kpr*(rd-r) + kir*sumERoll*dt + kdr*(rd-r - self.rError_prev)/dt)*self.Ixx
+            U3 = (kpp*(pd-p) + kip*sumEPitch*dt + kdp*(pd-p - self.pError_prev)/dt)*self.Iyy
+            U4 = (kpyaw*(yawd-yaw) + kiyaw*sumEYaw*dt + kdyaw*(yawd-yaw - self.yawError_prev)/dt)*self.Izz
+            force, rTau, pTau, yawTau = U1, U2, U3, U4'''
 
             
             
@@ -157,6 +174,29 @@ class Controller(Node):
             l_y = 0.073
 
             max_motor_speed = 4631.0# 1755*25.2
+            
+            '''if (0.2500*U1)/Cf + (0.5000*U3)/Cf + (0.2500*U4)/Ct < 0:
+                u1 = 0.0
+            else:
+                u1 = sqrt((0.2500*U1)/Cf + (0.5000*U3)/Cf + (0.2500*U4)/Ct)/max_motor_speed
+            if (0.2500*U1)/Cf - (0.5000*U2)/Cf - (0.2500*U4)/Ct < 0:
+                u2 = 0.0
+            else:
+                u2 = sqrt((0.2500*U1)/Cf - (0.5000*U2)/Cf - (0.2500*U4)/Ct)/max_motor_speed
+            if (0.2500*U1)/Cf + (0.5000*U2)/Cf - (0.2500*U4)/Ct < 0:
+                u3 = 0.0
+            else:
+                u3 = sqrt((0.2500*U1)/Cf + (0.5000*U2)/Cf - (0.2500*U4)/Ct)/max_motor_speed
+            if (0.2500*U1)/Cf - (0.5000*U3)/Cf + (0.2500*U4)/Ct < 0:
+                u4 = 0.0
+            else:
+                u4 = sqrt((0.2500*U1)/Cf - (0.5000*U3)/Cf + (0.2500*U4)/Ct)/max_motor_speed'''
+            
+
+            '''u1 = sqrt((0.2500*U1)/Cf + (0.5000*U3)/Cf + (0.2500*U4)/Ct)/max_motor_speed
+            u2 = sqrt((0.2500*U1)/Cf - (0.5000*U2)/Cf - (0.2500*U4)/Ct)/max_motor_speed
+            u3 = sqrt((0.2500*U1)/Cf + (0.5000*U2)/Cf - (0.2500*U4)/Ct)/max_motor_speed
+            u4 = sqrt((0.2500*U1)/Cf - (0.5000*U3)/Cf + (0.2500*U4)/Ct)/max_motor_speed'''
 
             
             if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
