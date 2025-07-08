@@ -82,7 +82,7 @@ class Controller(Node):
         msg.channel_0 = 0.0 # roll (-1,1)
         msg.channel_1 = 0.0 # pitch
         msg.channel_2 = -1.0 # throttle (-1 = 0)
-        msg.channel_3 = 0.0 # yaw''
+        msg.channel_3 = 0.0 # yaw'''
 
         self.t += self.dt
 
