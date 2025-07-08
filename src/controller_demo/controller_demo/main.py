@@ -19,7 +19,7 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
 
         self.current_pose = None
-        self.setpoint = np.array([-1.0, -1.0, 1.0])
+        self.setpoint = np.array([0.0, 0.0, 1.0])
 
         # Set up control loop
         self.control_frequency = 30.0
@@ -108,7 +108,7 @@ class Controller(Node):
 
             kpp, kip, kdp = 28.8235, 0.0, 8.235 #90.0, 10.0, 20.0 #30.0 # 80.0, 10.0, 50.0 note derivative term is very sensitive to noise (reduce as much as possible)
             kpr, kir, kdr = 43.64, 0.0, 12.43 #60.0, 10.0, 40.0 # 80.0, 10.0, 50.0 
-            kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0 
+            kpyaw, kiyaw, kdyaw = 60.0, 10.0, 30.0#80.0, 10.0, 50.0 
 
             '''kpx, kix, kdx = 0.00414, 0.0000345, 0.1242
             kpy, kiy, kdy = 0.00414, 0.0000345, 0.1242
@@ -199,26 +199,26 @@ class Controller(Node):
             u4 = sqrt((0.2500*U1)/Cf - (0.5000*U3)/Cf + (0.2500*U4)/Ct)/max_motor_speed'''
 
             
-            if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
+            if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
                 u1 = 0.0
             else:
-                u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+                u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
 
-            if (force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct)) < 0:
+            if (force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct)) < 0:
                 u2 = 0.0
             else:
-                u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+                u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
 
-            if force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct) < 0:
+            if force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct) < 0:
                 u3 = 0.0
             else:
-                u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+                u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
 
 
-            if force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
+            if force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
                 u4 = 0.0
             else:
-                 u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+                 u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
 
 
             ########################################################
