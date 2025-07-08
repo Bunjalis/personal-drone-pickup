@@ -96,9 +96,9 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_0_joint</jointName>
         <linkName>X3/rotor_0</linkName>
-        <turningDirection>cw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <turningDirection>ccw</turningDirection>
+        <timeConstantUp>0.02</timeConstantUp>
+        <timeConstantDown>0.02</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
         <momentConstant>0.2</momentConstant>
@@ -116,9 +116,9 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_1_joint</jointName>
         <linkName>X3/rotor_1</linkName>
-        <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <turningDirection>cw</turningDirection>
+        <timeConstantUp>0.02</timeConstantUp>
+        <timeConstantDown>0.02</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
         <momentConstant>0.2</momentConstant>
@@ -136,9 +136,9 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_2_joint</jointName>
         <linkName>X3/rotor_2</linkName>
-        <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <turningDirection>cw</turningDirection>
+        <timeConstantUp>0.02</timeConstantUp>
+        <timeConstantDown>0.02</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
         <momentConstant>0.2</momentConstant>
@@ -156,9 +156,9 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_3_joint</jointName>
         <linkName>X3/rotor_3</linkName>
-        <turningDirection>cw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <turningDirection>ccw</turningDirection>
+        <timeConstantUp>0.02</timeConstantUp>
+        <timeConstantDown>0.02</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
         <momentConstant>0.2</momentConstant>

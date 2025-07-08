@@ -91,7 +91,8 @@ class Controller(Node):
 
         if self.armed and self.pre_start_counter < self.pre_start_steps:
             print(f"Pre-start phase: {self.pre_start_counter + 1}/{self.pre_start_steps}")
-            msg = ELRSCommand(armed=True, channel_0=0.1, channel_1=-0.1, channel_2=-0.1, channel_3=0.1, channel_4=0.1, channel_5=-0.1, channel_6=-0.1, channel_7=0.1)
+            sd = 0.2
+            msg = ELRSCommand(armed=True, channel_0=-sd, channel_1=sd, channel_2=-sd, channel_3=sd, channel_4=sd, channel_5=-sd, channel_6=sd, channel_7=-sd)
             self.cmd_publisher_.publish(msg)
             self.pre_start_counter += 1
 
@@ -127,8 +128,12 @@ class Controller(Node):
 
 
             u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
+            #u_sqrt = u
 
             msg = ELRSCommand(armed=True, channel_0=u_sqrt[0], channel_1=u_sqrt[1], channel_2=u_sqrt[2], channel_3=u_sqrt[3], channel_4=u_sqrt[0], channel_5=u_sqrt[1], channel_6=u_sqrt[2], channel_7=u_sqrt[3])
+
+            #sd = 0.45
+            #msg = ELRSCommand(armed=True, channel_0=-sd, channel_1=sd, channel_2=-sd, channel_3=sd, channel_4=sd, channel_5=-sd, channel_6=sd, channel_7=-sd)
             self.cmd_publisher_.publish(msg)
 
 

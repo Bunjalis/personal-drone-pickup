@@ -33,7 +33,7 @@ class Controller(Node):
 
         self.ocp, self.sim_integrator = generate_ocp_controller()
 
-        self.dt = 1.0 / 30.0
+        self.dt = 1.0 /30.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
         self.data_record_timer = self.create_timer(self.dt, self.data_record_loop)

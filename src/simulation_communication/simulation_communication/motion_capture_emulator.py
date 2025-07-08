@@ -41,9 +41,9 @@ class PentaVerify(Node):
 
     def worldPoseCallback(self, msg):
         print("START")
-        # Extract current pose and time
-        current_position = msg.poses[9].position
-        current_orientation = msg.poses[9].orientation
+        # Extract current pose and time # 9 for omnicopter, 5 for quadcopter
+        current_position = msg.poses[5].position
+        current_orientation = msg.poses[5].orientation
        
         # Ensure w is positive
         current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w = self.normalize_quaternion_positive_w(
