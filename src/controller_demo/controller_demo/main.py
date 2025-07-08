@@ -22,13 +22,19 @@ class Controller(Node):
         self.setpoint = np.array([0.0, 0.0, 1.0])
 
         # Set up control loop
-        self.control_frequency = 30.0
+        self.control_frequency = 120.0
         self.dt = 1.0 / self.control_frequency
         self.timer = self.create_timer(self.dt, self.control_loop)
 
         self.pre_start_counter = 0
         self.pre_start_steps = self.control_frequency
         self.armed = False
+
+        self.g = 9.81
+        self.M = 0.65
+        self.Ixx = 0.001744744189
+        self.Iyy = 0.001400539551
+        self.Izz = 0.002782410904
 
         self.g = 9.81
         self.M = 0.65

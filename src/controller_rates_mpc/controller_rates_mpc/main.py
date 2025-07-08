@@ -22,27 +22,26 @@ class Controller(Node):
     def __init__(self):
         super().__init__('controller')
 
-        self.enable_L1_augmentation = True  # Enable L1 augmentation by default
+        self.enable_L1_augmentation = False  # Enable L1 augmentation by default
 
         self.cmd_publisher_ = self.create_publisher(ELRSCommand, '/ELRSCommand', 10)
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
+        self.orb_slam_state_subscription_ = self.create_subscription(MotionCaptureState, '/orb_slam_state', self.orb_slam_state_callback, 10)
         self.trajectory_publisher_ = self.create_publisher(PoseArray, '/planned_trajectory', 10)
         self.current_pose = None
+        self.orb_slam_state = None
 
         self.ocp, self.sim_integrator = generate_ocp_controller()
 
-        self.dt = 1.0 / 30.0
+        self.dt = 1.0 /30.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
-
+        self.data_record_timer = self.create_timer(self.dt, self.data_record_loop)
         
-
         #self.traj = circle_trajectory(self.dt)
         self.traj = hover_trajectory(self.dt)   
 
-
         self.steps = self.traj.shape[1] - 1  # Number of steps in the trajectory
-
 
         self.gui = GUI(self)
         self.armed = False
@@ -53,6 +52,7 @@ class Controller(Node):
 
         self.N = 20
         self.skip_steps = 3
+        self.augmented_u = 0.0  # Initialize the augmented control input
 
 
         # Initialize CSV file at the start of the program
@@ -69,16 +69,43 @@ class Controller(Node):
                 'sp_vx', 'sp_vy', 'sp_vz', 'sp_wx', 'sp_wy', 'sp_wz',
                 'err_z','aug_u',
         ])
+            
+        self.motion_csv_file = open('motion_comparison.csv', mode='w', newline='')
+        self.motion_csv_writer = csv.writer(self.motion_csv_file)
 
-        self.predicted_state = None  # Initialize in the constructor
+        self.motion_csv_writer.writerow([
+                'm_px', 'm_py', 'm_pz', 'm_rw', 'm_rx', 'm_ry', 'm_rz',
+                'm_vx', 'm_vy', 'm_vz', 'm_wx', 'm_wy', 'm_wz',
+                'o_px', 'o_py', 'o_pz', 'o_rw', 'o_rx', 'o_ry', 'o_rz',
+                'o_vx', 'o_vy', 'o_vz', 'o_wx', 'o_wy', 'o_wz',
+        ])
 
-        self.l1_controller = L1Controller(filter_size=12, adaptation_gain=0.012, dt=self.dt)
+        self.l1_controller = L1Controller(dt=self.dt)
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
         self.current_pose = np.round(np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
         ]), 3)
+
+
+    def orb_slam_state_callback(self, msg: MotionCaptureState):
+        p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
+        self.orb_slam_state = np.round(np.array([
+            p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
+        ]), 3)
+
+
+    def data_record_loop(self):
+
+        if self.current_pose is not None and self.orb_slam_state is not None:
+            self.motion_csv_writer.writerow(
+                        list(self.current_pose) +
+                        list(self.orb_slam_state)
+                    )
+
+
+
 
     def control_loop(self):
 
@@ -114,23 +141,14 @@ class Controller(Node):
                 raise Exception(f'acados returned status {status}.')
 
             u = self.ocp.get(0, "u")
-
+            print(f"Step {self.step_counter}, Control Output: {u}")
             # Use L1 adaptive augmentation to adjust the control output
-            if self.predicted_state is not None and self.enable_L1_augmentation:
-                error = self.current_pose - self.predicted_state
-                augmented_u = self.l1_controller.update(error)  # Pass only the error
-                print(f"Augmented control output: {augmented_u}")
-                u[2] -= augmented_u  # Adjust the throttle (channel 2)
+            if self.enable_L1_augmentation:
+                
+                u[2] += self.augmented_u
+                self.augmented_u = self.l1_controller.update(self.current_pose, u)
 
-            else:
-                error = np.zeros(13)
-                augmented_u = 0.0
 
-            #Predict the next state using the integrator
-            self.sim_integrator.set("x", self.current_pose)
-            self.sim_integrator.set("u", u)
-            self.sim_integrator.solve()
-            self.predicted_state = self.sim_integrator.get("x")
 
                 
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
@@ -150,7 +168,7 @@ class Controller(Node):
                      msg.channel_3] +
                     list(self.current_pose) +
                     list(self.traj[:, self.step_counter])+
-                    [error[9] , augmented_u]
+                    [0.0 , self.augmented_u]
                 )
 
             self.step_counter += 1

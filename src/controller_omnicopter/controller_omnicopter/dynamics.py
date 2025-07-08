@@ -1,0 +1,147 @@
+import os
+import sys
+import shutil
+import casadi as cs
+import numpy as np
+from copy import copy
+from acados_template import AcadosOcp, AcadosOcpSolver, AcadosModel
+
+
+class QuadDynamics:
+    def __init__(self):
+        # Declare model variables
+        self.p = cs.MX.sym('p', 3)  # position
+        self.q = cs.MX.sym('a', 4)  # angle quaternion (wxyz)
+        self.v = cs.MX.sym('v', 3)  # velocity
+        self.r = cs.MX.sym('r', 3)  # angular velocity
+
+        # State vector: position, quaternion, velocity, angular velocity
+        self.x = cs.vertcat(self.p, self.q, self.v, self.r)
+        self.state_dim = 13
+
+        # Control input: throttle, desired roll rate, pitch rate, yaw rate (Betaflight style))
+        u0 = cs.MX.sym('u0')
+        u1 = cs.MX.sym('u1')
+        u2 = cs.MX.sym('u2')
+        u3 = cs.MX.sym('u3')
+        u4 = cs.MX.sym('u4')
+        u5 = cs.MX.sym('u5')
+        u6 = cs.MX.sym('u6')
+        u7 = cs.MX.sym('u7')
+        
+        self.u = cs.vertcat(u0, u1, u2, u3, u4, u5, u6, u7)
+
+        self.mass = 1.1
+
+        self.J = np.array([0.015, 0.015, 0.015])
+        self.thrust_constant = 1.42e-06
+        self.moment_constant = 0.2
+
+        '''
+        self.mot_pos_vec = 0.12 * np.array([[1, 1, 1],
+                                    [-1, 1, 1], 
+                                    [1, -1, 1],
+                                    [-1, -1, 1],
+                                    [1, 1, -1],
+                                    [-1, 1, -1],
+                                    [1, 1, 1],
+                                    [-1, -1, -1]])
+                                    '''
+        
+
+        self.mot_pos_vec = 0.12 * np.array([[1, -1, 1],
+                                    [-1, -1, 1], 
+                                    [1, -1, -1],
+                                    [-1, -1, -1],
+                                    [1, 1, -1],
+                                    [-1, 1, -1],
+                                    [1, 1, 1],
+                                    [-1, 1, 1]])
+
+        self.mot_rot_vec = np.array([[-0.211325,-0.788675,  -0.57735],     # CW
+                                    [0.788675, -0.211325 ,  0.57735],         # CW
+                                    [0.211325, 0.788675, -0.57735],      # CW
+                                    [-0.788675,  0.211325,   0.57735],       # CW
+                                    [0.788675, -0.211325, 0.57735],         # CCW
+                                    [-0.211325, -0.788675,  -0.57735],      # CCW
+                                    [-0.788675,  0.211325,   0.57735],         # CCW
+                                    [0.211325, 0.788675, -0.57735]])     # CCW
+
+
+
+    
+    def q_to_rot_mat(self, q):
+        qw, qx, qy, qz = q[0], q[1], q[2], q[3]
+
+        if isinstance(q, np.ndarray):
+            rot_mat = np.array([
+                [1 - 2 * (qy ** 2 + qz ** 2), 2 * (qx * qy - qw * qz), 2 * (qx * qz + qw * qy)],
+                [2 * (qx * qy + qw * qz), 1 - 2 * (qx ** 2 + qz ** 2), 2 * (qy * qz - qw * qx)],
+                [2 * (qx * qz - qw * qy), 2 * (qy * qz + qw * qx), 1 - 2 * (qx ** 2 + qy ** 2)]])
+
+        else:
+            rot_mat = cs.vertcat(
+                cs.horzcat(1 - 2 * (qy ** 2 + qz ** 2), 2 * (qx * qy - qw * qz), 2 * (qx * qz + qw * qy)),
+                cs.horzcat(2 * (qx * qy + qw * qz), 1 - 2 * (qx ** 2 + qz ** 2), 2 * (qy * qz - qw * qx)),
+                cs.horzcat(2 * (qx * qz - qw * qy), 2 * (qy * qz + qw * qx), 1 - 2 * (qx ** 2 + qy ** 2)))
+
+        return rot_mat
+
+    def v_dot_q(self, v, q):
+        rot_mat = self.q_to_rot_mat(q)
+        if isinstance(q, np.ndarray):
+            return rot_mat.dot(v)
+
+        return cs.mtimes(rot_mat, v)
+
+    def skew_symmetric(self, v):
+        if isinstance(v, np.ndarray):
+            return np.array([[0, -v[0], -v[1], -v[2]],
+                             [v[0], 0, v[2], -v[1]],
+                             [v[1], -v[2], 0, v[0]],
+                             [v[2], v[1], -v[0], 0]])
+
+        return cs.vertcat(
+            cs.horzcat(0, -v[0], -v[1], -v[2]),
+            cs.horzcat(v[0], 0, v[2], -v[1]),
+            cs.horzcat(v[1], -v[2], 0, v[0]),
+            cs.horzcat(v[2], v[1], -v[0], 0))
+
+    def quad_dynamics(self):
+        x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(), self.v_dynamics(), self.w_dynamics())
+        return cs.Function('x_dot', [self.x, self.u], [x_dot], ['x', 'u'], ['x_dot'])
+
+    def p_dynamics(self):
+        return self.v
+
+    def q_dynamics(self):
+        return 1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
+
+    def v_dynamics(self):
+
+
+        f_thust = cs.mtimes(self.mot_rot_vec.T, self.thrust_constant * 4631 ** 2  * self.u )
+        g = cs.vertcat(0.0, 0.0, 9.81)
+        v_dynamics = self.v_dot_q(f_thust, self.q)/self.mass - g
+
+        return v_dynamics
+
+
+
+
+
+
+    def w_dynamics(self):
+        # Calculate thrust forces for each motor
+        thrusts = self.thrust_constant * 4631 ** 2 * self.u
+
+        # Compute torques generated by each motor
+        torque = cs.MX.zeros(3)
+        for i in range(8):
+            torque += thrusts[i] * cs.cross(self.mot_pos_vec[i], self.mot_rot_vec[i])
+
+        # Compute angular acceleration in the world frame
+        J_inv = cs.diag(1 / self.J)  # Inverse of inertia matrix
+        angular_acceleration = cs.mtimes(J_inv, torque - cs.cross(self.r, cs.mtimes(cs.diag(self.J), self.r)))
+
+        return angular_acceleration

@@ -28,19 +28,19 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.N_horizon = 20
     ocp.solver_options.tf = 2.0
 
-    nu = 4  # Number of control inputs
+    nu = 8  # Number of control inputs
     nx = 13  # New state dimension (no omega)
     ny = nx + nu
 
     # Cost matrices (tune as needed)
     Q_mat = 2 * np.diag([
-        5.0, 5.0, 5.0,    # position
-        4.0, 4.0, 4.0, 4.0,  # quaternion
-        1.0, 1.0, 1.0,      # velocity
-        1.0, 1.0, 1.0      # angular rates
+        0.1, 0.1, 100.0,    # position
+        0.1, 0.1, 0.1, 0.1,  # quaternion
+        0.1, 0.1, 10.0,      # velocity
+        0.1, 0.1, 0.1      # angular rates
     ])
-    R_mat = 2 * np.diag([0.5, 0.5, 0.1, 0.5])
-    ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
+    # Remove input cost matrix R_mat and its usage
+    ocp.cost.W = Q_mat
     ocp.cost.W_e = Q_mat  # Terminal cost only considers the state
 
     ocp.model.cost_y_expr = ca.vertcat(model.x, model.u)
@@ -50,42 +50,41 @@ def generate_ocp_controller(dynamics=None):
     x0[3] = 1  # Initial quaternion w=1
     ocp.constraints.x0 = x0
 
-    ocp.cost.cost_type = 'NONLINEAR_LS'
-    ocp.cost.cost_type_e = 'NONLINEAR_LS'
+    ocp.cost.cost_type = 'LINEAR_LS'
+    ocp.cost.cost_type_e = 'LINEAR_LS'
 
-    ocp.cost.Vx = np.zeros((ny, nx))
-    ocp.cost.Vx[:nx, :nx] = 1 * np.eye(nx)
-    ocp.cost.Vu = np.zeros((ny, nu))
-    ocp.cost.Vu[-nu:, -nu:] = 1 * np.eye(nu)
+    ocp.cost.Vx = np.eye(nx)
     ocp.cost.Vx_e = np.eye(nx)
 
-    ocp.cost.yref = np.zeros((ny, ))
+    ocp.cost.yref = np.zeros((nx, ))
     ocp.cost.yref_e = np.zeros((nx, ))
     ocp.cost.yref[3] = 1
     ocp.cost.yref_e[3] = 1
+
+    # Set Vu to a zero matrix with dimensions (ny, nu)
+    ocp.cost.Vu = np.zeros((nx, nu))
 
     # Set solver options (as before)
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
     ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
     ocp.solver_options.nlp_solver_max_iter = 500
-    ocp.solver_options.qp_solver_iter_max = 300
-    ocp.solver_options.qp_solver_tol_stat = 1e-4
-    ocp.solver_options.qp_solver_tol_eq = 1e-4
-    ocp.solver_options.qp_solver_tol_ineq = 1e-4
-    ocp.solver_options.qp_solver_tol_comp = 1e-4
-    ocp.solver_options.nlp_solver_tol_stat = 1e-4
-    ocp.solver_options.nlp_solver_tol_eq = 1e-4
-    ocp.solver_options.nlp_solver_tol_ineq = 1e-4
-    ocp.solver_options.nlp_solver_tol_comp = 1e-4
+    ocp.solver_options.qp_solver_iter_max = 200
+    ocp.solver_options.qp_solver_tol_stat = 1e-3
+    ocp.solver_options.qp_solver_tol_eq = 1e-3
+    ocp.solver_options.qp_solver_tol_ineq = 1e-3
+    ocp.solver_options.qp_solver_tol_comp = 1e-3
+    ocp.solver_options.nlp_solver_tol_stat = 1e-3
+    ocp.solver_options.nlp_solver_tol_eq = 1e-3
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-3
+    ocp.solver_options.nlp_solver_tol_comp = 1e-3
     ocp.solver_options.levenberg_marquardt = 1e-3
 
 
-    rate_limit = 0.1
-
+    rl = 0.6
     # Set input constraints (tune as needed)
-    ocp.constraints.lbu = np.array([-rate_limit, -rate_limit, 0.05, -rate_limit])  # throttle, roll_rate, pitch_rate, yaw_rate
-    ocp.constraints.ubu = np.array([rate_limit, rate_limit, 0.5, rate_limit])
+    ocp.constraints.lbu = np.array([-rl, -rl, -rl, -rl, -rl, -rl, -rl, -rl])  # throttle, roll_rate, pitch_rate, yaw_rate
+    ocp.constraints.ubu = np.array([rl, rl, rl, rl, rl, rl, rl, rl])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

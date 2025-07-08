@@ -14,7 +14,7 @@ time_step = 1 / sampling_frequency
 
 
 #motion_capture_file_path = 'motion_capture_results.csv'
-control_file_path = '8_without_l1_50g_control_results.csv'
+control_file_path = 'control_results.csv'
 
 
 '''
