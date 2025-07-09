@@ -19,7 +19,7 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
 
         self.current_pose = None
-        self.setpoint = np.array([0.0, 0.0, 1.0])
+        self.setpoint = np.array([1.0, 1.0, 1.0])
 
         # Set up control loop
         self.control_frequency = 120.0
@@ -65,6 +65,7 @@ class Controller(Node):
         self.dataWriter = csv.DictWriter(self.dataFile, fieldnames=['xError', 'yError', 'zError', 'rollError', 'pitchError', 'yawError'])
         self.dataWriter.writeheader()
 
+        self.usingBetaFLight =True
 
     # Recieve motion capture data
     def pose_callback(self, msg: MotionCaptureState):
@@ -79,26 +80,35 @@ class Controller(Node):
         # For saftey generate a message with all channels set to 0.0
         msg = ELRSCommand()
         msg.armed = False
-        msg.channel_0 = 0.0
-        msg.channel_1 = 0.0
-        msg.channel_2 = 0.0
-        msg.channel_3 = 0.0
+        if self.usingBetaFLight:
+            msg.channel_0 = 0.0 # roll (-1,1)
+            msg.channel_1 = 0.0 # pitch
+            msg.channel_2 = -1.0 # throttle (-1 = 0)
+            msg.channel_3 = 0.0 # yaw
+        else:
+            msg.channel_0 = 0.0
+            msg.channel_1 = 0.0
+            msg.channel_2 = 0.0
+            msg.channel_3 = 0.0
 
-        ''' Beta flight
-        msg.channel_0 = 0.0 # roll (-1,1)
-        msg.channel_1 = 0.0 # pitch
-        msg.channel_2 = -1.0 # throttle (-1 = 0)
-        msg.channel_3 = 0.0 # yaw'''
+
 
         self.t += self.dt
 
         # Pre-start state: Send 0.05 on all channels for one second before starting control loop.
-        if self.armed and self.pre_start_counter < self.pre_start_steps:
+        if self.armed and self.pre_start_counter < self.pre_start_steps and not self.usingBetaFLight:
             msg.armed = True
             msg.channel_0 = 0.05
             msg.channel_1 = 0.05
             msg.channel_2 = 0.05
             msg.channel_3 = 0.05
+            self.pre_start_counter += 1
+        if self.armed and self.pre_start_counter < self.pre_start_steps and self.usingBetaFLight:
+            msg.armed = True
+            msg.channel_0 = 0.0
+            msg.channel_1 = 0.0
+            msg.channel_2 = -0.999
+            msg.channel_3 = 0.0
             self.pre_start_counter += 1
 
         elif self.armed and self.current_pose is not None:
@@ -121,7 +131,7 @@ class Controller(Node):
 
             kpp, kip, kdp = 28.8235, 0.0, 8.235 #90.0, 10.0, 20.0 #30.0 # 80.0, 10.0, 50.0 note derivative term is very sensitive to noise (reduce as much as possible)
             kpr, kir, kdr = 43.64, 0.0, 12.43 #60.0, 10.0, 40.0 # 80.0, 10.0, 50.0 
-            kpyaw, kiyaw, kdyaw = 60.0, 10.0, 30.0#80.0, 10.0, 50.0 
+            kpyaw, kiyaw, kdyaw =60.0, 10.0, 30.0 
 
             '''kpx, kix, kdx = 0.00414, 0.0000345, 0.1242
             kpy, kiy, kdy = 0.00414, 0.0000345, 0.1242
@@ -129,7 +139,7 @@ class Controller(Node):
             kpp, kip, kdp = 2.4, 0.48, 3.09
             kpr, kir, kdr = 2.1, 0.84, 1.3125'''
  
-            force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M*(cos(r)*cos(p))
+            force = (self.g +kpz*(zd-z) + kdz*(0-vz))*self.M*(cos(r)*cos(p))
             Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx
             Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy 
             rd = (Ux*sin(yaw) - Uy*cos(yaw)) #*self.M/force
@@ -138,30 +148,7 @@ class Controller(Node):
             pTau= (kpp*(pd-p) + kip*(pd-p)*dt - kdp*vp)*self.Iyy
             yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
 
-            
-
-            '''rd = 0.0
-            pd = 0.0
-            sumEz = sum(self.zError) + zd-z
-            sumEx = sum(self.xError) + xd-x
-            sumEy = sum(self.yError) + yd-y
-            sumERoll = sum(self.rollError) + rd-r
-            sumEPitch= sum(self.pitchError) + pd-p
-            sumEYaw = sum(self.yawError) + yawd - yaw
-            
-            U1 = (self.g + kpz*(zd-z) + kiz*sumEz*dt + kdz*(zd-z - self.zError_prev)/dt)*self.M*(cos(r)*cos(p))
-            #Ux = kpx*(xd-x) + kix*sumEx*dt + kdx*(xd-x - self.xError_prev)/dt
-            #Uy = kpy*(yd-y) + kiy*sumEy*dt + kdy*(yd-y - self.yError_prev)/dt
-            Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx
-            Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy 
-            rd = (Ux*sin(yawd) - Uy*cos(yawd))*self.M/U1
-            pd = (Ux*cos(yawd) + Uy*sin(yawd))*self.M/U1
-            U2 = (kpr*(rd-r) + kir*sumERoll*dt + kdr*(rd-r - self.rError_prev)/dt)*self.Ixx
-            U3 = (kpp*(pd-p) + kip*sumEPitch*dt + kdp*(pd-p - self.pError_prev)/dt)*self.Iyy
-            U4 = (kpyaw*(yawd-yaw) + kiyaw*sumEYaw*dt + kdyaw*(yawd-yaw - self.yawError_prev)/dt)*self.Izz
-            force, rTau, pTau, yawTau = U1, U2, U3, U4'''
-
-            
+              
             
             #print(f"Ux: {Ux}, Uy: {Uy}")
             self.xError_prev = xd-x
@@ -180,7 +167,7 @@ class Controller(Node):
             
             self.dataWriter.writerow({'xError': xd-x, 'yError': yd-y, 'zError': zd-z, 'rollError': rd-r, 'pitchError':pd-p, 'yawError': yawd-yaw})
             
-            Cf = 1.42e-6
+            Cf = 1.42e-6 # motor constant 
             Ct = 2.84e-7
 
             l_x = 0.0865
@@ -188,31 +175,8 @@ class Controller(Node):
 
             max_motor_speed = 4631.0# 1755*25.2
             
-            '''if (0.2500*U1)/Cf + (0.5000*U3)/Cf + (0.2500*U4)/Ct < 0:
-                u1 = 0.0
-            else:
-                u1 = sqrt((0.2500*U1)/Cf + (0.5000*U3)/Cf + (0.2500*U4)/Ct)/max_motor_speed
-            if (0.2500*U1)/Cf - (0.5000*U2)/Cf - (0.2500*U4)/Ct < 0:
-                u2 = 0.0
-            else:
-                u2 = sqrt((0.2500*U1)/Cf - (0.5000*U2)/Cf - (0.2500*U4)/Ct)/max_motor_speed
-            if (0.2500*U1)/Cf + (0.5000*U2)/Cf - (0.2500*U4)/Ct < 0:
-                u3 = 0.0
-            else:
-                u3 = sqrt((0.2500*U1)/Cf + (0.5000*U2)/Cf - (0.2500*U4)/Ct)/max_motor_speed
-            if (0.2500*U1)/Cf - (0.5000*U3)/Cf + (0.2500*U4)/Ct < 0:
-                u4 = 0.0
-            else:
-                u4 = sqrt((0.2500*U1)/Cf - (0.5000*U3)/Cf + (0.2500*U4)/Ct)/max_motor_speed'''
             
-
-            '''u1 = sqrt((0.2500*U1)/Cf + (0.5000*U3)/Cf + (0.2500*U4)/Ct)/max_motor_speed
-            u2 = sqrt((0.2500*U1)/Cf - (0.5000*U2)/Cf - (0.2500*U4)/Ct)/max_motor_speed
-            u3 = sqrt((0.2500*U1)/Cf + (0.5000*U2)/Cf - (0.2500*U4)/Ct)/max_motor_speed
-            u4 = sqrt((0.2500*U1)/Cf - (0.5000*U3)/Cf + (0.2500*U4)/Ct)/max_motor_speed'''
-
-            
-            if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
+            '''if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
                 u1 = 0.0
             else:
                 u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
@@ -231,17 +195,66 @@ class Controller(Node):
             if force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
                 u4 = 0.0
             else:
-                 u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+                 u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed'''
+
+            
 
 
             ########################################################
+
+            if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
+                u1 = 0.0
+            else:
+                u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+
+            if  force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct) < 0:
+                u2 = 0.0
+            else:
+                u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+
+            if  force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct) < 0:
+                u3 = 0.0
+            else:
+                u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+
+
+            if force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct) < 0:
+                u4 = 0.0
+            else:
+                 u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
             '''u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
             u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
             u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
             u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
             
             u = [u1,u2,u3,u4]
+            
+          
+            wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
+            wy = (( wy[0]))/100.0
+            wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
+            wx = (( wx[0]))/100.0
+            maxForce = (Cf*max_motor_speed**2) 
+            maxTorque = (Ct*max_motor_speed**2) 
+        
+            
+           
+
+            force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M
+           
+            throttle = 2*(force)/(maxForce) - 1
+            if throttle < -1:
+                throttle = -1.0
+            if throttle > 1:
+                throttle = 1.0
+            wz =(0.2500*u1 - 0.2500*u2 - 0.2500*u3 + 0.2500*u4)/100.0
+            #wz =yawTau
+            print(f"force: {force}, r: {wx}, p: {wy}, yaw: {wz}")
+            u = [wx, wy, throttle, wz]
+            #u = [rTau, pTau, throttle, yawTau]
+
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
+            print(f"x: {x}, y: {y}, z: {z}, r: {r}, p: {p}, yaw: {yaw}, vx: {vx}, vy: {vy}")
             self.cmd_publisher_.publish(msg)
             
         else:         
