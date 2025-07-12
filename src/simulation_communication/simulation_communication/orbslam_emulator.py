@@ -23,7 +23,7 @@ class PentaVerify(Node):
     def __init__(self):
         super().__init__('penta_verify')
         self.worldPoseSub_ = self.create_subscription(PoseArray, '/model/x3/pose', self.worldPoseCallback, 10)
-        self.publisher = self.create_publisher(MotionCaptureState, '/motion_capture_state', 10)
+        self.publisher = self.create_publisher(MotionCaptureState, '/orb_slam_state', 10)
         self.pose_publisher = self.create_publisher(PoseStamped, '/rviz_pose', 10)
 
         self.last_pose = None

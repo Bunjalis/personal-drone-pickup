@@ -17,9 +17,21 @@ def generate_ocp_controller(dynamics=None):
 
     model = AcadosModel()
     model.name = 'quad_dynamics'
-    model.x = quad_dynamics.x  # [p, q, v, r] (13 states)
-    model.u = quad_dynamics.u  # [throttle, roll_rate_cmd, pitch_rate_cmd, yaw_rate_cmd]
-    model.f_expl_expr = dynamics_expr(quad_dynamics.x, quad_dynamics.u)
+    model.x = quad_dynamics.x  # [p, q, v, r, u] (17 states)
+    model.u = quad_dynamics.u_dot  # [u_dot] (control input)
+    model.p = quad_dynamics.p_param  # [ kT] parameters
+
+
+    # Explicit Dynamics
+    model.f_expl_expr = dynamics_expr(quad_dynamics.x, quad_dynamics.u_dot, quad_dynamics.p_param)
+
+    # Implicit Dynamics
+    xdot = ca.MX.sym('xdot', model.x.size()[0])
+    f_impl_expr = model.f_expl_expr - xdot
+    model.xdot = xdot
+    model.f_impl_expr = f_impl_expr
+
+
 
     # Create OCP object
     ocp = AcadosOcp()
@@ -29,17 +41,18 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.tf = 2.0
 
     nu = 4  # Number of control inputs
-    nx = 13  # New state dimension (no omega)
+    nx = 17  # New state dimension (no omega)
     ny = nx + nu
 
     # Cost matrices (tune as needed)
     Q_mat = 2 * np.diag([
-        5.0, 5.0, 5.0,    # position
-        4.0, 4.0, 4.0, 4.0,  # quaternion
+        2.5, 2.5, 5.0,    # position
+        2.5, 2.5, 2.5, 2.5,  # quaternion
         1.0, 1.0, 1.0,      # velocity
-        1.0, 1.0, 1.0      # angular rates
+        1.0, 1.0, 1.0,      # angular rates
+        0.001, 0.001, 0.001, 0.001,  # u
     ])
-    R_mat = 2 * np.diag([0.5, 0.5, 0.1, 0.5])
+    R_mat = 2 * np.diag([0.1, 0.1, 2.5, 0.1])
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
     ocp.cost.W_e = Q_mat  # Terminal cost only considers the state
 
@@ -50,8 +63,8 @@ def generate_ocp_controller(dynamics=None):
     x0[3] = 1  # Initial quaternion w=1
     ocp.constraints.x0 = x0
 
-    ocp.cost.cost_type = 'NONLINEAR_LS'
-    ocp.cost.cost_type_e = 'NONLINEAR_LS'
+    ocp.cost.cost_type = 'LINEAR_LS'
+    ocp.cost.cost_type_e = 'LINEAR_LS'
 
     ocp.cost.Vx = np.zeros((ny, nx))
     ocp.cost.Vx[:nx, :nx] = 1 * np.eye(nx)
@@ -63,6 +76,9 @@ def generate_ocp_controller(dynamics=None):
     ocp.cost.yref_e = np.zeros((nx, ))
     ocp.cost.yref[3] = 1
     ocp.cost.yref_e[3] = 1
+
+    ocp.parameter_values = np.array([1.0])  # Default mass=1.0, kT=14.0
+
 
     # Set solver options (as before)
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
@@ -81,11 +97,15 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.levenberg_marquardt = 1e-3
 
 
-    rate_limit = 0.1
+    # Add constraints for throttle (x[2])
+    ocp.constraints.lbx = np.array([0.0])  # Lower bound for throttle
+    ocp.constraints.ubx = np.array([0.6])  # Upper bound for throttle
+    ocp.constraints.idxbx = np.array([16])  # Index of throttle in the state vector
+
 
     # Set input constraints (tune as needed)
-    ocp.constraints.lbu = np.array([-rate_limit, -rate_limit, 0.05, -rate_limit])  # throttle, roll_rate, pitch_rate, yaw_rate
-    ocp.constraints.ubu = np.array([rate_limit, rate_limit, 0.5, rate_limit])
+    ocp.constraints.lbu = np.array([-5, -5, -5, -5])  # throttle, roll_rate, pitch_rate, yaw_rate
+    ocp.constraints.ubu = np.array([5, 5, 5, 5])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver
@@ -95,6 +115,7 @@ def generate_ocp_controller(dynamics=None):
     sim = AcadosSim()
     sim.model = ocp.model
     sim.solver_options.T = 1.0 / 30.0  # Set integrator to run at 30Hz
+    sim.parameter_values = np.array([1.0])
     sim_solver = AcadosSimSolver(sim)
 
     return ocp_solver, sim_solver
