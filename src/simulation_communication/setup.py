@@ -11,7 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         # Include launch files
-        ('share/' + package_name + '/launch', ['launch/simulation_launch.py', 'launch/betaflight_simulation_launch.py']),
+        ('share/' + package_name + '/launch', ['launch/simulation_launch.py', 'launch/betaflight_simulation_launch.py', 'launch/ukf_simulation_launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,7 +24,8 @@ setup(
             'ELRS_pass_through = simulation_communication.ELRS_pass_through:main',
             'motion_capture_emulator = simulation_communication.motion_capture_emulator:main',
             'betaflight_communication = simulation_communication.betaflight_communication:main',
-            'pendulum_state_listener = simulation_communication.pendulum_state_listener:main'
+            'pendulum_state_listener = simulation_communication.pendulum_state_listener:main',
+            'orbslam_emulator = simulation_communication.orbslam_emulator:main',
         ],
     },
 )
