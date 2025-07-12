@@ -66,9 +66,7 @@ class Controller(Node):
 
         self.control_history = [0.0,0.0,0.0,0.0]
 
-        self.est_params = np.array([40.0])
-
-
+        self.est_params = np.array([20.0])  # Initialize thrust ratio parameter to a reasonable value
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -77,23 +75,17 @@ class Controller(Node):
                                 0.0, 0.0, 0.0, 
                                 0.0, 0.0, 0.0, 
                                 self.est_params[0]])
-        self.P = np.diag([0.2, 0.2, 0.2, 
-                          0.2, 0.2, 0.2, 0.2,
-                          0.2, 0.2, 0.2, 
-                          0.2, 0.2, 0.2, 
-                          0.5])
-        self.Q = np.diag([1e-5, 1e-5, 1e-5,
-                          1e-5, 1e-5, 1e-5, 1e-5,
-                          1e-4, 1e-4, 1e-4,
-                          1e-4, 1e-4, 1e-4,
-                          1e-6])
-        self.R = np.diag([0.001])
-
-
-
-
-
-
+        self.P = np.diag([0.1, 0.1, 0.1,  # Increase initial uncertainty for position
+                          0.1, 0.1, 0.1, 0.1,  # Quaternion
+                          0.1, 0.1, 0.1,  # Velocity
+                          0.1, 0.1, 0.1,  # Angular rates
+                          1.0])  # Thrust ratio parameter uncertainty
+        self.Q = np.diag([1e-4, 1e-4, 1e-4,  # Position process noise
+                          1e-5, 1e-5, 1e-5, 1e-5,  # Quaternion process noise
+                          1e-3, 1e-3, 1e-3,  # Velocity process noise
+                          1e-3, 1e-3, 1e-3,  # Angular rates process noise
+                          1e-2])  # Thrust ratio process noise
+        self.R = np.diag([0.1]*13)  # Measurement noise for all 14 state elements
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
@@ -164,9 +156,12 @@ class Controller(Node):
 
 
 
+
             # UKF predict
             sigma_pts, wm, wc = self.generate_sigma_points(self.x_est, self.P, self.alpha, self.beta, self.kappa)
-            sigma_pts_pred = np.array([self.fx(pt, self.est_params, u_rate) for pt in sigma_pts])
+            sigma_pts_pred = np.array([
+                self.fx(pt, u, u_rate) for pt in sigma_pts
+            ])
             x_pred, P_pred = self.unscented_transform(sigma_pts_pred, wm, wc, self.Q)
 
             # UKF update
@@ -179,12 +174,19 @@ class Controller(Node):
                 P_xz += wc[i] * np.outer(dx, dz)
 
             K = P_xz @ np.linalg.inv(P_zz)
-            z = self.motion_capture_pose[2:3]  # Example: using z-position as measurement
-            self.x_est = x_pred + K @ (z - z_pred)
+            self.x_est = x_pred + K @ ((self.current_pose[:13]) - z_pred)
             self.P = P_pred - K @ P_zz @ K.T
+
+
+            print(f"x_est_position: {self.x_est[:3]}")
+            print(f"actual_position: {self.current_pose[:3]}")
+
+
 
             # Update estimated parameters
             self.est_params = np.array([self.x_est[13]])
+
+            print(f"Estimated thrust ratio: {self.est_params}")
 
 
             ### SEND COMMANDS
@@ -199,14 +201,11 @@ class Controller(Node):
 
 
     # --- UKF Functions ---
-    def fx(self, x, param, u_rate):
-        # Extract state variables
-        pos, quat, vel, ang_vel, u = x[:3], x[3:7], x[7:10], x[10:13], x[13:17]
-
-        # Prepare the state and input for the CasADi dynamics model
+    def fx(self, x, u, u_rate):
+        # Extract state variables from pt
+        pos, quat, vel, ang_vel, ratio = x[:3], x[3:7], x[7:10], x[10:13], x[13] 
         state = np.concatenate((pos, quat, vel, ang_vel, u))
-        input_u = np.array([u_rate])
-        param = np.array(param)
+        param = np.array([ratio])
 
         # Set the state, input, and parameters in the CasADi integrator
         self.sim_integrator.set("x", state)
@@ -218,11 +217,10 @@ class Controller(Node):
 
         # Retrieve the next state from the integrator
         x_next = self.sim_integrator.get("x")
-
-        return x_next
+        return np.concatenate((x_next[:13], param))  # Keep the thrust ratio constant during prediction
 
     def hx(self, x):
-        return np.array([x[0]])
+        return x[0:13]
 
     def generate_sigma_points(self, x, P, alpha, beta, kappa):
         n = len(x)
@@ -240,8 +238,8 @@ class Controller(Node):
         mean = np.sum(weights_mean[:, None] * sigma_points, axis=0)
         cov = np.zeros((mean.size, mean.size))
         for i in range(sigma_points.shape[0]):
-            diff = sigma_points[i] - mean
-            cov += weights_cov[i] * np.outer(diff, diff)
+            dx = sigma_points[i] - mean
+            cov += weights_cov[i] * np.outer(dx, dx)
         if noise_cov is not None:
             cov += noise_cov
         return mean, cov
