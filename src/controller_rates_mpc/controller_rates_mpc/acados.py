@@ -81,7 +81,7 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.levenberg_marquardt = 1e-3
 
 
-    rate_limit = 0.1
+    rate_limit = 0.2
 
     # Set input constraints (tune as needed)
     ocp.constraints.lbu = np.array([-rate_limit, -rate_limit, 0.05, -rate_limit])  # throttle, roll_rate, pitch_rate, yaw_rate
