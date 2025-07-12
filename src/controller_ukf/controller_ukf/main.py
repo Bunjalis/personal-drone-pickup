@@ -63,10 +63,7 @@ class Controller(Node):
         ])
 
 
-
-        self.control_history = [0.0,0.0,0.0,0.0]
-
-        self.est_params = np.array([20.0])  # Initialize thrust ratio parameter to a reasonable value
+        self.est_params = np.array([50.0])  # Initialize thrust ratio parameter to a reasonable value
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -79,13 +76,25 @@ class Controller(Node):
                           0.1, 0.1, 0.1, 0.1,  # Quaternion
                           0.1, 0.1, 0.1,  # Velocity
                           0.1, 0.1, 0.1,  # Angular rates
-                          1.0])  # Thrust ratio parameter uncertainty
+                          0.5])  # Thrust ratio parameter uncertainty
         self.Q = np.diag([1e-4, 1e-4, 1e-4,  # Position process noise
                           1e-5, 1e-5, 1e-5, 1e-5,  # Quaternion process noise
                           1e-3, 1e-3, 1e-3,  # Velocity process noise
                           1e-3, 1e-3, 1e-3,  # Angular rates process noise
-                          1e-2])  # Thrust ratio process noise
-        self.R = np.diag([0.1]*13)  # Measurement noise for all 14 state elements
+                          1e-5])  # Thrust ratio process noise
+        self.R = np.diag([0.1]*13)  # Measurement noise for all 13 state elements
+
+
+        self.delay_states = 8
+
+        self.control_history = [[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]] * self.delay_states  # Initialize with zeros
+
+
+
+
+
+
+
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
@@ -139,9 +148,30 @@ class Controller(Node):
 
 
             ### ESTIMATE CURRENT STATE AFTER DELAY
-            estimated_state_with_control = np.concatenate((self.current_pose, self.control_history))
-            self.ocp.set(0, "lbx", estimated_state_with_control)
-            self.ocp.set(0, "ubx", estimated_state_with_control)
+            estimated_state = copy.deepcopy(self.current_pose)
+            delayed_control_history = self.control_history[-self.delay_states:]
+
+            for i, val in enumerate(delayed_control_history):
+                self.sim_integrator.set("x", np.concatenate((estimated_state, np.array(val[0:4]).flatten())))  # Ensure state dimension matches expected size
+                self.sim_integrator.set("u", np.array(val[4:8]))  # Ensure control input dimension matches expected size
+                self.sim_integrator.set("p", self.est_params)
+                status_sim = self.sim_integrator.solve()
+                x_next = self.sim_integrator.get("x")
+                estimated_state = x_next[:13]
+
+            print(f"Observed state: {self.current_pose[0:3]}")
+            print(f"Estimated state: {estimated_state[0:3]}")
+            print(f"Actual state: {self.motion_capture_pose[0:3]}")
+
+            # Ensure both inputs to np.concatenate are 1D arrays
+            estimated_state_with_control = np.concatenate((estimated_state, np.array(self.control_history[-1][0:4])))  # Use the last control input for estimation
+
+            
+            relaxation_factor = 0.1
+            relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
+            relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
+            self.ocp.set(0, "lbx", relaxed_lbx)
+            self.ocp.set(0, "ubx", relaxed_ubx)
 
 
             ### SOLVE OCP
@@ -150,17 +180,22 @@ class Controller(Node):
                 raise Exception(f'acados returned status {status}.')
             x = self.ocp.get(1, "x")
             u = x[-4:]  # Extract the last 4 elements as control inputs
-            self.control_history = u
             u_rate = self.ocp.get(0, "u")
+
+            # Append control inputs and rates to control history as separate elements
+            self.control_history.append(u.tolist() + u_rate.tolist())
 
 
 
 
 
             # UKF predict
+
+            old_u = np.array(self.control_history[-self.delay_states][0:4])
+            old_u_rate = np.array(self.control_history[-self.delay_states][4:8])
             sigma_pts, wm, wc = self.generate_sigma_points(self.x_est, self.P, self.alpha, self.beta, self.kappa)
             sigma_pts_pred = np.array([
-                self.fx(pt, u, u_rate) for pt in sigma_pts
+                self.fx(pt, old_u, old_u_rate) for pt in sigma_pts
             ])
             x_pred, P_pred = self.unscented_transform(sigma_pts_pred, wm, wc, self.Q)
 
@@ -178,17 +213,13 @@ class Controller(Node):
             self.P = P_pred - K @ P_zz @ K.T
 
 
-            print(f"x_est_position: {self.x_est[:3]}")
-            print(f"actual_position: {self.current_pose[:3]}")
-
 
 
             # Update estimated parameters
             self.est_params = np.array([self.x_est[13]])
 
-            print(f"Estimated thrust ratio: {self.est_params}")
 
-
+            print(f"Height {round(self.current_pose[2],3)} throttle {round(u[2],3)} estimated thrust ratio {round(self.est_params[0],3)}")
             ### SEND COMMANDS
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
             self.cmd_publisher_.publish(msg)

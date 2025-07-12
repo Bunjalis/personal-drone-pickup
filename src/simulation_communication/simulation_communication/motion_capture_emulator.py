@@ -44,8 +44,8 @@ class PentaVerify(Node):
         # Extract current pose and time # 9 for omnicopter, 5 for quadcopter
         # when using world_large.sdf quadcopter is 5
         # when using world_inv_pen.sdf quadcopter is 6 and pendulum is 5
-        current_position = msg.poses[6].position
-        current_orientation = msg.poses[6].orientation
+        current_position = msg.poses[5].position
+        current_orientation = msg.poses[5].orientation
        
         # Ensure w is positive
         current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w = self.normalize_quaternion_positive_w(

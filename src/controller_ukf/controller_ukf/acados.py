@@ -47,12 +47,12 @@ def generate_ocp_controller(dynamics=None):
     # Cost matrices (tune as needed)
     Q_mat = 2 * np.diag([
         2.5, 2.5, 5.0,    # position
-        2.5, 2.5, 2.5, 2.5,  # quaternion
+        4.0, 4.0, 4.0, 4.0,  # quaternion
         1.0, 1.0, 1.0,      # velocity
         1.0, 1.0, 1.0,      # angular rates
         0.001, 0.001, 0.001, 0.001,  # u
     ])
-    R_mat = 2 * np.diag([0.1, 0.1, 2.5, 0.1])
+    R_mat = 2 * np.diag([0.1, 0.1, 5.0, 0.1])
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
     ocp.cost.W_e = Q_mat  # Terminal cost only considers the state
 
@@ -100,12 +100,12 @@ def generate_ocp_controller(dynamics=None):
     # Add constraints for throttle (x[2])
     ocp.constraints.lbx = np.array([0.0])  # Lower bound for throttle
     ocp.constraints.ubx = np.array([0.6])  # Upper bound for throttle
-    ocp.constraints.idxbx = np.array([16])  # Index of throttle in the state vector
+    ocp.constraints.idxbx = np.array([15])  # Index of throttle in the state vector
 
 
     # Set input constraints (tune as needed)
-    ocp.constraints.lbu = np.array([-5, -5, -5, -5])  # throttle, roll_rate, pitch_rate, yaw_rate
-    ocp.constraints.ubu = np.array([5, 5, 5, 5])
+    ocp.constraints.lbu = np.array([-3, -3, -3, -3])  # throttle, roll_rate, pitch_rate, yaw_rate
+    ocp.constraints.ubu = np.array([3, 3, 3, 3])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

@@ -35,5 +35,11 @@ def generate_launch_description():
             executable='betaflight_communication',
             name='betaflight_communication'
         ),
+
+        Node(
+            package='simulation_communication',
+            executable='motion_capture_emulator',
+            name='motion_capture_emulator'
+        ),
     ])
 
