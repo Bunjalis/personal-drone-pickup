@@ -11,7 +11,7 @@ from geometry_msgs.msg import Pose, PoseArray, PoseStamped, TwistStamped
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 import time
-from .acados import generate_ocp_controller
+#from .acados import generate_ocp_controller
 
 class Controller(Node):
     def __init__(self):
@@ -20,7 +20,7 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
         self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
         self.current_pose = None
-        self.setpoint = np.array([0.0, 0.0, 0.4])
+        self.setpoint = np.array([1.0, 1.0, 0.4])
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
@@ -50,8 +50,8 @@ class Controller(Node):
         self.timePoints = []
         self.t = 0
 
-        self.testInvPen = False
-        self.testMPC = True
+        self.testInvPen = False 
+        self.testMPC = False
         self.pen_length = 0.6
         self.pen_mass =  0.000001
         self.a = 0.0
@@ -86,7 +86,7 @@ class Controller(Node):
         self.timer = self.create_timer(self.dt, self.control_loop)
 
         # Get both the OCP solver and the integrator
-        self.ocp, self.sim_integrator = generate_ocp_controller()
+        #self.ocp, self.sim_integrator = generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         # Original trajectories
@@ -164,18 +164,20 @@ class Controller(Node):
 
     def navController(self):
 
+        
         state = self.current_pose
         xd, yd, zd = self.setpoint
-        penState = self.currentPenPose
-        a, b, eta = penState[0:3]
-        a_dot, b_dot, eta_dot = penState[7:10]
-        
         yawd = 0.0
         dt = self.dt
         x, y, z = state[0:3]
         r, p, yaw = self.quaternion_to_euler(*state[3:7])
         vx, vy, vz = state[7:10]
         vr, vp, vyaw = state[10:13]
+
+        
+        penState = self.currentPenPose
+        a, b, eta = penState[0:3]
+        a_dot, b_dot, eta_dot = penState[7:10]
         print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
         print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
         
@@ -300,6 +302,8 @@ class Controller(Node):
         pTau = pTau[0]
         rTau = rTau[0]
         self.prevForce = force'''
+        #wy = -1*np.array([-210.9648, -7.8557, 25.0000, -36.8930, -8.5851])@np.array([[a],[x-xd],[pitch],[a_dot], [vx]])  
+        #wx = -1*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[roll],[b_dot],[vy]])
         
         return force, rTau, pTau, yawTau
 
@@ -393,7 +397,7 @@ class Controller(Node):
                 force, rTau, pTau, yawTau = self.FIPController()
             elif not self.testMPC:
                 force, rTau, pTau, yawTau = self.navController()
-            else:
+            if self.testMPC:
                 u1,u2,u3,u4 = self.MPC()
             
             
@@ -406,26 +410,45 @@ class Controller(Node):
                 l_y = 0.073
 
                 max_motor_speed = 4631.0# 1755*25.2
+                kpz, kiz, kdz = 15.0, 10.0, 10.0 
+                kpx, kix, kdx = 0.06938, 0.0, 0.14488#0.006, 0.0, 0.0 #6.0, 0, 12.0 
+                kpy, kiy, kdy = 0.07, 0.0, 0.1456 #0.06, 0.0, 0.001#0.006, 0.0, 0.0 #6.0, 0, 12.0 
+
+                kpp, kip, kdp = 28.8235, 0.0, 8.235 #90.0, 10.0, 20.0 #30.0 # 80.0, 10.0, 50.0 note derivative term is very sensitive to noise (reduce as much as possible)
+                kpr, kir, kdr = 43.64, 0.0, 12.43 #60.0, 10.0, 40.0 # 80.0, 10.0, 50.0 
+                kpyaw, kiyaw, kdyaw =60.0, 10.0, 30.0
+                dt = self.dt
+                force = (self.g +kpz*(zd-z) + kdz*(0-vz))*self.M*(cos(r)*cos(p))
+                Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx
+                Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy 
+                rd = (Ux*sin(yaw) - Uy*cos(yaw)) #*self.M/force
+                pd = (Ux*cos(yaw) + Uy*sin(yaw)) #*self.M/force
+                rTau = (kpr*(rd-r) + kir*(rd-r)*dt - kdr*vr)*self.Ixx
+                pTau= (kpp*(pd-p) + kip*(pd-p)*dt - kdp*vp)*self.Iyy
+                yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
                 
-                if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
+
+                
+                if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
                     u1 = 0.0
                 else:
-                    u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+                    u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
 
-                if (force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct)) < 0:
+                if (force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct)) < 0:
                     u2 = 0.0
                 else:
-                    u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+                    u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
 
-                if force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct) < 0:
+                if force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct) < 0:
                     u3 = 0.0
                 else:
-                    u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
+                    u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
 
-                if force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
+
+                if force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
                     u4 = 0.0
                 else:
-                    u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
+                    u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
 
 
                 ########################################################
@@ -434,7 +457,7 @@ class Controller(Node):
                 u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
                 u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
                 u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
-            
+            print(f"x: {x}, y: {y}, z: {z}, r: {r}, p: {p}, yaw: {yaw}, vx: {vx}, vy: {vy}")
             u = [u1,u2,u3,u4]
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
             self.cmd_publisher_.publish(msg)

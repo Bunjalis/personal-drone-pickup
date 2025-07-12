@@ -96,7 +96,7 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_0_joint</jointName>
         <linkName>X3/rotor_0</linkName>
-        <turningDirection>ccw</turningDirection>
+        <turningDirection>cw</turningDirection>
         <timeConstantUp>0.02</timeConstantUp>
         <timeConstantDown>0.02</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
@@ -116,7 +116,7 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_1_joint</jointName>
         <linkName>X3/rotor_1</linkName>
-        <turningDirection>cw</turningDirection>
+        <turningDirection>ccw</turningDirection>
         <timeConstantUp>0.02</timeConstantUp>
         <timeConstantDown>0.02</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
@@ -136,7 +136,7 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_2_joint</jointName>
         <linkName>X3/rotor_2</linkName>
-        <turningDirection>cw</turningDirection>
+        <turningDirection>ccw</turningDirection>
         <timeConstantUp>0.02</timeConstantUp>
         <timeConstantDown>0.02</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
@@ -156,7 +156,7 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_3_joint</jointName>
         <linkName>X3/rotor_3</linkName>
-        <turningDirection>ccw</turningDirection>
+        <turningDirection>cw</turningDirection>
         <timeConstantUp>0.02</timeConstantUp>
         <timeConstantDown>0.02</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
