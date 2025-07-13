@@ -92,7 +92,7 @@ class QuadDynamics:
         )
         r_dot = (1 / self.tau_rate) * (r_cmd - self.r)
 
-        return r_cmd
+        return r_dot
     
     def u_dynamics(self):
         return self.u_dot

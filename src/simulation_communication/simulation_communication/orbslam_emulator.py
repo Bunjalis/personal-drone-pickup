@@ -54,8 +54,32 @@ class PentaVerify(Node):
     def worldPoseCallback(self, msg):
         print("START")
         # Extract current pose and time # 9 for omnicopter, 5 for quadcopter
+        # Add noise to the current position
+        noise_position = np.random.normal(0, 0.005, 3)  # Mean 0, standard deviation 0.01
         self.current_position = msg.poses[5].position
+        self.current_position.x += noise_position[0]
+        self.current_position.y += noise_position[1]
+        self.current_position.z += noise_position[2]
+
+        # Add noise to the current orientation
+        noise_orientation = np.random.normal(0, 0.001, 4)  # Mean 0, standard deviation 0.001
         self.current_orientation = msg.poses[5].orientation
+        self.current_orientation.x += noise_orientation[0]
+        self.current_orientation.y += noise_orientation[1]
+        self.current_orientation.z += noise_orientation[2]
+        self.current_orientation.w += noise_orientation[3]
+
+        # Normalize the quaternion to ensure it remains valid
+        norm = math.sqrt(
+            self.current_orientation.x**2 +
+            self.current_orientation.y**2 +
+            self.current_orientation.z**2 +
+            self.current_orientation.w**2
+        )
+        self.current_orientation.x /= norm
+        self.current_orientation.y /= norm
+        self.current_orientation.z /= norm
+        self.current_orientation.w /= norm
        
        
 
