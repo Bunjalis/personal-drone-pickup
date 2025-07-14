@@ -65,7 +65,7 @@ class Controller(Node):
         self.dataWriter = csv.DictWriter(self.dataFile, fieldnames=['xError', 'yError', 'zError', 'rollError', 'pitchError', 'yawError'])
         self.dataWriter.writeheader()
 
-        self.usingBetaFLight =False
+        self.usingBetaFLight =True
 
     # Recieve motion capture data
     def pose_callback(self, msg: MotionCaptureState):
@@ -176,7 +176,7 @@ class Controller(Node):
             max_motor_speed = 4631.0# 1755*25.2
             
             
-            if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
+            '''if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
                 u1 = 0.0
             else:
                 u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
@@ -197,7 +197,7 @@ class Controller(Node):
             else:
                  u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
                  
-            u = [u1,u2,u3,u4]
+            u = [u1,u2,u3,u4]'''
 
 
             '''u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
@@ -206,14 +206,17 @@ class Controller(Node):
             u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
             
             
-
-            '''maxForce = (Cf*max_motor_speed**2) 
-            maxTorque = (Ct*max_motor_speed**2) 
-        
+            
+          
             wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
             wy = (( wy[0]))/100.0
             wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
             wx = (( wx[0]))/100.0
+
+            maxForce = (Cf*max_motor_speed**2) 
+            maxTorque = (Ct*max_motor_speed**2) 
+        
+            
            
             kpz, kiz, kdz = 15.0, 10.0, 10.0 
             force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M
@@ -226,8 +229,8 @@ class Controller(Node):
             wz =  -0.5*(yawd-yaw) #-0.001*sumYawError*dt# (0.2500*u1 - 0.2500*u2 - 0.2500*u3 + 0.2500*u4)/100.0 # -0.002*yaw#kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw #-yaw #-1.25*yaw -0.5*vyaw#2.0*(0.2500*u1 - 0.2500*u2 - 0.2500*u3 + 0.2500*u4)/100.0
       
             print(f"force: {force}, r: {wx}, p: {wy}, yaw: {wz}")
-            u = [wx, wy, throttle, wz]'''
-    
+            u = [wx, wy, throttle, wz]
+            #u = [rTau, pTau, throttle, yawTau]
 
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
             print(f"x: {x}, y: {y}, z: {z}, r: {r}, p: {p}, yaw: {yaw}, vx: {vx}, vy: {vy}")

@@ -42,8 +42,6 @@ class PentaVerify(Node):
     def worldPoseCallback(self, msg):
         print("START")
         # Extract current pose and time # 9 for omnicopter, 5 for quadcopter
-        # when using world_large.sdf quadcopter is 5
-        # when using world_inv_pen.sdf quadcopter is 6 and pendulum is 5
         current_position = msg.poses[5].position
         current_orientation = msg.poses[5].orientation
        
