@@ -5,7 +5,7 @@ import casadi as cs
 import numpy as np
 from copy import copy
 from acados_template import AcadosOcp, AcadosOcpSolver, AcadosModel
-
+import math
 
 class QuadDynamics:
     def __init__(self):
@@ -14,13 +14,13 @@ class QuadDynamics:
         self.q = cs.MX.sym('a', 4)  # angle quaternion (wxyz)
         self.v = cs.MX.sym('v', 3)  # velocity
         self.r = cs.MX.sym('r', 3)  # angular velocity
-        self.penPos = cs.MX.sym('penPos', 2) #a and b
-        self.penVel = cs.MX.sym('penVel', 2)
+        self.penX = cs.MX.sym('penx', 2) #a and a_dot
+        self.penY = cs.MX.sym('peny', 2) #b and b_dot 
 
         # Update full state vector to include motor speeds
         self.omega = cs.MX.sym('omega', 4)  # Motor speeds
-        self.x = cs.vertcat(self.p, self.q, self.v, self.r, self.omega, self.penPos, self.penVel)
-        self.state_dim = 17  # Updated state dimension to include motor speeds
+        self.x = cs.vertcat(self.p, self.q, self.v, self.r, self.penX, self.penY, self.omega)
+        self.state_dim = 17  + 4# Updated state dimension to include motor speeds
 
         # Control input vector (throttle, roll, pitch, yaw)
         m1 = cs.MX.sym('m1') # back right, counter-clockwise
@@ -113,27 +113,56 @@ class QuadDynamics:
         omega_dot = (1 / self.tau_motor) * (-self.omega + self.K_motor * self.u)
         return omega_dot
 
-    def IP_dynamics(self):
+    
+    def quaternion_to_euler(self, w, x, y, z):
+        # Roll (x-axis rotation)
+        t0 = +2.0 * (w * x + y * z)
+        t1 = +1.0 - 2.0 * (x * x + y * y)
+        roll = cs.atan2(t0, t1)
+
+        # Pitch (y-axis rotation)
+        t2 = +2.0 * (w * y - z * x)
+        #t2 = +1.0 if t2 > +1.0 else t2
+        #t2 = -1.0 if t2 < -1.0 else t2
+        t2 = cs.if_else(t2>1.0, 1.0, t2)
+        t2 = cs.if_else(t2<-1.0, -1.0, t2)
+        
+        pitch = cs.asin(t2)
+
+        # Yaw (z-axis rotation)
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (y * y + z * z)
+        yaw = cs.atan2(t3, t4)
+
+        return roll, pitch, yaw
+
+    def IP_dynamicsX(self):
         # Add inverted pendulum dynamics here and return  a_dot, b_dot, a_ddot, b_ddot,
         #self.q_dynamics() returns roll, pitch yaw 
-        w = self.w_dynamics()
-        roll = w[0]
-        pitch = w[1]
-        penPos = self.penPos
-        a = penPos[0]
-        b = penPos[1]
+        #w = self.w_dynamics()
+        state = self.q
+        roll, pitch, yaw = self.quaternion_to_euler(state[0], state[1], state[2], state[3])
         g = 9.81
-        L = 0.6/2
-        dt = 1.0 / 30.0
+        L = 0.4/2
+        a = self.penX[0]
+        a_dot = self.penX[1] 
         a_ddot = a*g/L - pitch*g
+
+        return cs.vertcat(a_dot, a_ddot)
+
+    def IP_dynamicsY(self):
+        state = self.q
+        roll, pitch, yaw = self.quaternion_to_euler(state[0], state[1], state[2], state[3])
+        g = 9.81
+        L = 0.4/2
+        b = self.penY[0]
+        b_dot = self.penY[1]
         b_ddot = b*g/L + roll*g
-        a_dot = a_ddot*dt
-        b_dot = b_ddot*dt
-        return cs.vertcat(a_dot, b_dot, a_ddot, b_ddot)
+        return cs.vertcat(b_dot, b_ddot)
 
     def quad_dynamics(self):
         # Include motor dynamics in the overall dynamics
-        x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(), self.v_dynamics(), self.w_dynamics(), self.motor_dynamics(), self.IP_dynamics())
+        x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(), self.v_dynamics(), self.w_dynamics(), self.IP_dynamicsX(), self.IP_dynamicsY(), self.motor_dynamics() )
         return cs.Function('x_dot', [self.x, self.u], [x_dot], ['x', 'u'], ['x_dot']) # Function('function name', inputs, outputs, symbolic inputs, symbolic outputs)
 
     def p_dynamics(self):

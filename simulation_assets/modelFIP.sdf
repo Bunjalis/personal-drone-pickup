@@ -257,31 +257,27 @@
                 <use_parent_model_frame>1</use_parent_model_frame>
             </axis>
         </joint>
-
         <link name='X3/pendulum'>
-            <pose relative_to='X3/pendulum_pivot'>0 0 0.3 0 0 0</pose>
+            <pose>0 0 0.215 0 0 0</pose>
             <inertial>
                 <mass>0.000001</mass>
                 <inertia>
-                    <ixx>0.00000012</ixx>
+                    <ixx>5.3e-8</ixx>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
-                    <iyy>0.00000012</iyy>
+                    <iyy>5.3e-8</iyy>
                     <iyz>0</iyz>
                     <izz>8.3e-12</izz>
                 </inertia>
-                <pose frame=''>0 0 0 0 -0 0</pose>
-            </inertial>
-               
+            </inertial> 
             <gravity>1</gravity>
             <self_collide>0</self_collide>
-            <kinematic>0</kinematic>
+            <kinematic>1</kinematic>
             <visual name='pendulum_visual'>
-                <pose frame=''>0 0 0 0 -0 0</pose>
                 <geometry>
                 <cylinder>
                     <radius>0.005</radius>
-                    <length>0.6</length>
+                    <length>0.4</length>
                 </cylinder>
                 </geometry>
                 <material>
@@ -321,40 +317,36 @@
                 </imu>
             </sensor>
             <collision name='collision'>
-                <laser_retro>0</laser_retro>
-                <max_contacts>10</max_contacts>
-                <pose frame=''>0 0 0 0 -0 0</pose>
                 <geometry>
                 <cylinder>
                     <radius>0.005</radius>
-                    <length>0.6</length>
+                    <length>0.4</length>
                 </cylinder>
-                </geometry>
-                
+                </geometry> 
             </collision>
             </link>
 
         <joint name='X3/pendulum_pivot' type='revolute'>
             <parent>X3/base_link</parent>
             <child>X3/pendulum</child>
-            <pose relative_to="X3/base_link">0 0 0.015 0 -0 0</pose>
+            <pose>0 0 -0.2 0 -0 0</pose>
             <axis>
                 <xyz> 1 0 0</xyz>
-                <use_parent_model_frame>1</use_parent_model_frame>
                 <limit>
-                <lower>-1.5708</lower>
-                <upper>-1.5708</upper>
-                <effort>0.1</effort>
-                <velocity>-1</velocity>
+                <lower>-1.57</lower>
+                <upper>1.57</upper>
+                <effort>0.0</effort>
+                <velocity>1000</velocity>
                 </limit>
                 <dynamics>
                 <spring_reference>0</spring_reference>
                 <spring_stiffness>0</spring_stiffness>
-                <damping>0.0000000001</damping>
+                <damping>0.0</damping>
                 <friction>0.0</friction>
                 </dynamics>
             </axis>
             </joint>
-
+        
+        
     </model>
 </sdf>

@@ -19,7 +19,7 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
 
         self.current_pose = None
-        self.setpoint = np.array([1.0, 1.0, 1.0])
+        self.setpoint = np.array([0.0, 0.0, 1.0])
 
         # Set up control loop
         self.control_frequency = 120.0
@@ -65,7 +65,7 @@ class Controller(Node):
         self.dataWriter = csv.DictWriter(self.dataFile, fieldnames=['xError', 'yError', 'zError', 'rollError', 'pitchError', 'yawError'])
         self.dataWriter.writeheader()
 
-        self.usingBetaFLight =True
+        self.usingBetaFlight =True
 
     # Recieve motion capture data
     def pose_callback(self, msg: MotionCaptureState):
@@ -80,7 +80,7 @@ class Controller(Node):
         # For saftey generate a message with all channels set to 0.0
         msg = ELRSCommand()
         msg.armed = False
-        if self.usingBetaFLight:
+        if self.usingBetaFlight:
             msg.channel_0 = 0.0 # roll (-1,1)
             msg.channel_1 = 0.0 # pitch
             msg.channel_2 = -1.0 # throttle (-1 = 0)
@@ -96,14 +96,14 @@ class Controller(Node):
         self.t += self.dt
 
         # Pre-start state: Send 0.05 on all channels for one second before starting control loop.
-        if self.armed and self.pre_start_counter < self.pre_start_steps and not self.usingBetaFLight:
+        if self.armed and self.pre_start_counter < self.pre_start_steps and not self.usingBetaFlight:
             msg.armed = True
             msg.channel_0 = 0.05
             msg.channel_1 = 0.05
             msg.channel_2 = 0.05
             msg.channel_3 = 0.05
             self.pre_start_counter += 1
-        if self.armed and self.pre_start_counter < self.pre_start_steps and self.usingBetaFLight:
+        if self.armed and self.pre_start_counter < self.pre_start_steps and self.usingBetaFlight:
             msg.armed = True
             msg.channel_0 = 0.0
             msg.channel_1 = 0.0
@@ -206,8 +206,10 @@ class Controller(Node):
             u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
             
             
-            
-          
+
+            maxForce = (Cf*max_motor_speed**2) 
+            maxTorque = (Ct*max_motor_speed**2) 
+        
             wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
             wy = (( wy[0]))/100.0
             wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
@@ -230,7 +232,7 @@ class Controller(Node):
       
             print(f"force: {force}, r: {wx}, p: {wy}, yaw: {wz}")
             u = [wx, wy, throttle, wz]
-            #u = [rTau, pTau, throttle, yawTau]
+    
 
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
             print(f"x: {x}, y: {y}, z: {z}, r: {r}, p: {p}, yaw: {yaw}, vx: {vx}, vy: {vy}")

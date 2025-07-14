@@ -10,6 +10,7 @@ from interfaces.msg import MotionCaptureState, ELRSCommand, InvertedPendulumStat
 from geometry_msgs.msg import Pose, PoseArray, PoseStamped, TwistStamped
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
+from tf_transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_matrix
 import time
 from .acados import generate_ocp_controller
 
@@ -47,11 +48,15 @@ class Controller(Node):
         self.rollError = []
         self.pitchError = []
         self.yawError = []
+        self.b_dotError = []
+        self.y_dotError = []
+        self.wxOutput = []
         self.timePoints = []
         self.t = 0
 
-        self.testInvPen = False
+        self.testInvPen = False 
         self.testMPC = True
+        self.usingBetaFlight = False
         self.pen_length = 0.6
         self.pen_mass =  0.000001
         self.a = 0.0
@@ -63,6 +68,7 @@ class Controller(Node):
         self.eta = math.sqrt(self.pen_length**2 - self.a**2 -self.b**2)
         self.bErrorSum = 0
         self.prev_bError = 0
+        self.prev_rollError = 0
 
         self.vx_prev = 0.0
         self.vy_prev = 0.0
@@ -81,7 +87,7 @@ class Controller(Node):
 
         ######################## MPC variables #######################
         self.steps = 90 * 30
-        self.dt = 1.0 / 30.0
+        #self.dt = 1.0 / 30.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -153,9 +159,8 @@ class Controller(Node):
         angular_velocity = np.array([msg.twist.angular.x, msg.twist.angular.y, msg.twist.angular.z])
         self.currentPenPose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
         penState = self.currentPenPose
-        a, b, eta = penState[0:3]
-        a_dot, b_dot, eta_dot = penState[7:10]
-        print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
+        self.currentPenPose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
+        #print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
        
         
         #print(f"penAngle: {self.currentPenPose}")
@@ -179,34 +184,30 @@ class Controller(Node):
         print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
         print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
         
-        '''pd = 0
-        rd = 0
-        pTau = -1*np.array([0.0034,0.0490,0.0071,0.0140])@np.array([[x-xd],[p-pd],[vx],[vp]]) 
-        rTau = -1*np.array([-0.0043, 0.0611, -0.0089, 0.0174])@np.array([[y-yd],[r-rd],[vy],[vr]])
-        kpz, kiz, kdz = 15.0, 10.0, 10.0 
-        force =  (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M /(cos(r)*cos(p))
-        self.prevForce = force
-        #force = force/self.M
-        kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0#6.0, 1.5, 1.75
-        yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt + kdyaw*(-vyaw))*self.Izz'''
-        kpz, kiz, kdz = 15.0, 10.0, 10.0 #75.0, 42.857, 32.8125
-        kpx, kix, kdx = 6.0, 0, 12.0 #0.6, 0, 1.2#0.5, 0,0.4
-        kpy, kiy, kdy = 6.0, 0, 12.0 #0.6, 0, 1.2#0.36, 0, 0.45
 
-        kpp, kip, kdp = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 #5.0, 3.0, 3.0 # 2.4, 0.48, 3.09 #
-        kpr, kir, kdr = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # 2.1, 0.84, 1.3125 #
-        kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0 
-        force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M*(cos(r)*cos(p))
-        Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx#+ xd_dotdot
-        Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy #+ yd_dotdot
-        rd = (Ux*sin(yaw) - Uy*cos(yaw))*self.M/force
-        pd = (Ux*cos(yaw) + Uy*sin(yaw))*self.M/force
-        #rd = (Ux*cos(yaw) - Uy*sin(yaw))*self.M/force#(self.M/force)
-        #pd = (Ux*sin(yaw) + Uy*cos(yaw))*self.M/force#(self.M/force)
+
+        kpz, kiz, kdz = 15.0, 10.0, 10.0 
+        kpx, kix, kdx = 0.06938, 0.0, 0.14488#0.006, 0.0, 0.0 #6.0, 0, 12.0 
+        kpy, kiy, kdy = 0.07, 0.0, 0.1456 #0.06, 0.0, 0.001#0.006, 0.0, 0.0 #6.0, 0, 12.0 
+
+        kpp, kip, kdp = 28.8235, 0.0, 8.235 #90.0, 10.0, 20.0 #30.0 # 80.0, 10.0, 50.0 note derivative term is very sensitive to noise (reduce as much as possible)
+        kpr, kir, kdr = 43.64, 0.0, 12.43 #60.0, 10.0, 40.0 # 80.0, 10.0, 50.0 
+        kpyaw, kiyaw, kdyaw =60.0, 10.0, 30.0 
+
+        '''kpx, kix, kdx = 0.00414, 0.0000345, 0.1242
+        kpy, kiy, kdy = 0.00414, 0.0000345, 0.1242
+
+        kpp, kip, kdp = 2.4, 0.48, 3.09
+        kpr, kir, kdr = 2.1, 0.84, 1.3125'''
+
+        force = (self.g +kpz*(zd-z) + kdz*(0-vz))*self.M*(cos(r)*cos(p))
+        Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx
+        Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy 
+        rd = (Ux*sin(yaw) - Uy*cos(yaw)) #*self.M/force
+        pd = (Ux*cos(yaw) + Uy*sin(yaw)) #*self.M/force
         rTau = (kpr*(rd-r) + kir*(rd-r)*dt - kdr*vr)*self.Ixx
         pTau= (kpp*(pd-p) + kip*(pd-p)*dt - kdp*vp)*self.Iyy
         yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
-
 
 
         return force, rTau, pTau, yawTau
@@ -224,10 +225,18 @@ class Controller(Node):
         penState = self.currentPenPose
         a, b, eta = penState[0:3]
         a_dot, b_dot, eta_dot = penState[7:10]
-        #print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
-        #print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
+        rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
+        rotationMatrix = rotate.as_matrix()
+        print(rotationMatrix)
+        [[a], [b], [eta]] = rotationMatrix@np.array([[a],[b],[eta]])
+        [[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])
+        #print(position)
+        print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
+        print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
         self.aError.append(a)
         self.bError.append(b)
+        self.b_dotError.append(b_dot)
+        self.y_dotError.append(vy)
         
          
         #pTau = -1*np.array([-0.1320,0.9669,-10.0866,-0.1314,0.0546,-1.2473])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
@@ -288,23 +297,128 @@ class Controller(Node):
         #pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
         #rTau = -1*np.array([0.0085,    0.3191,    1.4704,    0.0157,    0.0340,    0.2969])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
         
-        kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # #0.804, 0.29236, 0.55275
+        kpyaw, kiyaw, kdyaw = 60.0, 10.0, 30.0 #6.0, 1.5, 1.75 # #0.804, 0.29236, 0.55275
         kpz, kiz, kdz = 15.0, 10.0, 10.0 
         force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt )*(self.M + self.pen_mass)*(cos(r)*cos(p))
         yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
+        pTau = -1*np.array([-0.0034, 1.9617,   -7.2211,   -0.0134,    0.2896,   -1.4960])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        rTau = -1*np.array([0.0043,    2.4439,    8.9958,    0.0167,    0.3607,    1.8637])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
+       
         pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
         rTau = -1*np.array([ 0.0040,0.2926,1.1953,0.0079, 0.0314,0.2086])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
-       
-        '''pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        rTau = -1*np.array([ 0.0040,0.2926,1.1953,0.0079, 0.0314,0.2086])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
+
+        pTau = -1*np.array([-0.0004,   0.1719,   -0.6198,   -0.0011,    0.0238,   -0.1134])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        rTau = -1*np.array([0.0137,2.1804,9.1509,0.0460, 0.0387,1.2022])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
         pTau = pTau[0]
         rTau = rTau[0]
-        self.prevForce = force'''
-        
+    
+
+        kpz, kiz, kdz = 15.0, 10.0, 10.0 
+        kpx, kix, kdx = 0.06938, 0.0, 0.14488#0.006, 0.0, 0.0 #6.0, 0, 12.0 
+        kpy, kiy, kdy = 0.07, 0.0, 0.1456
+        kpp, kip, kdp = 28.8235, 0.0, 8.235 #90.0, 10.0, 20.0 #30.0 # 80.0, 10.0, 50.0 note derivative term is very sensitive to noise (reduce as much as possible)
+        kpr, kir, kdr = 43.64, 0.0, 12.43 #60.0, 10.0, 40.0 # 80.0, 10.0, 50.0 
+        #kpr, kir, kdr = 23.64, 0.0, 5.43
+        kpyaw, kiyaw, kdyaw =60.0, 10.0, 30.0 
+
+        Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx
+        Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy 
+
+        rd = (Ux*sin(yaw) - Uy*cos(yaw)) #*self.M/force
+        rd = -1*np.array([10.8967,    0.0608,    1.8794,    0.1465])@np.array([[b], [y-yd], [b_dot], [vy]])
+        rd = rd[0]
+        pd = (Ux*cos(yaw) + Uy*sin(yaw)) #*self.M/force
+        #pd = -1*np.array([-37.4179,    -0.2181,   -11.6594,    -0.6523])@np.array([[a], [x-xd], [a_dot], [vx]])
+        #pd = pd[0]
+        self.rollError.append(self.prev_rollError-r)
+        self.prev_rollError = rd
+        #pd = 0
+        #rd = 0
+        rTau = (kpr*(rd-r) + kir*(rd-r)*dt - kdr*vr)*self.Ixx
+        pTau= (kpp*(pd-p) + kip*(pd-p)*dt - kdp*vp)*self.Iyy
+        #self.prevForce = force
+        #wy = -1*np.array([-210.9648, -7.8557, 25.0000, -36.8930, -8.5851])@np.array([[a],[x-xd],[pitch],[a_dot], [vx]])  
+        #wx = -1*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[roll],[b_dot],[vy]])
+        #pTau = -1*np.array([ -0.0010,    0.2708,   -1.0214,   -0.0030,    0.0332,   -0.1856])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        rTau = -1*np.array([ 0.0180,    0.3548,    1.6279,    0.0222,    0.0352,    0.2842])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
+        pTau = -1*np.array([   -0.0180,    0.5027,   -2.9400,   -0.0373,    0.0375,   -0.4895])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        pTau = pTau[0]
+        rTau=rTau[0]
+        self.wxOutput.append(rTau)
         return force, rTau, pTau, yawTau
+
+    def FIPControllerBeta(self):
+        state = self.current_pose
+        xd, yd, zd = self.setpoint
+        yawd = 0.0
+        dt = self.dt
+        x, y, z = state[0:3]
+        r, p, yaw = self.quaternion_to_euler(*state[3:7])
+        vx, vy, vz = state[7:10]
+        vr, vp, vyaw = state[10:13]
+        
+        penState = self.currentPenPose
+        a, b, eta = penState[0:3]
+        a_dot, b_dot, eta_dot = penState[7:10]
+        print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
+        #print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
+        self.aError.append(a)
+        self.bError.append(b)
+        self.b_dotError.append(b_dot)
+        self.y_dotError.append(vy)
+        #wy = -1*np.array([-664.5726,   -0.8313,  106.0000,  -69.9895,   -2.5022])@np.array([[a], [x-xd], [p], [a_dot], [vx]])
+        #wy = (( wy[0]))/100.0
+        #wx = -1000*np.array([ 3.050,    0.014,    0.40,    0.441,    0.0912])@np.array([[b], [y-yd], [r], [b_dot], [vy]]) # roll control
+        #wx = -1000*np.array([3.250,    0.014,    0.0,    0.05,    0.0912])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
+        #wx = -1000*np.array([7.0,    0.0,    0.125,    0.5,    0.0])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
+        wx = -1000*np.array([7.624,    0.001,    0.1,    0.672,    0.023])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
+        wx = -1000*np.array([1.824,    0.001,    0.1,    0.772,    0.023])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
+        wx = -1000*np.array([2.724,    0.001,    0.3,    1.372,    0.023])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
+        #wx = -1*np.array([1871.4617,    0.0125,   125.5217,  512.2909,    0.2571])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
+        wx = -1000*np.array([4.2515,    0.0400,    0.3023,    1.5277,    0.1076])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
+        wx = (( wx[0]))/100.0
+
+        rd = -1*np.array([33.0, 0.10104,    6.5,    0.200628])@np.array([[b], [y-yd], [b_dot], [vy]])
+        wx = -125.36*(r-rd[0])/100.0
+        #wx = -1*np.array([269.1772,   12.5000,   104.1573,   38.4470,    8.7540])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
+        #wx = (( wx[0]))/100.0
+        #wx = -1*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]])
+        #wx = (( wx[0]))/100.0
+        wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
+        wy = (( wy[0]))/100.0
+        #wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
+        #wx = (( wx[0]))/100.0
+
+
+
+        
+        Cf = 1.42e-6
+        Ct = 2.84e-7
+        l_x = 0.0865
+        l_y = 0.073
+
+        max_motor_speed = 4631.0
+        maxForce = (Cf*max_motor_speed**2) 
+        maxTorque = (Ct*max_motor_speed**2)
+        kpz, kiz, kdz = 15.0, 10.0, 10.0 
+        dt = self.dt
+        force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M
+        
+        throttle = 2*(force)/(maxForce) - 1
+        if throttle < -1:
+            throttle = -1.0
+        if throttle > 1:
+            throttle = 1.0
+        #sumYawError = sum(self.yawError)
+        wz =  -0.5*(yawd-yaw)
+        print(f"force: {force}, r: {wx}, p: {wy}, yaw: {wz}")
+        self.wxOutput.append(wx)
+        u = [wx, wy, throttle, wz]
+        return u
 
     def MPC(self):
         skip_steps = 3
+        
         for j in range(self.N):
             if self.step_counter + j*skip_steps < self.steps:
                 yref = np.array([self.x_traj[self.step_counter + j*skip_steps], self.y_traj[self.step_counter + j*skip_steps],
@@ -313,9 +427,9 @@ class Controller(Node):
                                     self.qz_traj[self.step_counter + j*skip_steps], 
                                     self.vx_traj[self.step_counter + j*skip_steps], self.vy_traj[self.step_counter + j*skip_steps], self.vz_traj[self.step_counter + j*skip_steps], 
                                     self.ax_traj[self.step_counter + j*skip_steps], self.ay_traj[self.step_counter + j*skip_steps], self.az_traj[self.step_counter + j*skip_steps], 
-                                    0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2, 0,0,0,0])
+                                    0.0, 0.0, 0.0, 0.0, 0.0,0.0,0.0,0.0, 0.2, 0.2, 0.2, 0.2])
             else:
-                yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.2, 0.2,0,0,0,0])
+                yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.0, 0.0, 0.0, 0.0,0.0,0.0,0.0,0.0, 0.2, 0.2, 0.2, 0.2])
             self.ocp.set(j, "yref", yref)
 
 
@@ -326,8 +440,25 @@ class Controller(Node):
                                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ])
         self.ocp.set(self.N, "yref", yref_N)
 
-        # merge current_pose with currentPenPose
-        current_state_with_omega = np.concatenate((self.current_pose, self.omega_est, self.currentPenPose[0:2], self.currentPenPose[7:9])) #add pen a,b,a_dot and b_dot  to current pose
+        # merge current_pose with currentPenPosepenState = self.currentPenPose
+        state = self.current_pose
+        xd, yd, zd = self.setpoint
+        yawd = 0.0
+        dt = self.dt
+        x, y, z = state[0:3]
+        r, p, yaw = self.quaternion_to_euler(*state[3:7])
+        vx, vy, vz = state[7:10]
+        vr, vp, vyaw = state[10:13]
+        penState = self.currentPenPose
+        a, b, eta = penState[0:3]
+        a_dot, b_dot, eta_dot = penState[7:10]
+        rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
+        rotationMatrix = rotate.as_matrix()
+        #print(rotationMatrix)
+        [[a], [b], [eta]] = rotationMatrix@np.array([[a],[b], [eta]])
+        [[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])
+        penPose = np.array([a,a_dot,b, b_dot])
+        current_state_with_omega = np.concatenate((self.current_pose,penPose, self.omega_est)) #add pen a,b,a_dot and b_dot  to current pose
         
 
         self.ocp.set(0, "lbx", current_state_with_omega)
@@ -335,6 +466,7 @@ class Controller(Node):
 
         # Solve the OCP
         status = self.ocp.solve()
+        print(f"STATUS: {status}")
         if status != 0:
             raise Exception(f'acados returned status {status}.')
 
@@ -348,27 +480,44 @@ class Controller(Node):
         
         #self.cmd_publisher_.publish(msg)
         self.omega_est = self.ocp.get(1,"x")[-4:]
+        print(f"step: {self.step_counter}")
         self.step_counter += 1
-
+        
+        print(f"pendulum: {penPose}")
         print(f"U = {np.round(u, 3)} omega_est = {np.round(self.omega_est, 3)}")
         return u
          
     def control_loop(self):
         msg = ELRSCommand()
         msg.armed = False
-        msg.channel_0 = 0.0
-        msg.channel_1 = 0.0
-        msg.channel_2 = 0.0
-        msg.channel_3 = 0.0
+        if self.usingBetaFlight:
+            msg.channel_0 = 0.0
+            msg.channel_1 = 0.0
+            msg.channel_2 = -1.0
+            msg.channel_3 = 0.0
+        else:
+            msg.channel_0 = 0.0
+            msg.channel_1 = 0.0
+            msg.channel_2 = 0.0
+            msg.channel_3 = 0.0
+        
         self.t += self.dt
 
         # Pre-start state: Send 0.05 on all channels for one second before starting control loop.
         if self.armed and self.pre_start_counter < self.pre_start_steps:
             msg.armed = True
-            msg.channel_0 = 0.05
-            msg.channel_1 = 0.05
-            msg.channel_2 = 0.05
-            msg.channel_3 = 0.05
+
+            if self.usingBetaFlight:
+                msg.channel_0 = 0.0
+                msg.channel_1 = 0.0
+                msg.channel_2 = -0.999
+                msg.channel_3 = 0.0
+            else:
+                msg.channel_0 = 0.05
+                msg.channel_1 = 0.05
+                msg.channel_2 = 0.05
+                msg.channel_3 = 0.05
+
             self.pre_start_counter += 1
 
         elif self.armed and self.current_pose is not None:
@@ -389,16 +538,20 @@ class Controller(Node):
             self.timePoints.append(self.t)
 
             # CONTROL CODE GOES HERE
-            if self.testInvPen:
+            if self.testInvPen and not self.usingBetaFlight:
                 force, rTau, pTau, yawTau = self.FIPController()
-            elif not self.testMPC:
+
+            if self.testInvPen and self.usingBetaFlight:
+                u1, u2, u3, u4 = self.FIPControllerBeta()
+
+            elif not self.testMPC and not self.testInvPen:
                 force, rTau, pTau, yawTau = self.navController()
             else:
                 u1,u2,u3,u4 = self.MPC()
             
             
             
-            if not self.testMPC:
+            if not self.testMPC and not self.usingBetaFlight:
                 Cf = 1.42e-6
                 Ct = 2.84e-7
 
@@ -407,7 +560,8 @@ class Controller(Node):
 
                 max_motor_speed = 4631.0# 1755*25.2
                 
-                if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
+                
+                if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
                     u1 = 0.0
                 else:
                     u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
@@ -434,9 +588,39 @@ class Controller(Node):
                 u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
                 u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
                 u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
+            print(f"x: {x}, y: {y}, z: {z}, r: {r}, p: {p}, yaw: {yaw}, vx: {vx}, vy: {vy}")
             
             u = [u1,u2,u3,u4]
-            msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
+
+            '''Cf = 1.42e-6
+            Ct = 2.84e-7
+            l_x = 0.0865
+            l_y = 0.073
+
+            max_motor_speed = 4631.0
+            maxForce = (Cf*max_motor_speed**2) 
+            maxTorque = (Ct*max_motor_speed**2) 
+        
+            #wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
+            #wy = (( wy[0]))/100.0
+            #wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
+            #wx = (( wx[0]))/100.0
+
+            state = self.current_pose
+            xd, yd, zd = self.setpoint
+            yawd = 0.0
+            dt = self.dt
+            x, y, z = state[0:3]
+            r, p, yaw = self.quaternion_to_euler(*state[3:7])
+            vx, vy, vz = state[7:10]
+            vr, vp, vyaw = state[10:13]
+            
+            penState = self.currentPenPose
+            a, b, eta = penState[0:3]
+            a_dot, b_dot, eta_dot = penState[7:10]
+            '''
+            
+            msg = ELRSCommand(armed=True, channel_0=round(u[0], 8), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
             self.cmd_publisher_.publish(msg)
             
         else:         
@@ -510,7 +694,7 @@ class Controller(Node):
     def plotSystemResponse(self):
         time = self.timePoints
         if self.testInvPen:
-            figure1, ax1 = plt.subplots(2,1)
+            figure1, ax1 = plt.subplots(3,1)
             ax1[0].plot(time, self.aError)
             ax1[0].set_title('a position error over time')
             ax1[0].set_ylabel('a position error')
@@ -520,7 +704,27 @@ class Controller(Node):
             ax1[1].set_title('b position error over time')
             ax1[1].set_ylabel('b position error')
             ax1[1].set_xlabel('time (s)')
+
+            ax1[2].plot(time, self.wxOutput)
+            ax1[2].set_title('wx output over time')
+            ax1[2].set_ylabel('wx output')
+            ax1[2].set_xlabel('time (s)')
             plt.tight_layout()
+
+            figure3, ax3 = plt.subplots(2,1)
+            ax3[0].plot(time, self.b_dotError)
+            ax3[0].set_title('b_dot error over time')
+            ax3[0].set_ylabel('b_dot error')
+            ax3[0].set_xlabel('time (s)')
+
+            ax3[1].plot(time, self.y_dotError)
+            ax3[1].set_title('y_dot error over time')
+            ax3[1].set_ylabel('y_dot error')
+            ax3[1].set_xlabel('time (s)')
+
+            
+            plt.tight_layout()
+
 
         figure2, ax2 = plt.subplots(4,1)
         ax2[0].plot(time, self.xError)

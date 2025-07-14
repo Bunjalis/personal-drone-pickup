@@ -23,6 +23,12 @@ def generate_launch_description():
             name='pose_bridgey2',
             arguments=['/model/x3/pose@geometry_msgs/msg/PoseArray[ignition.msgs.Pose_V']
         ),
+        Node(
+            package='ros_gz_bridge',
+            executable='parameter_bridge',
+            name='pose_bridgey3',
+            arguments=['/model/pendulum/pose@geometry_msgs/msg/PoseArray[ignition.msgs.Pose_V']
+        ),
         # Motion Capture Emulator
         Node(
             package='simulation_communication',
@@ -34,6 +40,11 @@ def generate_launch_description():
             package='simulation_communication',
             executable='betaflight_communication',
             name='betaflight_communication'
+        ),
+        Node(
+            package='simulation_communication',
+            executable='pendulum_state_listener',
+            name='pendulum_state_listener'       
         ),
     ])
 

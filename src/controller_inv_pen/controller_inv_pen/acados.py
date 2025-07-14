@@ -42,7 +42,7 @@ def generate_ocp_controller(dynamics=None):
 
     # Update the cost matrices to match the new state dimension
 
-    Q_mat = 2 * np.diag([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0, 0.0, 0.0, 0.0, 0.0, 1.0,1.0,1.0,1.0])
+    Q_mat = 2 * np.diag([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0, 10.0,10.0,10.0,10.0, 0.0, 0.0, 0.0, 0.0])
     R_mat = 2 * np.diag([1.0, 1.0, 1.0, 1.0])
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
     ocp.cost.W_e = Q_mat[:nx, :nx]  # Terminal cost only considers the state
