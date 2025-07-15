@@ -53,7 +53,7 @@ class QuadDynamics:
         '''
 
         #''' Simulated tiny trainer parameters
-        self.mass = 0.6
+        self.mass = 0.6605
         self.x_l = 0.173/2
         self.y_l = 0.146/2
         self.J = np.array([0.001799424313, 0.001522934832, 0.002923509135])

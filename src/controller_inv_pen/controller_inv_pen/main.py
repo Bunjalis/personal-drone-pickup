@@ -54,11 +54,11 @@ class Controller(Node):
         self.timePoints = []
         self.t = 0
 
-        self.testInvPen = False 
-        self.testMPC = True
+        self.testInvPen = True
+        self.testMPC = False
         self.usingBetaFlight = False
-        self.pen_length = 0.6
-        self.pen_mass =  0.000001
+        self.pen_length = 0.4
+        self.pen_mass =  0.105
         self.a = 0.0
         self.b = 0.0
         self.a_dot = 0.0
@@ -92,7 +92,7 @@ class Controller(Node):
         self.timer = self.create_timer(self.dt, self.control_loop)
 
         # Get both the OCP solver and the integrator
-        self.ocp, self.sim_integrator = generate_ocp_controller()
+        self.ocp, self.sim_integrator = None, None #generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         # Original trajectories
@@ -200,7 +200,7 @@ class Controller(Node):
         kpp, kip, kdp = 2.4, 0.48, 3.09
         kpr, kir, kdr = 2.1, 0.84, 1.3125'''
 
-        force = (self.g +kpz*(zd-z) + kdz*(0-vz))*self.M*(cos(r)*cos(p))
+        force = (self.g +kpz*(zd-z) + kdz*(0-vz))*(self.M)*(cos(r)*cos(p))
         Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx
         Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy 
         rd = (Ux*sin(yaw) - Uy*cos(yaw)) #*self.M/force
@@ -299,7 +299,7 @@ class Controller(Node):
         
         kpyaw, kiyaw, kdyaw = 60.0, 10.0, 30.0 #6.0, 1.5, 1.75 # #0.804, 0.29236, 0.55275
         kpz, kiz, kdz = 15.0, 10.0, 10.0 
-        force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt )*(self.M + self.pen_mass)*(cos(r)*cos(p))
+        force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt )*(self.M)*(cos(r)*cos(p))
         yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
         pTau = -1*np.array([-0.0034, 1.9617,   -7.2211,   -0.0134,    0.2896,   -1.4960])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
         rTau = -1*np.array([0.0043,    2.4439,    8.9958,    0.0167,    0.3607,    1.8637])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
@@ -307,10 +307,7 @@ class Controller(Node):
         pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
         rTau = -1*np.array([ 0.0040,0.2926,1.1953,0.0079, 0.0314,0.2086])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
 
-        pTau = -1*np.array([-0.0004,   0.1719,   -0.6198,   -0.0011,    0.0238,   -0.1134])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        rTau = -1*np.array([0.0137,2.1804,9.1509,0.0460, 0.0387,1.2022])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
-        pTau = pTau[0]
-        rTau = rTau[0]
+        
     
 
         kpz, kiz, kdz = 15.0, 10.0, 10.0 
@@ -330,7 +327,7 @@ class Controller(Node):
         pd = (Ux*cos(yaw) + Uy*sin(yaw)) #*self.M/force
         #pd = -1*np.array([-37.4179,    -0.2181,   -11.6594,    -0.6523])@np.array([[a], [x-xd], [a_dot], [vx]])
         #pd = pd[0]
-        self.rollError.append(self.prev_rollError-r)
+        #self.rollError.append(self.prev_rollError-r)
         self.prev_rollError = rd
         #pd = 0
         #rd = 0
@@ -344,6 +341,11 @@ class Controller(Node):
         pTau = -1*np.array([   -0.0180,    0.5027,   -2.9400,   -0.0373,    0.0375,   -0.4895])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
         pTau = pTau[0]
         rTau=rTau[0]
+        pTau = -1*np.array([-0.0005,    0.3103,   -1.6519,   -0.0015,    0.0385,   -0.2631])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
+        rTau = -1*np.array([ 0.0006,    0.3865,    2.0579,    0.0019,    0.0480,    0.3278])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
+        
+        pTau = pTau[0]
+        rTau = rTau[0]
         self.wxOutput.append(rTau)
         return force, rTau, pTau, yawTau
 
@@ -546,7 +548,7 @@ class Controller(Node):
 
             elif not self.testMPC and not self.testInvPen:
                 force, rTau, pTau, yawTau = self.navController()
-            else:
+            if self.testMPC:
                 u1,u2,u3,u4 = self.MPC()
             
             
@@ -561,7 +563,7 @@ class Controller(Node):
                 max_motor_speed = 4631.0# 1755*25.2
                 
                 
-                if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
+                if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
                     u1 = 0.0
                 else:
                     u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
