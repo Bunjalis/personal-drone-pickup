@@ -10,11 +10,7 @@
         "np": 1,
         "np_global": 0,
         "nu": 4,
-<<<<<<< HEAD
         "nx": 17,
-=======
-        "nx": 13,
->>>>>>> c43d13a3888108824f0e4de729e3d796451b5fb4
         "nz": 0
     },
     "external_function_files_model": [
@@ -50,15 +46,9 @@
         "cost_r_in_psi_expr": [],
         "cost_r_in_psi_expr_0": [],
         "cost_r_in_psi_expr_e": [],
-<<<<<<< HEAD
         "cost_y_expr": "vertcat(p, a, v, r, u, u_dot)",
         "cost_y_expr_0": "vertcat(p, a, v, r, u, u_dot)",
         "cost_y_expr_e": "vertcat(p, a, v, r, u)",
-=======
-        "cost_y_expr": "vertcat(p, a, v, r, throttle, roll_rate_cmd, pitch_rate_cmd, yaw_rate_cmd)",
-        "cost_y_expr_0": "vertcat(p, a, v, r, throttle, roll_rate_cmd, pitch_rate_cmd, yaw_rate_cmd)",
-        "cost_y_expr_e": "vertcat(p, a, v, r)",
->>>>>>> c43d13a3888108824f0e4de729e3d796451b5fb4
         "disc_dyn_expr": [],
         "dyn_disc_fun": null,
         "dyn_disc_fun_jac": null,
@@ -68,13 +58,8 @@
         "dyn_impl_dae_fun": null,
         "dyn_impl_dae_fun_jac": null,
         "dyn_impl_dae_jac": null,
-<<<<<<< HEAD
         "f_expl_expr": "@1=a[2], @2=a[3], @3=a[1], @4=a[0], vertcat(v, (0.5*mac(horzcat(horzcat(0, (-r[0]), (-r[1]), (-r[2]))', horzcat(r[0], 0, r[2], (-r[1]))', horzcat(r[1], (-r[2]), 0, r[0])', horzcat(r[2], r[1], (-r[0]), 0)')',a,zeros(4x1))), (mac(horzcat(horzcat((1-(2.*(sq(@1)+sq(@2)))), (2.*((@3*@1)-(@4*@2))), (2.*((@3*@2)+(@4*@1))))', horzcat((2.*((@3*@1)+(@4*@2))), (1-(2.*(sq(@3)+sq(@2)))), (2.*((@1*@2)-(@4*@3))))', horzcat((2.*((@3*@2)-(@4*@1))), (2.*((@1*@2)+(@4*@3))), (1-(2.*(sq(@3)+sq(@1)))))')',vertcat(0, 0, (kT*u[2])),zeros(3x1))-[0, 0, 9.81]), (14.2857*(vertcat((1.74533*u[0]), (1.74533*u[1]), (-(1.74533*u[3])))-r)), u_dot)",
         "f_impl_expr": "@1=a[2], @2=a[3], @3=a[1], @4=a[0], (vertcat(v, (0.5*mac(horzcat(horzcat(0, (-r[0]), (-r[1]), (-r[2]))', horzcat(r[0], 0, r[2], (-r[1]))', horzcat(r[1], (-r[2]), 0, r[0])', horzcat(r[2], r[1], (-r[0]), 0)')',a,zeros(4x1))), (mac(horzcat(horzcat((1-(2.*(sq(@1)+sq(@2)))), (2.*((@3*@1)-(@4*@2))), (2.*((@3*@2)+(@4*@1))))', horzcat((2.*((@3*@1)+(@4*@2))), (1-(2.*(sq(@3)+sq(@2)))), (2.*((@1*@2)-(@4*@3))))', horzcat((2.*((@3*@2)-(@4*@1))), (2.*((@1*@2)+(@4*@3))), (1-(2.*(sq(@3)+sq(@1)))))')',vertcat(0, 0, (kT*u[2])),zeros(3x1))-[0, 0, 9.81]), (14.2857*(vertcat((1.74533*u[0]), (1.74533*u[1]), (-(1.74533*u[3])))-r)), u_dot)-xdot)",
-=======
-        "f_expl_expr": "@1=a[2], @2=a[3], @3=a[1], @4=a[0], vertcat(v, (0.5*mac(horzcat(horzcat(0, (-r[0]), (-r[1]), (-r[2]))', horzcat(r[0], 0, r[2], (-r[1]))', horzcat(r[1], (-r[2]), 0, r[0])', horzcat(r[2], r[1], (-r[0]), 0)')',a,zeros(4x1))), (mac(horzcat(horzcat((1-(2.*(sq(@1)+sq(@2)))), (2.*((@3*@1)-(@4*@2))), (2.*((@3*@2)+(@4*@1))))', horzcat((2.*((@3*@1)+(@4*@2))), (1-(2.*(sq(@3)+sq(@2)))), (2.*((@1*@2)-(@4*@3))))', horzcat((2.*((@3*@2)-(@4*@1))), (2.*((@1*@2)+(@4*@3))), (1-(2.*(sq(@3)+sq(@1)))))')',(vertcat(0, 0, (40*pitch_rate_cmd))/0.7),zeros(3x1))-[0, 0, 9.81]), (14.2857*(vertcat((1.74533*throttle), (1.74533*roll_rate_cmd), (-(1.74533*yaw_rate_cmd)))-r)))",
-        "f_impl_expr": [],
->>>>>>> c43d13a3888108824f0e4de729e3d796451b5fb4
         "gnsf_nontrivial_f_LO": 1,
         "gnsf_purely_linear": 0,
         "name": "quad_dynamics",
@@ -84,11 +69,7 @@
         "t": [],
         "t0": null,
         "t_label": "t",
-<<<<<<< HEAD
         "u": "u_dot",
-=======
-        "u": "vertcat(throttle, roll_rate_cmd, pitch_rate_cmd, yaw_rate_cmd)",
->>>>>>> c43d13a3888108824f0e4de729e3d796451b5fb4
         "u_labels": null,
         "x": "vertcat(p, a, v, r, u)",
         "x_labels": null,

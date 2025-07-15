@@ -56,16 +56,35 @@ class Controller(Node):
             
 
 
-        self.logger_csv_file = open('logger.csv', mode='w', newline='')
-        self.logger_csv_writer = csv.writer(self.logger_csv_file)
+        # Create a folder to save all CSV files
+        self.output_folder = 'output_data'
+        os.makedirs(self.output_folder, exist_ok=True)
 
-        self.logger_csv_writer.writerow([
-                'm_px', 'm_py', 'm_pz', 'm_rw', 'm_rx', 'm_ry', 'm_rz',
-                'm_vx', 'm_vy', 'm_vz', 'm_wx', 'm_wy', 'm_wz',
-                'o_px', 'o_py', 'o_pz', 'o_rw', 'o_rx', 'o_ry', 'o_rz',
-                'o_vx', 'o_vy', 'o_vz', 'o_wx', 'o_wy', 'o_wz',
-        ])
+        # Initialize CSV writers in the constructor
+        self.control_history_file = open(os.path.join(self.output_folder, 'control_history.csv'), mode='w', newline='')
+        self.control_history_writer = csv.writer(self.control_history_file)
 
+        self.observed_state_history_file = open(os.path.join(self.output_folder, 'observed_state_history.csv'), mode='w', newline='')
+        self.observed_state_history_writer = csv.writer(self.observed_state_history_file)
+
+        self.motion_capture_history_file = open(os.path.join(self.output_folder, 'motion_capture_history.csv'), mode='w', newline='')
+        self.motion_capture_history_writer = csv.writer(self.motion_capture_history_file)
+
+        self.parameter_estimation_history_file = open(os.path.join(self.output_folder, 'parameter_estimation_history.csv'), mode='w', newline='')
+        self.parameter_estimation_history_writer = csv.writer(self.parameter_estimation_history_file)
+
+        self.estimated_state_history_file = open(os.path.join(self.output_folder, 'estimated_state_history.csv'), mode='w', newline='')
+        self.estimated_state_history_writer = csv.writer(self.estimated_state_history_file)
+
+        self.delay_state_estimation_history_file = open(os.path.join(self.output_folder, 'delay_state_estimation_history.csv'), mode='w', newline='')
+        self.delay_state_estimation_history_writer = csv.writer(self.delay_state_estimation_history_file)
+
+        self.UKF_state_estimation_history_file = open(os.path.join(self.output_folder, 'UKF_state_estimation_history.csv'), mode='w', newline='')
+        self.UKF_state_estimation_history_writer = csv.writer(self.UKF_state_estimation_history_file)
+
+        self.trajectory_file = open(os.path.join(self.output_folder, 'trajectory.csv'), mode='w', newline='')
+        self.trajectory_writer = csv.writer(self.trajectory_file)
+        self.trajectory_writer.writerows(self.traj.T)  # Save trajectory as rows
 
         self.est_params = np.array([50.0])  # Initialize thrust ratio parameter to a reasonable value
 
@@ -89,7 +108,7 @@ class Controller(Node):
         self.R = np.diag([0.1]*13)  # Measurement noise for all 13 state elements
 
 
-        self.delay_states = 5
+        self.delay_states = 3
         self.delay_states_float = float(self.delay_states)
 
         
@@ -108,27 +127,44 @@ class Controller(Node):
         self.delay_state_estimation_history = []
         self.UKF_state_estimation_history = []
 
-    
+        # Initialize CSV writers in the constructor
+        self.control_history_file = open(os.path.join(self.output_folder, 'control_history.csv'), mode='w', newline='')
+        self.control_history_writer = csv.writer(self.control_history_file)
 
+        self.observed_state_history_file = open(os.path.join(self.output_folder, 'observed_state_history.csv'), mode='w', newline='')
+        self.observed_state_history_writer = csv.writer(self.observed_state_history_file)
 
+        self.motion_capture_history_file = open(os.path.join(self.output_folder, 'motion_capture_history.csv'), mode='w', newline='')
+        self.motion_capture_history_writer = csv.writer(self.motion_capture_history_file)
 
+        self.parameter_estimation_history_file = open(os.path.join(self.output_folder, 'parameter_estimation_history.csv'), mode='w', newline='')
+        self.parameter_estimation_history_writer = csv.writer(self.parameter_estimation_history_file)
 
+        self.estimated_state_history_file = open(os.path.join(self.output_folder, 'estimated_state_history.csv'), mode='w', newline='')
+        self.estimated_state_history_writer = csv.writer(self.estimated_state_history_file)
 
+        self.delay_state_estimation_history_file = open(os.path.join(self.output_folder, 'delay_state_estimation_history.csv'), mode='w', newline='')
+        self.delay_state_estimation_history_writer = csv.writer(self.delay_state_estimation_history_file)
 
+        self.UKF_state_estimation_history_file = open(os.path.join(self.output_folder, 'UKF_state_estimation_history.csv'), mode='w', newline='')
+        self.UKF_state_estimation_history_writer = csv.writer(self.UKF_state_estimation_history_file)
 
+        self.trajectory_file = open(os.path.join(self.output_folder, 'trajectory.csv'), mode='w', newline='')
+        self.trajectory_writer = csv.writer(self.trajectory_file)
+        self.trajectory_writer.writerows(self.traj.T)  # Save trajectory as rows
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
         self.motion_capture_pose = np.round(np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
-        ]), 3)
+        ]), 3) #motion_capture_pose
 
 
     def orb_slam_state_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
         self.current_pose = np.round(np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
-        ]), 3)
+        ]), 3) #orb_slam_pose
 
 
     def delay_estimation_timer(self):
@@ -171,10 +207,10 @@ class Controller(Node):
                 optimal_delay = delay
 
         # Apply a low-pass filter to smooth the delay value
-        alpha = 0.05  # Reduced low-pass filter coefficient for slower updates
+        alpha = 0.01  # Reduced low-pass filter coefficient for slower updates
         #self.delay_states_float = getattr(self, 'delay_states_float', float(self.delay_states))  # Initialize if not present
         self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
-        self.delay_states = round(self.delay_states_float) + 1
+        self.delay_states = round(self.delay_states_float)
 
         #print(f"Updated delay_states to {self.delay_states} with minimum average position error {round(min_error, 3)}")
         #print("Error latencies:", error_latencies)
@@ -415,6 +451,32 @@ class Controller(Node):
         self.on_close()
 
     def on_close(self):
+        # Check if on_close has already been called
+        if getattr(self, 'on_close_called', False):
+            return
+
+        self.on_close_called = True  # Set the flag to True
+
+        # Save data to files at the end
+        self.control_history_writer.writerows(self.control_history)
+        self.observed_state_history_writer.writerows(self.observed_state_history)
+        self.motion_capture_history_writer.writerows(self.motion_capture_history)
+        self.parameter_estimation_history_writer.writerows(self.parameter_estimation_history)
+        self.estimated_state_history_writer.writerows(self.estimated_state_history)
+        self.delay_state_estimation_history_writer.writerows([[d] for d in self.delay_state_estimation_history])
+        self.UKF_state_estimation_history_writer.writerows(self.UKF_state_estimation_history)
+
+        # Close all files
+        self.control_history_file.close()
+        self.observed_state_history_file.close()
+        self.motion_capture_history_file.close()
+        self.parameter_estimation_history_file.close()
+        self.estimated_state_history_file.close()
+        self.delay_state_estimation_history_file.close()
+        self.UKF_state_estimation_history_file.close()
+        self.trajectory_file.close()
+
+        # Plot system response and shutdown
         self.plotSystemResponse()
         self.gui.quit()
         rclpy.shutdown()
