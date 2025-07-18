@@ -6,11 +6,16 @@ from geometry_msgs.msg import PoseStamped, TwistStamped, PoseArray, Pose, Twist
 from sensor_msgs.msg import Imu
 from tf_transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_matrix
 import numpy as np
+from scipy.spatial.transform import Rotation as R
+from tf_transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_matrix
+import math 
 class pendulumStateListener(Node):
     def __init__(self):
         super().__init__('pendulum_state_listener')
         #self.subscription = self.create_subscription(Imu,'/imu',self.listener_callback,10)
+        
         self.worldPoseSub_ = self.create_subscription(PoseArray, '/world/quadcopter/dynamic_pose/info', self.listener_callback, 10)
+        #self.worldPoseSub_ = self.create_subscription(PoseArray, '/model/pendulum/pose', self.listener_callback, 10)
         #self.worldPoseSub_ = self.create_subscription(PoseArray, '/model/x3/pose', self.listener_callback, 10)
         #self.subscription = self.create_subscription(Imu,'/imu',self.listener_callback,10)
         self.publisher = self.create_publisher(InvertedPendulumStates, '/pendulum_state_publisher', 10)
@@ -29,6 +34,25 @@ class pendulumStateListener(Node):
             return -x, -y, -z, -w
         return x, y, z, w
 
+    def quaternion_to_euler(self, w, x, y, z):
+        # Roll (x-axis rotation)
+        t0 = +2.0 * (w * x + y * z)
+        t1 = +1.0 - 2.0 * (x * x + y * y)
+        roll = math.atan2(t0, t1)
+
+        # Pitch (y-axis rotation)
+        t2 = +2.0 * (w * y - z * x)
+        t2 = +1.0 if t2 > +1.0 else t2
+        t2 = -1.0 if t2 < -1.0 else t2
+        pitch = math.asin(t2)
+
+        # Yaw (z-axis rotation)
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (y * y + z * z)
+        yaw = math.atan2(t3, t4)
+
+        return roll, pitch, yaw
+
     def listener_callback(self, msg):
         print("START")
         # Extract current pose and time
@@ -37,6 +61,9 @@ class pendulumStateListener(Node):
         #if msg[-1]["name"] != "X3/pendulum":
         #    raise Exception("Pendulum link not found")
 
+        currentQuad_position = msg.poses[0].position
+        currentQuad_orientation = msg.poses[0].orientation
+        #base_orientation = msg.poses[-1].orientation
         current_position = msg.poses[-1].position
         current_orientation = msg.poses[-1].orientation
         # pendulum index is 5
@@ -47,6 +74,18 @@ class pendulumStateListener(Node):
         current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w = self.normalize_quaternion_positive_w(
             current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w
         )
+        currentQuad_orientation.x, currentQuad_orientation.y, currentQuad_orientation.z, currentQuad_orientation.w = self.normalize_quaternion_positive_w(
+            currentQuad_orientation.x, currentQuad_orientation.y, currentQuad_orientation.z, currentQuad_orientation.w
+        )
+        
+
+        r, p, yaw = self.quaternion_to_euler(currentQuad_orientation.w, currentQuad_orientation.x, currentQuad_orientation.y, currentQuad_orientation.z)
+        rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
+        rotationMatrix = rotate.as_matrix()
+       
+        [[a], [b], [eta]] = rotationMatrix@np.array([[current_position.x],[current_position.y],[current_position.z]])
+        #[[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])
+        current_position.x, current_position.y, current_position.z = a, b, eta
         
         current_time = msg.header.stamp
 
@@ -116,11 +155,11 @@ class pendulumStateListener(Node):
 
         '''current_orientation = msg.orientation
         angular_velocity = msg.angular_velocity
-        linear_acceleration = msg.linear_acceleration
+        linear_acceleration = msg.linear_acceleration'''
 
        
         # Ensure w is positive
-        current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w = self.normalize_quaternion_positive_w(
+        '''current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w = self.normalize_quaternion_positive_w(
             current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w
         )
         
@@ -175,7 +214,9 @@ def main(args=None):
     node.destroy_node()
     rclpy.shutdown()
 
-'''#!/usr/bin/env python3
+
+'''
+#!/usr/bin/env python3
 
 import numpy as np
 
@@ -196,12 +237,16 @@ import math
 import matplotlib.pyplot as plt
 from interfaces.msg import MotionCaptureState 
 from interfaces.msg import InvertedPendulumStates
+
+from scipy.spatial.transform import Rotation as R
+
 class pendulumStateListener(Node):
     def __init__(self):
         super().__init__('pendulum_state_listener')
         #self.worldPoseSub_ = self.create_subscription(PoseArray, '/model/pendulum/pose', self.worldPoseCallback, 10)
         #self.worldPoseSub_ = self.create_subscription(PoseArray, '/model/x3/pose', self.worldPoseCallback, 10)
-        self.worldPoseSub_ = self.create_subscription(PoseArray, '/world/quadcopter/dynamic_pose/info', self.listener_callback, 10)
+        #self.worldPoseSub_ = self.create_subscription(PoseArray, '/world/quadcopter/dynamic_pose/info', self.listener_callback, 10)
+        self.worldPoseSub_ = self.create_subscription(PoseArray, '/model/pendulum/pose', self.worldPoseCallback, 10)
         self.publisher = self.create_publisher(InvertedPendulumStates,'/pendulum_state_publisher', 10)
         #self.pose_publisher = self.create_publisher(PoseStamped, '/rviz_pose', 10)
 
@@ -218,6 +263,25 @@ class pendulumStateListener(Node):
             return -x, -y, -z, -w
         return x, y, z, w
 
+    def quaternion_to_euler(self, w, x, y, z):
+        # Roll (x-axis rotation)
+        t0 = +2.0 * (w * x + y * z)
+        t1 = +1.0 - 2.0 * (x * x + y * y)
+        roll = math.atan2(t0, t1)
+
+        # Pitch (y-axis rotation)
+        t2 = +2.0 * (w * y - z * x)
+        t2 = +1.0 if t2 > +1.0 else t2
+        t2 = -1.0 if t2 < -1.0 else t2
+        pitch = math.asin(t2)
+
+        # Yaw (z-axis rotation)
+        t3 = +2.0 * (w * z + x * y)
+        t4 = +1.0 - 2.0 * (y * y + z * z)
+        yaw = math.atan2(t3, t4)
+
+        return roll, pitch, yaw
+
     def worldPoseCallback(self, msg):
         print("START")
         # Extract current pose and time # 9 for omnicopter, 5 for quadcopter
@@ -230,14 +294,27 @@ class pendulumStateListener(Node):
         #current_orientation = msg.poses[0].orientation
         #current_position = msg.poses[5].position
         #current_orientation = msg.poses[5].orientation
-        current_position = msg.poses[-1].position
-        current_orientation = msg.poses[-1].orientation
-       
+        #current_position = msg.poses[-1].position
+        #current_orientation = msg.poses[-1].orientation
+        current_position = msg.poses[0].position
+        current_orientation = msg.poses[0].orientation
+        base_orientation = msg.poses[-1].orientation
+        
         # Ensure w is positive
         current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w = self.normalize_quaternion_positive_w(
             current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w
         )
-        
+
+        base_orientation.x, base_orientation.y, base_orientation.z, base_orientation.w = self.normalize_quaternion_positive_w(
+            base_orientation.x, base_orientation.y, base_orientation.z, base_orientation.w
+        )
+        r, p, yaw = self.quaternion_to_euler(base_orientation.x, base_orientation.y, base_orientation.z, base_orientation.w)
+        rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
+        rotationMatrix = rotate.as_matrix()
+       
+        [[a], [b], [eta]] = rotationMatrix@np.array([[current_position.x],[current_position.y],[current_position.z]])
+        #[[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])
+        current_position.x, current_position.y, current_position.z = a, b, eta
         current_time = self.get_clock().now().to_msg()
 
         if self.last_pose is None:

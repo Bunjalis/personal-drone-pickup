@@ -14,6 +14,7 @@ from tf_transformations import euler_from_quaternion, quaternion_multiply, quate
 import time
 from .acados import generate_ocp_controller
 
+
 class Controller(Node):
     def __init__(self):
         super().__init__('controller')
@@ -21,11 +22,11 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
         self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
         self.current_pose = None
-        self.setpoint = np.array([0.0, 0.0, 0.4])
+        self.setpoint = np.array([1.0,1.0, 1.0])
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
-        self.control_frequency = 30.0
+        self.control_frequency = 300.0
         self.dt = 1.0 / self.control_frequency
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -49,26 +50,44 @@ class Controller(Node):
         self.pitchError = []
         self.yawError = []
         self.b_dotError = []
+        self.a_dotError = []
         self.y_dotError = []
         self.wxOutput = []
         self.timePoints = []
         self.t = 0
+        self.modelOutputA = []
+        self.modelOutputB = []
+        self.modelOutputAdot = []
+        self.modelOutputBdot = []
 
         self.testInvPen = True
         self.testMPC = False
-        self.usingBetaFlight = False
-        self.pen_length = 0.4
-        self.pen_mass =  0.105
+        self.usingBetaFlight = True
+        self.pen_length = 0.6
+        self.pen_mass =  0.01
         self.a = 0.0
         self.b = 0.0
         self.a_dot = 0.0
         self.b_dot = 0.0
         self.a_ddot = 0.0
         self.b_ddot = 0.0
-        self.eta = math.sqrt(self.pen_length**2 - self.a**2 -self.b**2)
+        self.eta = math.sqrt((self.pen_length/2)**2 - self.a**2 -self.b**2)
         self.bErrorSum = 0
         self.prev_bError = 0
         self.prev_rollError = 0
+
+        # controller 
+        self.last_a = 0.0
+        self.last_b = 0.0
+        self.last_eta = 0.3
+        #model 
+        self.a_prev = 0 #0.01
+        self.b_prev = -0.01
+        self.a_dotprev = 0.0
+        self.b_dotprev = 0.0
+        self.a_ddotprev = 0.0
+        self.b_ddotprev = 0.0
+
 
         self.vx_prev = 0.0
         self.vy_prev = 0.0
@@ -225,18 +244,24 @@ class Controller(Node):
         penState = self.currentPenPose
         a, b, eta = penState[0:3]
         a_dot, b_dot, eta_dot = penState[7:10]
-        rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
+        '''rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
         rotationMatrix = rotate.as_matrix()
-        print(rotationMatrix)
+        #print(rotationMatrix)
         [[a], [b], [eta]] = rotationMatrix@np.array([[a],[b],[eta]])
-        [[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])
+        [[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])'''
         #print(position)
-        print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
-        print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
+        #print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
+        #print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
         self.aError.append(a)
         self.bError.append(b)
         self.b_dotError.append(b_dot)
+        self.a_dotError.append(a_dot)
         self.y_dotError.append(vy)
+        aModel, bModel, a_dotModel, b_dotModel = self.computePenPosition()
+        self.modelOutputA.append(aModel)
+        self.modelOutputB.append(bModel)
+        self.modelOutputAdot.append(a_dotModel)
+        self.modelOutputBdot.append(b_dotModel)
         
          
         #pTau = -1*np.array([-0.1320,0.9669,-10.0866,-0.1314,0.0546,-1.2473])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
@@ -358,41 +383,108 @@ class Controller(Node):
         r, p, yaw = self.quaternion_to_euler(*state[3:7])
         vx, vy, vz = state[7:10]
         vr, vp, vyaw = state[10:13]
+        aModel, bModel, a_dotModel, b_dotModel = self.computePenPosition()
+        self.modelOutputA.append(aModel)
+        self.modelOutputB.append(bModel)
+        self.modelOutputAdot.append(a_dotModel)
+        self.modelOutputBdot.append(b_dotModel)
         
         penState = self.currentPenPose
         a, b, eta = penState[0:3]
         a_dot, b_dot, eta_dot = penState[7:10]
+        '''rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
+        rotationMatrix = rotate.as_matrix()
+        #print(rotationMatrix)
+        [[a], [b], [eta]] = rotationMatrix@np.array([[a],[b],[eta]])
+        a_dot, b_dot, eta_dot = (a-self.last_a)/dt, (b-self.last_b)/dt, (eta-self.last_eta)/dt
+        self.last_a, self.last_b, self.last_eta = a, b, eta'''
+        #[[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])
         print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
         #print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
         self.aError.append(a)
         self.bError.append(b)
         self.b_dotError.append(b_dot)
+        self.a_dotError.append(a_dot)
         self.y_dotError.append(vy)
-        #wy = -1*np.array([-664.5726,   -0.8313,  106.0000,  -69.9895,   -2.5022])@np.array([[a], [x-xd], [p], [a_dot], [vx]])
-        #wy = (( wy[0]))/100.0
-        #wx = -1000*np.array([ 3.050,    0.014,    0.40,    0.441,    0.0912])@np.array([[b], [y-yd], [r], [b_dot], [vy]]) # roll control
-        #wx = -1000*np.array([3.250,    0.014,    0.0,    0.05,    0.0912])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
-        #wx = -1000*np.array([7.0,    0.0,    0.125,    0.5,    0.0])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
-        wx = -1000*np.array([7.624,    0.001,    0.1,    0.672,    0.023])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
-        wx = -1000*np.array([1.824,    0.001,    0.1,    0.772,    0.023])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
-        wx = -1000*np.array([2.724,    0.001,    0.3,    1.372,    0.023])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
-        #wx = -1*np.array([1871.4617,    0.0125,   125.5217,  512.2909,    0.2571])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
-        wx = -1000*np.array([4.2515,    0.0400,    0.3023,    1.5277,    0.1076])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
+        
+        wy = -1*np.array([ -78.1342,   -0.0648,   13.2000,  -11.4676,   -0.2087])@np.array([[a], [x-xd], [p], [a_dot], [vx]])
+        wy = (( wy[0]))/100.0
+        
+        wx = -1*np.array([ 269.4669,   12.5000,   24.1688,   38.4820,    8.7607])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
         wx = (( wx[0]))/100.0
-
-        rd = -1*np.array([33.0, 0.10104,    6.5,    0.200628])@np.array([[b], [y-yd], [b_dot], [vy]])
-        wx = -125.36*(r-rd[0])/100.0
-        #wx = -1*np.array([269.1772,   12.5000,   104.1573,   38.4470,    8.7540])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
-        #wx = (( wx[0]))/100.0
-        #wx = -1*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]])
-        #wx = (( wx[0]))/100.0
+      
         wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
         wy = (( wy[0]))/100.0
-        #wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
+
+        wx = -1*np.array([-12.6320, 125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]])
+        wx = (( wx[0]))/100.0
+
+        '''wy = -1*np.array([-31.1105,   -0.0351,    8.0000,   -6.1191,   -0.1099])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0'''
+        #wx = -1*np.array([ 369.2509,   20.0000,   20.6635,   89.5978,    7.8358])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
         #wx = (( wx[0]))/100.0
 
+    
+        #wx = -1*np.array([44.5184,    0.1,    8.0000,    1.7335,    0.2])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        #wx = (( wx[0]))/100.0
+        #wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
+        #wx = (( wx[0]))/100.0
+        wy = -1*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = (( wy[0]))/10.0
+        #wx = -10*np.array([122.7619,    2.6497,   121.0000,   81.4809,    3.3667])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        #wx = (( wx[0]))/100.0
 
+        '''penWx, penWy, penWz = self.currentPenPose[10:13]
+        print(f"penWx: {penWx}, penWy: {penWy}, penWz: {penWz}")
+        alpha = math.asin(a/(self.pen_length/2))
+        gamma = p + alpha
+        gammaDot = vp + penWy'''
+        #self.bError.append(gamma)
+        #self.b_dotError.append(gammaDot)
+        wy = -25*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -25*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        wx = wx[0]/100.0
 
+        wy = -31*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -31*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        wx = wx[0]/100.0
+
+        wy = -1000*np.array([-1.5,    -0.0054,    0.3560,    -0.2697,    -0.0118])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -1000*np.array([1.5,    0.0054,    0.3560,    0.2697,    0.0118])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        wx = wx[0]/100.0
+
+        wy = -1000*np.array([-1.5,    -0.0037665,    0.359,    -0.2697,    -0.009])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -1000*np.array([1.5,    0.0037665,    0.359,    0.2697,    0.009])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        wx = wx[0]/100.0
+
+        wy = -32*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -32*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        wx = wx[0]/100.0
+
+        wy = -33*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -33*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        wx = wx[0]/100.0
+
+        '''wy = -1000*np.array([-1.4674,    -0.0079,    0.2912,    -0.2601,    -0.0154])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -1000*np.array([1.4674,    0.0079,    0.2912,    0.2601,    0.0154])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        wx = wx[0]/100.0'''
+
+        '''wy = -1*np.array([-485.0286,    -1.2257,  116.0100,   -86.6516,    -2.9883])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -1*np.array([485.0286,    1.2257,  116.0100,   86.6516,    2.9883])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        wx = wx[0]/100.0'''
+
+        #wy = -1*np.array([-515.1772,    -1.3914,  116.3800,   -91.8044,    -3.7738])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        #wy = (( wy[0]))/100.0
+        #wx = -1*np.array([515.1772,    1.3914,  116.3800,   91.8044,    3.7738])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        #wx = wx[0]/100.0
         
         Cf = 1.42e-6
         Ct = 2.84e-7
@@ -404,7 +496,7 @@ class Controller(Node):
         maxTorque = (Ct*max_motor_speed**2)
         kpz, kiz, kdz = 15.0, 10.0, 10.0 
         dt = self.dt
-        force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M
+        force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.055) #*self.M
         
         throttle = 2*(force)/(maxForce) - 1
         if throttle < -1:
@@ -415,6 +507,7 @@ class Controller(Node):
         wz =  -0.5*(yawd-yaw)
         print(f"force: {force}, r: {wx}, p: {wy}, yaw: {wz}")
         self.wxOutput.append(wx)
+        #wx, wy, throttle, wz = 0.0, 0.0, -1.0, 0.0
         u = [wx, wy, throttle, wz]
         return u
 
@@ -593,7 +686,7 @@ class Controller(Node):
             print(f"x: {x}, y: {y}, z: {z}, r: {r}, p: {p}, yaw: {yaw}, vx: {vx}, vy: {vy}")
             
             u = [u1,u2,u3,u4]
-
+            #u = [0.0,0.0,0.0,0.0]
             '''Cf = 1.42e-6
             Ct = 2.84e-7
             l_x = 0.0865
@@ -632,8 +725,8 @@ class Controller(Node):
         print(f"control output {msg.channel_0}, {msg.channel_1}, {msg.channel_2}, {msg.channel_3}")
 
     def computePenPosition(self):
-        dt = self.dt
-        L= self.pen_length
+        '''dt = self.dt
+        L= self.pen_length/2
         state = self.current_pose
         
         roll, pitch, yaw = self.quaternion_to_euler(*state[3:7])
@@ -641,13 +734,21 @@ class Controller(Node):
         vx, vy, vz = state[7:10]
         vr, vp, vyaw = state[10:13]
 
-        eta = self.eta
-        r = self.a
-        s=self.b
-        r_dot = self.a_dot
-        s_dot = self.b_dot
-        s_ddot = self.b_ddot
-        r_ddot = self.a_ddot
+        penState = self.currentPenPose
+        a, b, eta = penState[0:3]
+        a_dot, b_dot, eta_dot = penState[7:10]
+        rotate = R.from_euler('zyx', [yaw, pitch, roll], degrees=False)
+        rotationMatrix = rotate.as_matrix()
+        [[a], [b], [eta]] = rotationMatrix@np.array([[a],[b],[eta]])
+        [[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])
+
+      
+        r = a
+        s= b
+        r_dot = a_dot
+        s_dot = b_dot
+        s_ddot = (b_dot - self.b_dotprev)/dt
+        r_ddot = (a_dot - self.a_dotprev)/dt
         fp1 = 3*r*eta*self.g/(4*(L**2-s**2)) + ((r**3)*(s_dot**2 + s*s_ddot) - 2*r**2*s*r_dot*s_dot)/((L**2 -s**2)*eta**2) + (r*(-(L**2)*s*s_ddot + s_ddot*s**3 + (s**2)*(r_dot**2) -(L**2)*(r_dot**2)-(L**2)*(s_dot**2))/((L**2-s**2)*eta**2))
         fp2 = 3*s*eta*self.g/(4*(L**2-r**2)) + ((s**3)*(r_dot**2 + r*r_ddot) - 2*s**2*r*s_dot*r_dot)/((L**2 -r**2)*eta**2) + (s*(-(L**2)*r*r_ddot + r_ddot*r**3 + (r**2)*(s_dot**2) -(L**2)*(s_dot**2)-(L**2)*(r_dot**2))/((L**2-r**2)*eta**2))
 
@@ -655,76 +756,137 @@ class Controller(Node):
         #zd_ddot = 4*(L**2-r**2)*(bd_ddot - fp2)*(1/(3*(s+1e-3)*eta))
         
         x_ddot, y_ddot, z_ddot = (vx-self.vx_prev)/dt, (vy-self.vy_prev)/dt, (vz-self.vz_prev)/dt
-        utz = self.prevForce
-
-        accel_x = (utz / (self.M + self.pen_mass)) * (cos(roll) * sin(pitch) * cos(yaw) + sin(roll) * sin(yaw))
-        accel_y = (utz / (self.M + self.pen_mass)) * (cos(roll) * sin(pitch) * sin(yaw) - sin(roll) * cos(yaw))
-        accel_z = (utz / (self.M + self.pen_mass)) * (cos(roll) * cos(pitch)) - self.g
-        #print(f"ax: {accel_x}, ay: {accel_y}, az: {accel_z}")
-        #print(f"xd: {x_ddot}, yd: {y_ddot}, zd: {z_ddot}")
-        self.vx_approx += accel_x*dt
-        self.vy_approx += accel_y*dt
-        self.vz_approx += accel_z*dt
-        #print(f"ax: {vx}, ay: {vy}, az: {vz}")
-        #print(f"xd: {(x-self.x_prev)/dt}, yd: {(y-self.y_prev)/dt}, zd: {(z-self.z_prev)/dt}")
-        #print(f"x: {self.vx_approx}, y: {self.vy_approx}, z: {self.vz_approx}")
-        #x_ddot, y_ddot, z_ddot = accel_x, accel_y, accel_z
         r_ddot = x_ddot/(-4*(L**2-s**2)/(3*eta**2)) + (3*r*eta*z_ddot/(4*(L**2-s**2))) + fp1 
         s_ddot  = y_ddot/(-4*(L**2-r**2)/(3*eta**2)) + (3*s*eta*z_ddot/(4*(L**2-r**2)))  +fp2 
 
+        r_ddot = r*self.g/L- pitch*self.g
+        s_ddot = s*self.g/L+ roll*self.g
+        a_dot += r_ddot*dt 
+        b_dot += s_ddot*dt
+        a += a_dot*dt
+        b += b_dot*dt 
 
-
-        self.a_ddot = r_ddot
-        self.b_ddot = s_ddot 
-        self.a_dot += self.a_ddot*self.dt 
-        self.b_dot += self.b_ddot*self.dt
-        self.a += self.a_dot*self.dt
-        self.b += self.b_dot*self.dt
-        if L**2 - self.a**2 - self.b**2 <= 0:
-            self.eta = 1e-02
-            self.b = 0.0
-            '''if self.a < 0:
-                self.a = -L
-            else:
-                self.a = L'''
-        else:
-            self.eta = (L**2 - self.a**2 - self.b**2)**(1/2)
+        self.b_dotprev = b_dot 
+        self.a_dotprev = a_dot 
         self.vx_prev, self.vy_prev, self.vz_prev = vx, vy, vz
         self.x_prev, self.y_prev, self.z_prev = x, y, z
-        return self.a,self.b,self.a_dot,self.b_dot 
+        print(f"model states | a: {a}, b: {b}, a_dot: {a_dot}, b_dot: {b_dot}")'''
+
+
+        dt = self.dt
+        L= self.pen_length/2
+        state = self.current_pose
+        
+        roll, pitch, yaw = self.quaternion_to_euler(*state[3:7])
+        x, y, z = state[0:3]
+        vx, vy, vz = state[7:10]
+        vr, vp, vyaw = state[10:13]
+
+        '''penState = self.currentPenPose
+        a, b, eta = penState[0:3]
+        a_dot, b_dot, eta_dot = penState[7:10]
+        rotate = R.from_euler('zyx', [yaw, pitch, roll], degrees=False)
+        rotationMatrix = rotate.as_matrix()
+        [[a], [b], [eta]] = rotationMatrix@np.array([[a],[b],[eta]])
+        [[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])'''
+
+      
+        r =self.a_prev
+        s= self.b_prev
+        eta = (L**2 - r**2 - s**2)**(1/2)
+        r_dot = self.a_dotprev
+        s_dot = self.b_dotprev
+        s_ddot = self.a_ddotprev #(b_dot - self.b_dotprev)/dt
+        r_ddot =self.b_ddotprev #(a_dot - self.a_dotprev)/dt
+        
+        g = 9.81
+        '''fp1 = 3*r*eta*g/(4*(L**2-s**2)) + ((r**3)*(s_dot**2 + s*s_ddot) - 2*r**2*s*r_dot*s_dot)/((L**2 -s**2)*eta**2) + (r*(-(L**2)*s*s_ddot + s_ddot*s**3 + (s**2)*(r_dot**2) -(L**2)*(r_dot**2)-(L**2)*(s_dot**2))/((L**2-s**2)*eta**2))
+        fp2 = 3*s*eta*g/(4*(L**2-r**2)) + ((s**3)*(r_dot**2 + r*r_ddot) - 2*s**2*r*s_dot*r_dot)/((L**2 -r**2)*eta**2) + (s*(-(L**2)*r*r_ddot + r_ddot*r**3 + (r**2)*(s_dot**2) -(L**2)*(s_dot**2)-(L**2)*(r_dot**2))/((L**2-r**2)*eta**2))
+
+        
+        x_ddot, y_ddot, z_ddot = (vx-self.vx_prev)/dt, (vy-self.vy_prev)/dt, (vz-self.vz_prev)/dt
+        r_ddot = x_ddot/(-4*(L**2-s**2)/(3*eta**2)) + (3*r*eta*z_ddot/(4*(L**2-s**2))) + fp1 
+        s_ddot  = y_ddot/(-4*(L**2-r**2)/(3*eta**2)) + (3*s*eta*z_ddot/(4*(L**2-r**2)))  +fp2'''
+
+        g = 9.81
+        x_ddot, y_ddot, z_ddot = (vx-self.vx_prev)/dt, (vy-self.vy_prev)/dt, (vz-self.vz_prev)/dt
+        self.a_ddotprev = 1/((L**2 -s**2)*eta**2)*(-(r**4)*x_ddot - ((L**2 - s**2)**2)*x_ddot - (2*r**2)*(s*r_dot*s_dot + (-L**2 + s**2)*x_ddot) + (r**3)*(s_dot**2 + s*s_ddot-eta*(g+z_ddot))+r*((-L**2)*s*s_ddot + s_ddot*s**3 + (s**2)*(r_dot**2-eta*(g+z_ddot))+(L**2)*(-r_dot**2 -s_dot**2 + eta*(g + z_ddot))))
+        self.b_ddotprev = 1/((L**2 -r**2)*eta**2)*(-(s**4)*y_ddot - ((L**2 - r**2)**2)*y_ddot - (2*s**2)*(r*s_dot*r_dot + (-L**2 + r**2)*y_ddot) + (s**3)*(r_dot**2 + r*r_ddot-eta*(g+z_ddot))+s*((-L**2)*r*r_ddot + r_ddot*r**3 + (r**2)*(s_dot**2-eta*(g+z_ddot))+(L**2)*(-s_dot**2 -r_dot**2 + eta*(g + z_ddot))))
+        
+        
+       
+        #r_ddot =(r*g/L - pitch*g)
+        #s_ddot = (s*g/L + roll*g)
+        #self.a_ddotprev = r_ddot
+        #self.b_ddotprev = s_ddot
+        self.a_dotprev += self.a_ddotprev*dt #r_ddot*dt 
+        self.b_dotprev += self.b_ddotprev*dt #s_ddot*dt
+        self.a_prev += self.a_dotprev*dt
+        self.b_prev += self.b_dotprev*dt 
+        self.vx_prev, self.vy_prev, self.vz_prev = vx, vy, vz
+        self.x_prev, self.y_prev, self.z_prev = x, y, z
+
+        print(f"model states | a: {self.a_prev}, b: {self.b_prev}, a_dot: {self.a_dotprev}, b_dot: {self.b_dotprev}")
+        return self.a_prev, self.b_prev, self.a_dotprev, self.b_dotprev
 
     def plotSystemResponse(self):
         time = self.timePoints
         if self.testInvPen:
             figure1, ax1 = plt.subplots(3,1)
-            ax1[0].plot(time, self.aError)
-            ax1[0].set_title('a position error over time')
-            ax1[0].set_ylabel('a position error')
+  
+            #ax1[0].plot(time, self.aError, label="a")
+            ax1[0].plot(time, self.bError, label="b")
+            ax1[0].set_title('a and b  over time')
+            ax1[0].set_ylabel('a and b')
             ax1[0].set_xlabel('time (s)')
+            ax1[0].legend('lower right')
 
-            ax1[1].plot(time, self.bError)
-            ax1[1].set_title('b position error over time')
-            ax1[1].set_ylabel('b position error')
+            #ax1[1].plot(time, self.a_dotError, label="a_dot")
+            ax1[1].plot(time, self.b_dotError, label="b_dot")
+            ax1[1].set_title('a_dot and b_dot over time')
+            ax1[1].set_ylabel('a_dot and b_dot')
             ax1[1].set_xlabel('time (s)')
-
+            ax1[1].legend('lower right')
+    
             ax1[2].plot(time, self.wxOutput)
             ax1[2].set_title('wx output over time')
             ax1[2].set_ylabel('wx output')
             ax1[2].set_xlabel('time (s)')
             plt.tight_layout()
 
-            figure3, ax3 = plt.subplots(2,1)
-            ax3[0].plot(time, self.b_dotError)
-            ax3[0].set_title('b_dot error over time')
-            ax3[0].set_ylabel('b_dot error')
-            ax3[0].set_xlabel('time (s)')
-
-            ax3[1].plot(time, self.y_dotError)
-            ax3[1].set_title('y_dot error over time')
-            ax3[1].set_ylabel('y_dot error')
-            ax3[1].set_xlabel('time (s)')
-
+            figure4, ax4 = plt.subplots(2,1)
+            #ax4[0].plot(time, self.bError, label="actual data")
             
+            #ax4[0].plot(time, self.modelOutputA, label="model data A")
+            ax4[0].plot(time, self.modelOutputB, label="model data B")
+            ax4[0].set_title('b model over time')
+            ax4[0].set_ylabel('b')
+            ax4[0].set_xlabel('time (s)')
+            #ax4[0].legend('lower right')
+
+            #ax4[1].plot(time, self.bError, label="actual data")
+            #ax4[1].plot(time, self.modelOutputAdot, label="model dataA")
+            ax4[1].plot(time, self.modelOutputBdot, label="model dataB")
+            
+            ax4[1].set_title('b_dot model over time')
+            ax4[1].set_ylabel('b_dot')
+            ax4[1].set_xlabel('time (s)')
+            ax4[1].legend('lower right')
+
+            '''figure6, ax6 = plt.subplots(2,1)
+            ax6[0].plot(time, self.a_dotError, label="actual data")
+            ax6[0].plot(time, self.modelOutputAdot, label="model data")
+            ax6[0].set_title('a_dot over time')
+            ax6[0].set_ylabel('a_dot')
+            ax6[0].set_xlabel('time (s)')
+            ax6[0].legend('lower right')
+
+            ax6[1].plot(time, self.b_dotError, label="actual data")
+            ax6[1].plot(time, self.modelOutputBdot, label="model data")
+            ax6[1].set_title('b_dot over time')
+            ax6[1].set_ylabel('b_dot')
+            ax6[1].set_xlabel('time (s)')
+            ax6[1].legend('lower right')'''
             plt.tight_layout()
 
 
