@@ -108,7 +108,7 @@ class Controller(Node):
         self.R = np.diag([0.1]*13)  # Measurement noise for all 13 state elements
 
 
-        self.delay_states = 3
+        self.delay_states = 1
         self.delay_states_float = float(self.delay_states)
 
         
@@ -158,6 +158,9 @@ class Controller(Node):
         self.motion_capture_pose = np.round(np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
         ]), 3) #motion_capture_pose
+        #self.current_pose = np.round(np.array([
+        #    p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
+        #]), 3)
 
 
     def orb_slam_state_callback(self, msg: MotionCaptureState):

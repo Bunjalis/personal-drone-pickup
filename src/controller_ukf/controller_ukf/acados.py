@@ -99,13 +99,13 @@ def generate_ocp_controller(dynamics=None):
 
     # Add constraints for throttle (x[2])
     ocp.constraints.lbx = np.array([0.0])  # Lower bound for throttle
-    ocp.constraints.ubx = np.array([0.6])  # Upper bound for throttle
+    ocp.constraints.ubx = np.array([0.8])  # Upper bound for throttle
     ocp.constraints.idxbx = np.array([15])  # Index of throttle in the state vector
 
 
     # Set input constraints (tune as needed)
-    ocp.constraints.lbu = np.array([-10, -10, -1, -10])  # throttle, roll_rate, pitch_rate, yaw_rate
-    ocp.constraints.ubu = np.array([10, 10, 1, 10])
+    ocp.constraints.lbu = np.array([-10, -10, -3.0, -10])  # throttle, roll_rate, pitch_rate, yaw_rate
+    ocp.constraints.ubu = np.array([10, 10, 3.0, 10])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver
