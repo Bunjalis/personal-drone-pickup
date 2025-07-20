@@ -29,15 +29,26 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.tf = 2.0
 
     nu = 4  # Number of control inputs
-    nx = 13  # New state dimension (no omega)
+    nx = 13 + 4  # New state dimension (no omega)
     ny = nx + nu
 
     # Cost matrices (tune as needed)
+    '''Q_mat = 2 * np.diag([
+        5.0, 5.0, 5.0,    # position
+        4.0, 4.0, 4.0, 4.0,  # quaternion
+        1500.0, 1500.0,         # a and b 
+        1.0, 1.0, 1.0,      # velocity
+        1.0, 1.0, 1.0,     # angular rates
+        280.0, 280.0            # a_dot and b_dot 
+    ])'''
+
     Q_mat = 2 * np.diag([
         5.0, 5.0, 5.0,    # position
         4.0, 4.0, 4.0, 4.0,  # quaternion
+        0.0, 0.0,         # a and b 
         1.0, 1.0, 1.0,      # velocity
-        1.0, 1.0, 1.0      # angular rates
+        1.0, 1.0, 1.0,     # angular rates
+        0.0, 0.0            # a_dot and b_dot 
     ])
     R_mat = 2 * np.diag([0.5, 0.5, 0.1, 0.5])
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
@@ -79,6 +90,17 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.nlp_solver_tol_ineq = 1e-4
     ocp.solver_options.nlp_solver_tol_comp = 1e-4
     ocp.solver_options.levenberg_marquardt = 1e-3
+    '''ocp.solver_options.nlp_solver_max_iter = 500
+    ocp.solver_options.qp_solver_iter_max = 300
+    ocp.solver_options.qp_solver_tol_stat = 1e-3
+    ocp.solver_options.qp_solver_tol_eq = 1e-3
+    ocp.solver_options.qp_solver_tol_ineq = 1e-3
+    ocp.solver_options.qp_solver_tol_comp = 1e-3
+    ocp.solver_options.nlp_solver_tol_stat = 1e-3
+    ocp.solver_options.nlp_solver_tol_eq = 1e-3
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-3
+    ocp.solver_options.nlp_solver_tol_comp = 1e-3
+    ocp.solver_options.levenberg_marquardt = 1e-3'''
 
 
     rate_limit = 0.2

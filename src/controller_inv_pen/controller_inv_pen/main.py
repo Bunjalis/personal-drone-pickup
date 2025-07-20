@@ -26,7 +26,7 @@ class Controller(Node):
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
-        self.control_frequency = 30.0 # 120.0
+        self.control_frequency = 120.0 # 120.0
         self.dt = 1.0 / self.control_frequency
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -106,7 +106,7 @@ class Controller(Node):
 
         ######################## MPC variables #######################
         #self.steps = 90 * 30
-        self.dt = 1.0 / 30.0
+        self.dt = 1.0 / 120.0
         self.step_counter = 0
         #self.timer = self.create_timer(self.dt, self.control_loop)
         self.traj = hover_trajectory(self.dt)  
@@ -461,9 +461,18 @@ class Controller(Node):
         yref_N = self.traj[:, sn]
         self.ocp.set(self.N, "yref", yref_N)
 
-        self.ocp.set(0, "lbx", self.current_pose)
-        self.ocp.set(0, "ubx", self.current_pose)
+        state = np.concatenate((self.current_pose[0:7], self.currentPenPose[0:2], self.current_pose[7:13], self.currentPenPose[7:9]))
+        self.ocp.set(0, "lbx", state)
+        self.ocp.set(0, "ubx", state)
+        #bounds =  np.array([0.0005,0.0005,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+        #stateUpper = state + bounds
+        #stateLower = state - bounds
+        #self.ocp.set(0, "lbx", stateLower)
+        #self.ocp.set(0, "ubx", stateUpper)
 
+        #print(self.ocp.constraints_get(0, "lbx"))
+        #print(self.ocp.constraints_get(0, "ubx"))
+        print(f"a: {self.currentPenPose[0]}, b: {self.currentPenPose[1]}, a_dot: {self.currentPenPose[7]}, b_dot: {self.currentPenPose[8]}")
         status = self.ocp.solve()
         if status != 0:
             raise Exception(f'acados returned status {status}.')
@@ -518,6 +527,7 @@ class Controller(Node):
                 msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
                 self.cmd_publisher_.publish(msg)
                 self.on_close()
+
             state = self.current_pose
             goal = self.setpoint
             xd, yd, zd = self.setpoint
@@ -882,8 +892,14 @@ def takeoff_trajectory(dt):
     ax_traj = np.zeros_like(time_space)
     ay_traj = np.zeros_like(time_space)
     az_traj = np.zeros_like(time_space)
-    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
-                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+
+    a_traj = np.zeros_like(time_space)
+    b_traj = np.zeros_like(time_space)
+    a_dot_traj = np.zeros_like(time_space)
+    b_dot_traj = np.zeros_like(time_space)
+
+    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj, a_traj, b_traj,
+                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, a_dot_traj, b_dot_traj])
     
 
 def land_trajectory(dt, init_pose):
@@ -915,14 +931,21 @@ def land_trajectory(dt, init_pose):
     qy_traj = quaternions[:, 1]
     qz_traj = quaternions[:, 2]
     qw_traj = quaternions[:, 3]
+
     vx_traj = np.gradient(x_traj, dt)
     vy_traj = np.gradient(y_traj, dt)
     vz_traj = np.gradient(z_traj, dt)
     ax_traj = np.zeros_like(time_space_total)
     ay_traj = np.zeros_like(time_space_total)
     az_traj = np.zeros_like(time_space_total)
-    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
-                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+
+    a_traj = np.zeros_like(time_space_total)
+    b_traj = np.zeros_like(time_space_total)
+    a_dot_traj = np.zeros_like(time_space_total)
+    b_dot_traj = np.zeros_like(time_space_total)
+ 
+    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj, a_traj, b_traj,
+                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, a_dot_traj, b_dot_traj])
 
 
 def move_to_start_of_main_trajectory(dt, init_pose, final_pose):
@@ -947,8 +970,14 @@ def move_to_start_of_main_trajectory(dt, init_pose, final_pose):
     ax_traj = np.zeros_like(time_space)
     ay_traj = np.zeros_like(time_space)
     az_traj = np.gradient(vz_traj, dt)
-    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
-                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+
+    a_traj = np.zeros_like(time_space)
+    b_traj = np.zeros_like(time_space)
+    a_dot_traj = np.zeros_like(time_space)
+    b_dot_traj = np.zeros_like(time_space)
+
+    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj, a_traj, b_traj,
+                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, a_dot_traj, b_dot_traj])
 
 
 
@@ -980,8 +1009,14 @@ def hover_trajectory(dt):
         ax_traj = np.zeros_like(time_space)
         ay_traj = np.zeros_like(time_space)
         az_traj = np.zeros_like(time_space)
-        hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
-                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+
+        a_traj = np.zeros_like(time_space)
+        b_traj = np.zeros_like(time_space)
+        a_dot_traj = np.zeros_like(time_space)
+        b_dot_traj = np.zeros_like(time_space)
+
+        hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj, a_traj, b_traj,
+                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, a_dot_traj, b_dot_traj])
 
 
         land_traj = land_trajectory(dt, take_off_traj[:, -1])
