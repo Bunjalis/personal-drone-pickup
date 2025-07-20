@@ -26,7 +26,7 @@ class Controller(Node):
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
-        self.control_frequency = 120.0
+        self.control_frequency = 30.0 # 120.0
         self.dt = 1.0 / self.control_frequency
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -60,8 +60,8 @@ class Controller(Node):
         self.modelOutputAdot = []
         self.modelOutputBdot = []
 
-        self.testInvPen = True
-        self.testMPC = False
+        self.testInvPen = False
+        self.testMPC = True
         self.usingBetaFlight = True
         self.pen_length = 0.6
         self.pen_mass =  0.01
@@ -105,13 +105,14 @@ class Controller(Node):
         self.pd = 0
 
         ######################## MPC variables #######################
-        self.steps = 90 * 30
-        #self.dt = 1.0 / 30.0
+        #self.steps = 90 * 30
+        self.dt = 1.0 / 30.0
         self.step_counter = 0
-        self.timer = self.create_timer(self.dt, self.control_loop)
-
+        #self.timer = self.create_timer(self.dt, self.control_loop)
+        self.traj = hover_trajectory(self.dt)  
+        self.steps = self.traj.shape[1] - 1   
         # Get both the OCP solver and the integrator
-        self.ocp, self.sim_integrator = None, None #generate_ocp_controller()
+        self.ocp, self.sim_integrator = generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         # Original trajectories
@@ -156,11 +157,13 @@ class Controller(Node):
 
         self.omega_est = np.array([0.1,0.1,0.1,0.1])  # Initialize omega_est if not already present
 
-        self.pre_start_duration = 1.0  # Duration for the pre-start state in seconds
+        self.pre_start_duration = 2.0  # Duration for the pre-start state in seconds
         self.pre_start_counter = 0  # Counter to track pre-start steps
         self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
 
         self.N = 20
+        self.skip_steps = 3
+        self.augmented_u = 0.0  # Initialize the augmented control input
 
     # Recieve motion capture data
     def pose_callback(self, msg: MotionCaptureState):
@@ -449,74 +452,30 @@ class Controller(Node):
         return u
 
     def MPC(self):
-        skip_steps = 3
-        
         for j in range(self.N):
-            if self.step_counter + j*skip_steps < self.steps:
-                yref = np.array([self.x_traj[self.step_counter + j*skip_steps], self.y_traj[self.step_counter + j*skip_steps],
-                                    self.z_traj[self.step_counter + j*skip_steps], self.qw_traj[self.step_counter + j*skip_steps],
-                                    self.qx_traj[self.step_counter + j*skip_steps], self.qy_traj[self.step_counter + j*skip_steps],
-                                    self.qz_traj[self.step_counter + j*skip_steps], 
-                                    self.vx_traj[self.step_counter + j*skip_steps], self.vy_traj[self.step_counter + j*skip_steps], self.vz_traj[self.step_counter + j*skip_steps], 
-                                    self.ax_traj[self.step_counter + j*skip_steps], self.ay_traj[self.step_counter + j*skip_steps], self.az_traj[self.step_counter + j*skip_steps], 
-                                    0.0, 0.0, 0.0, 0.0, 0.0,0.0,0.0,0.0, 0.2, 0.2, 0.2, 0.2])
-            else:
-                yref = np.array([self.x_traj[-1], self.y_traj[-1], self.z_traj[-1], 1, 0, 0, 0, 0,0, 0, 0,0, 0.0, 0.0, 0.0, 0.0, 0.0,0.0,0.0,0.0,0.0, 0.2, 0.2, 0.2, 0.2])
+            sc = self.step_counter + j * self.skip_steps
+            yref = np.concatenate((self.traj[:, sc], [0.0, 0.0, 0.2, 0.0]))
             self.ocp.set(j, "yref", yref)
 
-
-        yref_N = np.array([self.x_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.y_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.z_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
-                                self.qw_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.qx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.qz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
-                                self.vx_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.vy_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.vz_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], 
-                                self.ax_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)], self.ay_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],  self.az_traj[min(self.step_counter + self.N*skip_steps, self.steps - 1)],
-                                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ])
+        sn = self.step_counter + self.N * self.skip_steps
+        yref_N = self.traj[:, sn]
         self.ocp.set(self.N, "yref", yref_N)
 
-        # merge current_pose with currentPenPosepenState = self.currentPenPose
-        state = self.current_pose
-        xd, yd, zd = self.setpoint
-        yawd = 0.0
-        dt = self.dt
-        x, y, z = state[0:3]
-        r, p, yaw = self.quaternion_to_euler(*state[3:7])
-        vx, vy, vz = state[7:10]
-        vr, vp, vyaw = state[10:13]
-        penState = self.currentPenPose
-        a, b, eta = penState[0:3]
-        a_dot, b_dot, eta_dot = penState[7:10]
-        rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
-        rotationMatrix = rotate.as_matrix()
-        #print(rotationMatrix)
-        [[a], [b], [eta]] = rotationMatrix@np.array([[a],[b], [eta]])
-        [[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])
-        penPose = np.array([a,a_dot,b, b_dot])
-        current_state_with_omega = np.concatenate((self.current_pose,penPose, self.omega_est)) #add pen a,b,a_dot and b_dot  to current pose
-        
+        self.ocp.set(0, "lbx", self.current_pose)
+        self.ocp.set(0, "ubx", self.current_pose)
 
-        self.ocp.set(0, "lbx", current_state_with_omega)
-        self.ocp.set(0, "ubx", current_state_with_omega)
-
-        # Solve the OCP
         status = self.ocp.solve()
-        print(f"STATUS: {status}")
         if status != 0:
             raise Exception(f'acados returned status {status}.')
 
-        # Retrieve the control inputs
         u = self.ocp.get(0, "u")
-        '''msg.armed = True
-        msg.channel_0 = round(u[0], 3)
-        msg.channel_1 = round(u[1], 3)
-        msg.channel_2 = round(u[2], 3)
-        msg.channel_3 = round(u[3], 3)'''
-        
-        #self.cmd_publisher_.publish(msg)
-        self.omega_est = self.ocp.get(1,"x")[-4:]
-        print(f"step: {self.step_counter}")
+        #if self.enable_L1_augmentation:
+        #        u[2] += self.augmented_u
+        #        self.augmented_u = self.l1_controller.update(self.current_pose, u)
+        u[2] = u[2]*2 - 1
+        print(f"Step {self.step_counter}, Control Output: {u}")
         self.step_counter += 1
         
-        print(f"pendulum: {penPose}")
-        print(f"U = {np.round(u, 3)} omega_est = {np.round(self.omega_est, 3)}")
         return u
          
     def control_loop(self):
@@ -553,6 +512,12 @@ class Controller(Node):
             self.pre_start_counter += 1
 
         elif self.armed and self.current_pose is not None:
+            if self.step_counter + self.N * self.skip_steps > self.steps:
+                self.step_counter = 0
+                self.armed = False
+                msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
+                self.cmd_publisher_.publish(msg)
+                self.on_close()
             state = self.current_pose
             goal = self.setpoint
             xd, yd, zd = self.setpoint
@@ -655,8 +620,10 @@ class Controller(Node):
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 8), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
             self.cmd_publisher_.publish(msg)
             
+            
         else:         
             self.pre_start_counter = 0
+            self.step_counter = 0
 
         self.cmd_publisher_.publish(msg)
         print(f"control output {msg.channel_0}, {msg.channel_1}, {msg.channel_2}, {msg.channel_3}")
@@ -893,7 +860,135 @@ class Controller(Node):
         rclpy.shutdown()
         sys.exit(0)
 
+def takeoff_trajectory(dt):
+    steps = 1 * 30  # 5 seconds of takeoff at 30 Hz
+    time_space = np.linspace(0, steps * dt, steps)
+    x_traj = np.zeros_like(time_space)
+    y_traj = np.zeros_like(time_space)
+    z_traj = np.linspace(0.0,1.0,steps)
 
+    roll_traj = np.zeros_like(time_space)
+    pitch_traj = np.zeros_like(time_space)
+    yaw_traj = np.zeros_like(time_space)
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
+    qx_traj = quaternions[:, 0]
+    qy_traj = quaternions[:, 1]
+    qz_traj = quaternions[:, 2]
+    qw_traj = quaternions[:, 3]
+    vx_traj = np.gradient(x_traj, dt)
+    vy_traj = np.gradient(y_traj, dt)
+    vz_traj = np.gradient(z_traj, dt)
+    ax_traj = np.zeros_like(time_space)
+    ay_traj = np.zeros_like(time_space)
+    az_traj = np.zeros_like(time_space)
+    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+    
+
+def land_trajectory(dt, init_pose):
+    steps_move_back = 3 * 30  # 5 seconds of takeoff at 30 Hz
+    steps_descend = 3 * 30  # 5 seconds of takeoff at 30 Hz
+    time_space_move_back = np.linspace(0, steps_move_back * dt, steps_move_back)
+    time_space_descend = np.linspace(0, steps_descend * dt, steps_descend)
+
+    time_space_total = np.concatenate((time_space_move_back, time_space_descend))
+
+    x_traj_move_back = np.linspace(init_pose[0], 0, steps_move_back)  # Move back 1 meter
+    x_traj_descend = np.linspace(0, 0, steps_descend)  # Move back 1 meter
+    x_traj = np.concatenate((x_traj_move_back, x_traj_descend))
+
+    y_traj_move_back = np.linspace(init_pose[1], 0, steps_move_back)  # Move back 1 meter
+    y_traj_descend = np.linspace(0, 0, steps_descend)  # Move back 1 meter
+    y_traj = np.concatenate((y_traj_move_back, y_traj_descend))
+
+    z_traj_move_back = np.linspace(init_pose[2], 1.0, steps_move_back)  # Move back 1 meter
+    z_traj_descend  = np.linspace(1.0, 0.0, steps_descend)  # Move back 1 meter
+    z_traj = np.concatenate((z_traj_move_back, z_traj_descend))
+
+    roll_traj = np.zeros_like(time_space_total)
+    pitch_traj = np.zeros_like(time_space_total)
+    yaw_traj = np.zeros_like(time_space_total)
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
+    qx_traj = quaternions[:, 0]
+    qy_traj = quaternions[:, 1]
+    qz_traj = quaternions[:, 2]
+    qw_traj = quaternions[:, 3]
+    vx_traj = np.gradient(x_traj, dt)
+    vy_traj = np.gradient(y_traj, dt)
+    vz_traj = np.gradient(z_traj, dt)
+    ax_traj = np.zeros_like(time_space_total)
+    ay_traj = np.zeros_like(time_space_total)
+    az_traj = np.zeros_like(time_space_total)
+    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+
+
+def move_to_start_of_main_trajectory(dt, init_pose, final_pose):
+    steps = 3 * 30  # 3 seconds at 30 Hz
+    time_space = np.linspace(0, steps * dt, steps)
+
+    x_traj = np.linspace(init_pose[0], final_pose[0], steps)
+    y_traj = np.linspace(init_pose[1], final_pose[1], steps)
+    z_traj = np.linspace(init_pose[2], final_pose[2], steps)
+    roll_traj = np.zeros_like(time_space)
+    pitch_traj = np.zeros_like(time_space)
+    yaw_traj = np.zeros_like(time_space)
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()
+    qx_traj = quaternions[:, 0]
+    qy_traj = quaternions[:, 1]
+    qz_traj = quaternions[:, 2]
+    qw_traj = quaternions[:, 3]
+    vx_traj = np.gradient(x_traj, dt)
+    vy_traj = np.gradient(y_traj, dt)
+    vz_traj = np.gradient(z_traj, dt)
+    ax_traj = np.zeros_like(time_space)
+    ay_traj = np.zeros_like(time_space)
+    az_traj = np.gradient(vz_traj, dt)
+    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+
+
+
+
+
+def hover_trajectory(dt):
+
+        take_off_traj = takeoff_trajectory(dt)
+
+
+        steps = 10 * 30  # 10 seconds of hover at 30 Hz
+        time_space = np.linspace(0, steps * dt, steps)
+        x_traj = np.zeros_like(time_space)
+        y_traj = np.zeros_like(time_space)
+        z_traj = np.ones_like(time_space)
+
+        roll_traj = np.zeros_like(time_space)
+        pitch_traj = np.zeros_like(time_space)
+        yaw_traj = np.zeros_like(time_space)
+        rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+        quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
+        qx_traj = quaternions[:, 0]
+        qy_traj = quaternions[:, 1]
+        qz_traj = quaternions[:, 2]
+        qw_traj = quaternions[:, 3]
+        vx_traj = np.gradient(x_traj, dt)
+        vy_traj = np.gradient(y_traj, dt)
+        vz_traj = np.gradient(z_traj, dt)
+        ax_traj = np.zeros_like(time_space)
+        ay_traj = np.zeros_like(time_space)
+        az_traj = np.zeros_like(time_space)
+        hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+
+
+        land_traj = land_trajectory(dt, take_off_traj[:, -1])
+        zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
+
+
+        return np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
 
 
 def main(args=None): 
