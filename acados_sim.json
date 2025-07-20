@@ -9,8 +9,8 @@
     "dims": {
         "np": 0,
         "np_global": 0,
-        "nu": 4,
-        "nx": 17,
+        "nu": 2,
+        "nx": 10,
         "nz": 0
     },
     "external_function_files_model": [
@@ -46,8 +46,8 @@
         "cost_r_in_psi_expr": [],
         "cost_r_in_psi_expr_0": [],
         "cost_r_in_psi_expr_e": [],
-        "cost_y_expr": "vertcat(p, a, penPos, v, r, penVel, throttle, roll_rate_cmd, pitch_rate_cmd, yaw_rate_cmd)",
-        "cost_y_expr_0": "vertcat(p, a, penPos, v, r, penVel, throttle, roll_rate_cmd, pitch_rate_cmd, yaw_rate_cmd)",
+        "cost_y_expr": "vertcat(p, a, penPos, v, r, penVel, roll_rate_cmd, pitch_rate_cmd)",
+        "cost_y_expr_0": "vertcat(p, a, penPos, v, r, penVel, roll_rate_cmd, pitch_rate_cmd)",
         "cost_y_expr_e": "vertcat(p, a, penPos, v, r, penVel)",
         "disc_dyn_expr": [],
         "dyn_disc_fun": null,
@@ -58,7 +58,7 @@
         "dyn_impl_dae_fun": null,
         "dyn_impl_dae_fun_jac": null,
         "dyn_impl_dae_jac": null,
-        "f_expl_expr": "@1=a[2], @2=a[3], @3=a[1], @4=a[0], @5=a[0], @6=a[2], @7=a[3], @8=a[1], @9=(2.*((@5*@6)-(@7*@8))), @10=(1<@9), @11=((@10?1:0)+((!@10)?@9:0)), @12=(@11<-1), vertcat(v, (0.5*mac(horzcat(horzcat(0, (-r[0]), (-r[1]), (-r[2]))', horzcat(r[0], 0, r[2], (-r[1]))', horzcat(r[1], (-r[2]), 0, r[0])', horzcat(r[2], r[1], (-r[0]), 0)')',a,zeros(4x1))), penVel, (mac(horzcat(horzcat((1-(2.*(sq(@1)+sq(@2)))), (2.*((@3*@1)-(@4*@2))), (2.*((@3*@2)+(@4*@1))))', horzcat((2.*((@3*@1)+(@4*@2))), (1-(2.*(sq(@3)+sq(@2)))), (2.*((@1*@2)-(@4*@3))))', horzcat((2.*((@3*@2)-(@4*@1))), (2.*((@1*@2)+(@4*@3))), (1-(2.*(sq(@3)+sq(@1)))))')',(vertcat(0, 0, (40*pitch_rate_cmd))/0.7),zeros(3x1))-[0, 0, 9.81]), (14.2857*(vertcat((1.74533*throttle), (1.74533*roll_rate_cmd), (-(1.74533*yaw_rate_cmd)))-r)), (((9.81*penPos[0])/0.15)-(9.81*asin(((@12?-1:0)+((!@12)?@11:0))))), (((9.81*penPos[1])/0.15)+(9.81*atan2((2.*((@5*@8)+(@6*@7))),(1-(2.*(sq(@8)+sq(@6))))))))",
+        "f_expl_expr": "vertcat(v, a, penVel, (9.81*a[1]), (-9.81*a[0]), (14.2857*(vertcat((1.74533*roll_rate_cmd), (1.74533*pitch_rate_cmd))-r)), (((9.81*penPos)/0.3)+(9.81*a[0])))",
         "f_impl_expr": [],
         "gnsf_nontrivial_f_LO": 1,
         "gnsf_purely_linear": 0,
@@ -69,7 +69,7 @@
         "t": [],
         "t0": null,
         "t_label": "t",
-        "u": "vertcat(throttle, roll_rate_cmd, pitch_rate_cmd, yaw_rate_cmd)",
+        "u": "vertcat(roll_rate_cmd, pitch_rate_cmd)",
         "u_labels": null,
         "x": "vertcat(p, a, penPos, v, r, penVel)",
         "x_labels": null,
@@ -81,7 +81,7 @@
     "shared_lib_ext": ".so",
     "simulink_opts": null,
     "solver_options": {
-        "Tsim": 0.03333333333333333,
+        "Tsim": 0.008333333333333333,
         "collocation_type": "GAUSS_LEGENDRE",
         "ext_fun_compile_flags": "-O2",
         "ext_fun_expand_dyn": false,

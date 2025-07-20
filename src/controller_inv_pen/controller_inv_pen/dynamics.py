@@ -6,21 +6,21 @@ import numpy as np
 from copy import copy
 from acados_template import AcadosOcp, AcadosOcpSolver, AcadosModel
 
-'''# Dynamics for linear MPC 
+# Dynamics for linear MPC 
 class QuadDynamics:
     def __init__(self):
         # Declare model variables
         self.p = cs.MX.sym('p', 2)  #  xy position
         self.q = cs.MX.sym('a', 2)  # euler angles (roll and pitch)
-        self.penPos = cs.MX.sym('penPos', 2) #a and b
+        self.penPos = cs.MX.sym('penPos', 1) # b
         self.v = cs.MX.sym('v', 2)  # x and y velocity (previously rotated to global frame)
         self.r = cs.MX.sym('r', 2)  # roll and pitch angular velocity
-        self.penVel = cs.MX.sym('penVel', 2) #a_dot and b_dot 
+        self.penVel = cs.MX.sym('penVel', 1) # b_dot 
         
 
         # State vector: position, quaternion, velocity, angular velocity
         self.x = cs.vertcat(self.p, self.q, self.penPos, self.v, self.r, self.penVel)
-        self.state_dim = 12
+        self.state_dim = 10
 
         # Control input: throttle, desired roll rate, pitch rate, yaw rate (Betaflight style)
         #throttle = cs.MX.sym('throttle')
@@ -50,7 +50,7 @@ class QuadDynamics:
         return self.q #1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
 
     def v_dynamics(self):
-        f_thrust = self.thrust_constant * self.u[2]
+        #f_thrust = self.thrust_constant * self.u[2]
         #f_thrust = 4 * 1.42e-06 * (self.u[2] *4631)**2
 
         
@@ -62,7 +62,6 @@ class QuadDynamics:
         r_cmd = cs.vertcat(
             self.u[0] * max_rate_rad,
             self.u[1] * max_rate_rad,
-            -self.u[3] * max_rate_rad 
         )
         r_dot = (1 / self.tau_rate) * (r_cmd - self.r)
         return r_dot
@@ -74,37 +73,16 @@ class QuadDynamics:
     def penVel_dynamics(self):
     
         g = 9.81
-        L = 0.3/2
-        a_ddot = self.penPos[0]*g/L - self.q[1]*g
-        b_ddot = self.penPos[1]*g/L + self.q[0]*g
-        return cs.vertcat(a_ddot, b_ddot)
+        L = 0.3
+        #a_ddot = self.penPos[0]*g/L - self.q[1]*g
+        b_ddot = self.penPos[0]*g/L + self.q[0]*g
+        return b_ddot#cs.vertcat(a_ddot, b_ddot)
 
-    def quaternion_to_euler(self, w, x, y, z):
-        # Roll (x-axis rotation)
-        t0 = +2.0 * (w * x + y * z)
-        t1 = +1.0 - 2.0 * (x * x + y * y)
-        roll = cs.atan2(t0, t1)
-
-        # Pitch (y-axis rotation)
-        t2 = +2.0 * (w * y - z * x)
-        #t2 = +1.0 if t2 > +1.0 else t2
-        #t2 = -1.0 if t2 < -1.0 else t2
-        t2 = cs.if_else(t2>1.0, 1.0, t2)
-        t2 = cs.if_else(t2<-1.0, -1.0, t2)
-        
-        pitch = cs.asin(t2)
-
-        # Yaw (z-axis rotation)
-        t3 = +2.0 * (w * z + x * y)
-        t4 = +1.0 - 2.0 * (y * y + z * z)
-        yaw = cs.atan2(t3, t4)
-
-        return roll, pitch, yaw'''
+    
 
 
 
-
-class QuadDynamics:
+'''class QuadDynamics:
     def __init__(self):
         # Declare model variables
         self.p = cs.MX.sym('p', 3)  # position
@@ -235,5 +213,6 @@ class QuadDynamics:
         yaw = cs.atan2(t3, t4)
 
         return roll, pitch, yaw
+    '''
 
 

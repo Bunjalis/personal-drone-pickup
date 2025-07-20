@@ -60,8 +60,8 @@ class Controller(Node):
         self.modelOutputAdot = []
         self.modelOutputBdot = []
 
-        self.testInvPen = False
-        self.testMPC = True
+        self.testInvPen = True
+        self.testMPC = False
         self.usingBetaFlight = True
         self.pen_length = 0.6
         self.pen_mass =  0.01
@@ -161,7 +161,7 @@ class Controller(Node):
         self.pre_start_counter = 0  # Counter to track pre-start steps
         self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
 
-        self.N = 20
+        self.N = 60
         self.skip_steps = 3
         self.augmented_u = 0.0  # Initialize the augmented control input
 
@@ -182,11 +182,6 @@ class Controller(Node):
         self.currentPenPose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
         penState = self.currentPenPose
         self.currentPenPose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
-        #print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
-       
-        
-        #print(f"penAngle: {self.currentPenPose}")
-
     
 
     def navController(self):
@@ -216,11 +211,6 @@ class Controller(Node):
         kpr, kir, kdr = 43.64, 0.0, 12.43 #60.0, 10.0, 40.0 # 80.0, 10.0, 50.0 
         kpyaw, kiyaw, kdyaw =60.0, 10.0, 30.0 
 
-        '''kpx, kix, kdx = 0.00414, 0.0000345, 0.1242
-        kpy, kiy, kdy = 0.00414, 0.0000345, 0.1242
-
-        kpp, kip, kdp = 2.4, 0.48, 3.09
-        kpr, kir, kdr = 2.1, 0.84, 1.3125'''
 
         force = (self.g +kpz*(zd-z) + kdz*(0-vz))*(self.M)*(cos(r)*cos(p))
         Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx
@@ -234,148 +224,6 @@ class Controller(Node):
 
         return force, rTau, pTau, yawTau
 
-    def FIPController(self):
-        state = self.current_pose
-        xd, yd, zd = self.setpoint
-        yawd = 0.0
-        dt = self.dt
-        x, y, z = state[0:3]
-        r, p, yaw = self.quaternion_to_euler(*state[3:7])
-        vx, vy, vz = state[7:10]
-        vr, vp, vyaw = state[10:13]
-        
-        penState = self.currentPenPose
-        a, b, eta = penState[0:3]
-        a_dot, b_dot, eta_dot = penState[7:10]
-        '''rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
-        rotationMatrix = rotate.as_matrix()
-        #print(rotationMatrix)
-        [[a], [b], [eta]] = rotationMatrix@np.array([[a],[b],[eta]])
-        [[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])'''
-        #print(position)
-        #print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
-        #print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
-        self.aError.append(a)
-        self.bError.append(b)
-        self.b_dotError.append(b_dot)
-        self.a_dotError.append(a_dot)
-        self.y_dotError.append(vy)
-        aModel, bModel, a_dotModel, b_dotModel = self.computePenPosition()
-        self.modelOutputA.append(aModel)
-        self.modelOutputB.append(bModel)
-        self.modelOutputAdot.append(a_dotModel)
-        self.modelOutputBdot.append(b_dotModel)
-        
-         
-        #pTau = -1*np.array([-0.1320,0.9669,-10.0866,-0.1314,0.0546,-1.2473])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        #rTau = -1*np.array([0.1645, 1.2046, 12.5655 , 0.1638, 0.0680, 1.5538])@np.array([[y-yd],[r],[b],[vy],[vr], [b_dot]])
-        
-        
-       
-       
-        '''pTau = -1*K1@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        rTau = -1*K2@np.array([[y-yd],[r],[b],[vy],[vr], [b_dot]])
-        pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        rTau = -1*np.array([ 0.0040,0.2926,1.1953,0.0079, 0.0314,0.2086])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])'''
-        #a = 0
-        #a_dot = 0
-        
-        
-        
-
-        #rTau = -1*np.array([0.0064,    0.3333,   -1.4141,   0.0118,    0.0340,   -0.2471])@np.array([[y-yd],[r],[b],[vy],[vr], [b_dot]])
-        '''kpr, kir, kdr = 80.0, 10.0, 50.0
-        rTau = (kpr*(rd-r) + kir*(rd-r)*dt - kdr*vr)*self.Ixx
-        pTau = -1*np.array([0.0034,0.0490,0.0071,0.0140])@np.array([[x-xd],[p],[vx],[vp]]) '''
-        
-        '''vr, vp, vyaw = state[10:13]
-        kpz, kiz, kdz = 15.0, 10.0, 10.0 #75.0, 42.857, 32.8125
-        kpx, kix, kdx = 6.0, 0, 12.0 #0.6, 0, 1.2#0.5, 0,0.4
-        kpy, kiy, kdy = 6.0, 0, 12.0 #0.6, 0, 1.2#0.36, 0, 0.45
-
-        kpp, kip, kdp = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 #5.0, 3.0, 3.0 # 2.4, 0.48, 3.09 #
-        kpr, kir, kdr = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # 2.1, 0.84, 1.3125 #
-        kpyaw, kiyaw, kdyaw = 80.0, 10.0, 50.0 #6.0, 1.5, 1.75 # #0.804, 0.29236, 0.55275
-        force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt )*(self.M + self.pen_mass)*(cos(r)*cos(p))
-        K1= np.array([-4.73384185e+01, -2.23606798e-02,  1.26778474e+01, -8.27830464e+00, -8.62906201e-02])
-        K2= np.array([4.73384185e+01, 2.23606798e-02, 1.26778474e+01, 8.27830464e+00, 8.62906201e-02])
-        vpd = -K1@np.array([[a],[x-xd],[p],[a_dot],[vx]]) #-1*np.array([-0.0341,0.6168, -5.4842,-0.0409,0.0420,-0.6779])@np.array([[x-xd],[pitch],[a],[vx],[vp],[a_dot]]) 
-        vrd = -K2@np.array([[b],[y-yd],[r],[b_dot],[vy]])#-1*np.array([0.0020,0.4194,3.0870,0.0048,0.0366,0.3798])@np.array([[y-yd],[roll],[b],[vy],[vr],[b_dot]])
-        vpd = math.atan(vpd[0])
-        vrd = math.atan(vrd[0])
-        self.rd += vrd*dt
-        self.pd += vpd*dt
-        rd = self.rd
-        pd = self.pd'''
-
-        '''pd = -np.array([-24.3912,   -2.0574,   -4.9252,   -1.7571])@np.array([[a],[x-xd],[a_dot],[vx]]) # vrd*dt
-        pd = math.atan(pd[0])
-        rd = -np.array([24.3912,   2.0574,   4.9252,   1.7571])@np.array([[a],[x-xd],[a_dot],[vx]]) #vpd*dt
-        rd = math.atan(rd[0])'''
-
-        '''ad_ddot = 3/4*self.g*(1/0.3*a-p)*20
-        Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx #+ ad_ddot#+ xd_dotdot
-        Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy #+ yd_dotdot
-        
-        rd =8*((-5*b) + (-b_dot)) # (Ux*sin(yaw) - Uy*cos(yaw))*(self.M+self.pen_mass)/force # =2*((-5*b) + (-b_dot))
-        pd = (Ux*cos(yaw) + Uy*sin(yaw))*(self.M+self.pen_mass)/force'''
-        
-        #rTau = (kpr*(rd-r) + kir*(rd-r)*dt + kdr*(vrd-vr))*self.Ixx
-        #pTau= (kpp*(pd-p) + kip*(pd-p)*dt + kdp*(vpd-vp))*self.Iyy
-        #pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        #rTau = -1*np.array([0.0085,    0.3191,    1.4704,    0.0157,    0.0340,    0.2969])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
-        
-        kpyaw, kiyaw, kdyaw = 60.0, 10.0, 30.0 #6.0, 1.5, 1.75 # #0.804, 0.29236, 0.55275
-        kpz, kiz, kdz = 15.0, 10.0, 10.0 
-        force = (self.g +kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt )*(self.M)*(cos(r)*cos(p))
-        yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
-        pTau = -1*np.array([-0.0034, 1.9617,   -7.2211,   -0.0134,    0.2896,   -1.4960])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        rTau = -1*np.array([0.0043,    2.4439,    8.9958,    0.0167,    0.3607,    1.8637])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
-       
-        pTau = -1*np.array([ -0.0032,0.2349,-0.9595,-0.0064,0.0252,-0.1675])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        rTau = -1*np.array([ 0.0040,0.2926,1.1953,0.0079, 0.0314,0.2086])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
-
-        
-    
-
-        kpz, kiz, kdz = 15.0, 10.0, 10.0 
-        kpx, kix, kdx = 0.06938, 0.0, 0.14488#0.006, 0.0, 0.0 #6.0, 0, 12.0 
-        kpy, kiy, kdy = 0.07, 0.0, 0.1456
-        kpp, kip, kdp = 28.8235, 0.0, 8.235 #90.0, 10.0, 20.0 #30.0 # 80.0, 10.0, 50.0 note derivative term is very sensitive to noise (reduce as much as possible)
-        kpr, kir, kdr = 43.64, 0.0, 12.43 #60.0, 10.0, 40.0 # 80.0, 10.0, 50.0 
-        #kpr, kir, kdr = 23.64, 0.0, 5.43
-        kpyaw, kiyaw, kdyaw =60.0, 10.0, 30.0 
-
-        Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx
-        Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy 
-
-        rd = (Ux*sin(yaw) - Uy*cos(yaw)) #*self.M/force
-        rd = -1*np.array([10.8967,    0.0608,    1.8794,    0.1465])@np.array([[b], [y-yd], [b_dot], [vy]])
-        rd = rd[0]
-        pd = (Ux*cos(yaw) + Uy*sin(yaw)) #*self.M/force
-        #pd = -1*np.array([-37.4179,    -0.2181,   -11.6594,    -0.6523])@np.array([[a], [x-xd], [a_dot], [vx]])
-        #pd = pd[0]
-        #self.rollError.append(self.prev_rollError-r)
-        self.prev_rollError = rd
-        #pd = 0
-        #rd = 0
-        rTau = (kpr*(rd-r) + kir*(rd-r)*dt - kdr*vr)*self.Ixx
-        pTau= (kpp*(pd-p) + kip*(pd-p)*dt - kdp*vp)*self.Iyy
-        #self.prevForce = force
-        #wy = -1*np.array([-210.9648, -7.8557, 25.0000, -36.8930, -8.5851])@np.array([[a],[x-xd],[pitch],[a_dot], [vx]])  
-        #wx = -1*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[roll],[b_dot],[vy]])
-        #pTau = -1*np.array([ -0.0010,    0.2708,   -1.0214,   -0.0030,    0.0332,   -0.1856])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        rTau = -1*np.array([ 0.0180,    0.3548,    1.6279,    0.0222,    0.0352,    0.2842])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
-        pTau = -1*np.array([   -0.0180,    0.5027,   -2.9400,   -0.0373,    0.0375,   -0.4895])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        pTau = pTau[0]
-        rTau=rTau[0]
-        pTau = -1*np.array([-0.0005,    0.3103,   -1.6519,   -0.0015,    0.0385,   -0.2631])@np.array([[x-xd],[p],[a],[vx],[vp],[a_dot]]) 
-        rTau = -1*np.array([ 0.0006,    0.3865,    2.0579,    0.0019,    0.0480,    0.3278])@np.array([[y-yd],[r],[b],[vy],[vr],[b_dot]])
-        
-        pTau = pTau[0]
-        rTau = rTau[0]
-        self.wxOutput.append(rTau)
-        return force, rTau, pTau, yawTau
 
     def FIPControllerBeta(self):
         state = self.current_pose
@@ -454,34 +302,58 @@ class Controller(Node):
     def MPC(self):
         for j in range(self.N):
             sc = self.step_counter + j * self.skip_steps
-            yref = np.concatenate((self.traj[:, sc], [0.0, 0.0, 0.2, 0.0]))
+            #yref = np.concatenate((self.traj[:, sc], [0.0, 0.0]))
+            yref = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
             self.ocp.set(j, "yref", yref)
 
         sn = self.step_counter + self.N * self.skip_steps
-        yref_N = self.traj[:, sn]
+        yref_N = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) #self.traj[:, sn]
         self.ocp.set(self.N, "yref", yref_N)
 
-        state = np.concatenate((self.current_pose[0:7], self.currentPenPose[0:2], self.current_pose[7:13], self.currentPenPose[7:9]))
+        
+        currentState = self.current_pose
+        r, p, yaw = self.quaternion_to_euler(*currentState[3:7])
+        vx, vy, vz = currentState[7:10]
+        rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
+        rotationMatrix = rotate.as_matrix()
+        [[vx], [vy], [vz]] = rotationMatrix@np.array([[vx],[vy],[vz]])
+        
+
+        state = np.concatenate((self.current_pose[0:2], [r], [p], [self.currentPenPose[1]], self.current_pose[7:9], [vx], [vy], [self.currentPenPose[8]]))
         self.ocp.set(0, "lbx", state)
         self.ocp.set(0, "ubx", state)
-        #bounds =  np.array([0.0005,0.0005,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
-        #stateUpper = state + bounds
-        #stateLower = state - bounds
-        #self.ocp.set(0, "lbx", stateLower)
-        #self.ocp.set(0, "ubx", stateUpper)
-
-        #print(self.ocp.constraints_get(0, "lbx"))
-        #print(self.ocp.constraints_get(0, "ubx"))
-        print(f"a: {self.currentPenPose[0]}, b: {self.currentPenPose[1]}, a_dot: {self.currentPenPose[7]}, b_dot: {self.currentPenPose[8]}")
+    
+        print(f" b: {self.currentPenPose[1]}, b_dot: {self.currentPenPose[8]}")
         status = self.ocp.solve()
         if status != 0:
             raise Exception(f'acados returned status {status}.')
 
         u = self.ocp.get(0, "u")
+        cost = self.ocp.get_cost()
+        print("Optimal cost:", cost)
         #if self.enable_L1_augmentation:
         #        u[2] += self.augmented_u
         #        self.augmented_u = self.l1_controller.update(self.current_pose, u)
-        u[2] = u[2]*2 - 1
+        #u[2] = u[2]*2 - 1
+
+        Cf = 1.42e-6
+        Ct = 2.84e-7
+
+        max_motor_speed = 4631.0
+        maxForce = (Cf*max_motor_speed**2) 
+        maxTorque = (Ct*max_motor_speed**2)
+        kpz, kiz, kdz = 15.0, 10.0, 10.0 
+        zd, yawd  = 1.0, 0.0
+        z = currentState[2]
+        force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*self.dt)*(self.M+0.055) #*self.M 
+        throttle = 2*(force)/(maxForce) - 1
+        if throttle < -1:
+            throttle = -1.0
+        if throttle > 1:
+            throttle = 1.0
+       
+        wz =  -0.5*(yawd-yaw)
+        u = [u[0], u[1], throttle, wz] 
         print(f"Step {self.step_counter}, Control Output: {u}")
         self.step_counter += 1
         
@@ -520,7 +392,7 @@ class Controller(Node):
 
             self.pre_start_counter += 1
 
-        elif self.armed and self.current_pose is not None:
+        if self.armed and self.current_pose is not None:
             if self.step_counter + self.N * self.skip_steps > self.steps:
                 self.step_counter = 0
                 self.armed = False
@@ -545,9 +417,7 @@ class Controller(Node):
             self.timePoints.append(self.t)
 
             # CONTROL CODE GOES HERE
-            if self.testInvPen and not self.usingBetaFlight:
-                force, rTau, pTau, yawTau = self.FIPController()
-
+            
             if self.testInvPen and self.usingBetaFlight:
                 u1, u2, u3, u4 = self.FIPControllerBeta()
 
@@ -875,31 +745,25 @@ def takeoff_trajectory(dt):
     time_space = np.linspace(0, steps * dt, steps)
     x_traj = np.zeros_like(time_space)
     y_traj = np.zeros_like(time_space)
-    z_traj = np.linspace(0.0,1.0,steps)
 
     roll_traj = np.zeros_like(time_space)
     pitch_traj = np.zeros_like(time_space)
-    yaw_traj = np.zeros_like(time_space)
-    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
-    quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
-    qx_traj = quaternions[:, 0]
-    qy_traj = quaternions[:, 1]
-    qz_traj = quaternions[:, 2]
-    qw_traj = quaternions[:, 3]
+
     vx_traj = np.gradient(x_traj, dt)
     vy_traj = np.gradient(y_traj, dt)
-    vz_traj = np.gradient(z_traj, dt)
-    ax_traj = np.zeros_like(time_space)
-    ay_traj = np.zeros_like(time_space)
-    az_traj = np.zeros_like(time_space)
+   
+    roll_traj = np.zeros_like(time_space)
+    pitch_traj = np.zeros_like(time_space)
+    vr_traj = np.zeros_like(time_space)
+    vp_traj = np.zeros_like(time_space) 
 
     a_traj = np.zeros_like(time_space)
     b_traj = np.zeros_like(time_space)
     a_dot_traj = np.zeros_like(time_space)
     b_dot_traj = np.zeros_like(time_space)
 
-    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj, a_traj, b_traj,
-                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, a_dot_traj, b_dot_traj])
+    return np.array([x_traj, y_traj, roll_traj, pitch_traj, a_traj, b_traj,
+                     vx_traj, vy_traj, vr_traj, vp_traj, a_dot_traj, b_dot_traj])
     
 
 def land_trajectory(dt, init_pose):
@@ -918,34 +782,24 @@ def land_trajectory(dt, init_pose):
     y_traj_descend = np.linspace(0, 0, steps_descend)  # Move back 1 meter
     y_traj = np.concatenate((y_traj_move_back, y_traj_descend))
 
-    z_traj_move_back = np.linspace(init_pose[2], 1.0, steps_move_back)  # Move back 1 meter
-    z_traj_descend  = np.linspace(1.0, 0.0, steps_descend)  # Move back 1 meter
-    z_traj = np.concatenate((z_traj_move_back, z_traj_descend))
-
     roll_traj = np.zeros_like(time_space_total)
     pitch_traj = np.zeros_like(time_space_total)
     yaw_traj = np.zeros_like(time_space_total)
-    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
-    quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
-    qx_traj = quaternions[:, 0]
-    qy_traj = quaternions[:, 1]
-    qz_traj = quaternions[:, 2]
-    qw_traj = quaternions[:, 3]
-
+    
     vx_traj = np.gradient(x_traj, dt)
     vy_traj = np.gradient(y_traj, dt)
-    vz_traj = np.gradient(z_traj, dt)
-    ax_traj = np.zeros_like(time_space_total)
-    ay_traj = np.zeros_like(time_space_total)
-    az_traj = np.zeros_like(time_space_total)
+   
+    vr_traj = np.zeros_like(time_space_total)
+    vp_traj = np.zeros_like(time_space_total)
+    
 
     a_traj = np.zeros_like(time_space_total)
     b_traj = np.zeros_like(time_space_total)
     a_dot_traj = np.zeros_like(time_space_total)
     b_dot_traj = np.zeros_like(time_space_total)
  
-    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj, a_traj, b_traj,
-                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, a_dot_traj, b_dot_traj])
+    return np.array([x_traj, y_traj, roll_traj, pitch_traj,  a_traj, b_traj,
+                     vx_traj, vy_traj, vr_traj, vp_traj, a_dot_traj, b_dot_traj])
 
 
 def move_to_start_of_main_trajectory(dt, init_pose, final_pose):
@@ -954,30 +808,23 @@ def move_to_start_of_main_trajectory(dt, init_pose, final_pose):
 
     x_traj = np.linspace(init_pose[0], final_pose[0], steps)
     y_traj = np.linspace(init_pose[1], final_pose[1], steps)
-    z_traj = np.linspace(init_pose[2], final_pose[2], steps)
+    
     roll_traj = np.zeros_like(time_space)
     pitch_traj = np.zeros_like(time_space)
-    yaw_traj = np.zeros_like(time_space)
-    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
-    quaternions = R.from_euler('xyz', rpy_traj).as_quat()
-    qx_traj = quaternions[:, 0]
-    qy_traj = quaternions[:, 1]
-    qz_traj = quaternions[:, 2]
-    qw_traj = quaternions[:, 3]
+    
     vx_traj = np.gradient(x_traj, dt)
     vy_traj = np.gradient(y_traj, dt)
-    vz_traj = np.gradient(z_traj, dt)
-    ax_traj = np.zeros_like(time_space)
-    ay_traj = np.zeros_like(time_space)
-    az_traj = np.gradient(vz_traj, dt)
-
+   
+    vr_traj = np.zeros_like(time_space)
+    vp_traj = np.zeros_like(time_space)
+ 
     a_traj = np.zeros_like(time_space)
     b_traj = np.zeros_like(time_space)
     a_dot_traj = np.zeros_like(time_space)
     b_dot_traj = np.zeros_like(time_space)
 
-    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj, a_traj, b_traj,
-                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, a_dot_traj, b_dot_traj])
+    return np.array([x_traj, y_traj, roll_traj, pitch_traj, a_traj, b_traj,
+                     vx_traj, vy_traj, vr_traj, vp_traj, a_dot_traj, b_dot_traj])
 
 
 
@@ -992,31 +839,24 @@ def hover_trajectory(dt):
         time_space = np.linspace(0, steps * dt, steps)
         x_traj = np.zeros_like(time_space)
         y_traj = np.zeros_like(time_space)
-        z_traj = np.ones_like(time_space)
+        
 
         roll_traj = np.zeros_like(time_space)
         pitch_traj = np.zeros_like(time_space)
-        yaw_traj = np.zeros_like(time_space)
-        rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
-        quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
-        qx_traj = quaternions[:, 0]
-        qy_traj = quaternions[:, 1]
-        qz_traj = quaternions[:, 2]
-        qw_traj = quaternions[:, 3]
+        
         vx_traj = np.gradient(x_traj, dt)
         vy_traj = np.gradient(y_traj, dt)
-        vz_traj = np.gradient(z_traj, dt)
-        ax_traj = np.zeros_like(time_space)
-        ay_traj = np.zeros_like(time_space)
-        az_traj = np.zeros_like(time_space)
+
+        vr_traj = np.zeros_like(time_space)
+        vp_traj = np.zeros_like(time_space)
 
         a_traj = np.zeros_like(time_space)
         b_traj = np.zeros_like(time_space)
         a_dot_traj = np.zeros_like(time_space)
         b_dot_traj = np.zeros_like(time_space)
 
-        hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj, a_traj, b_traj,
-                     vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, a_dot_traj, b_dot_traj])
+        hover_traj =  np.array([x_traj, y_traj, roll_traj, pitch_traj, a_traj, b_traj,
+                     vx_traj, vy_traj, vr_traj, vp_traj, a_dot_traj, b_dot_traj])
 
 
         land_traj = land_trajectory(dt, take_off_traj[:, -1])
