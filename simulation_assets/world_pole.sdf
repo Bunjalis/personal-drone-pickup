@@ -18,7 +18,7 @@
       <gravity>0 0 -9.81</gravity>
       <max_step_size>0.001</max_step_size>
       <real_time_factor>1.0</real_time_factor>
-      <real_time_update_rate>800</real_time_update_rate>
+      <real_time_update_rate>500</real_time_update_rate>
     </physics>
     <plugin
       filename="ignition-gazebo-physics-system"
@@ -91,7 +91,7 @@
             <publish_link_pose>true</publish_link_pose>
             <publish_nested_model_pose>true</publish_nested_model_pose>
             <use_pose_vector_msg>true</use_pose_vector_msg>
-            <update_frequency>800</update_frequency>
+            <update_frequency>500</update_frequency>
           </plugin>
 
       <pose>0 0 0.01 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
@@ -192,7 +192,7 @@
             <publish_link_pose>true</publish_link_pose>
             <publish_nested_model_pose>true</publish_nested_model_pose>
             <use_pose_vector_msg>true</use_pose_vector_msg>
-            <update_frequency>800</update_frequency>
+            <update_frequency>500</update_frequency>
         </plugin>
     </include>
 

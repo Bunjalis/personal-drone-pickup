@@ -26,7 +26,7 @@ class Controller(Node):
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
-        self.control_frequency = 300.0
+        self.control_frequency = 120.0
         self.dt = 1.0 / self.control_frequency
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -392,15 +392,8 @@ class Controller(Node):
         penState = self.currentPenPose
         a, b, eta = penState[0:3]
         a_dot, b_dot, eta_dot = penState[7:10]
-        '''rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
-        rotationMatrix = rotate.as_matrix()
-        #print(rotationMatrix)
-        [[a], [b], [eta]] = rotationMatrix@np.array([[a],[b],[eta]])
-        a_dot, b_dot, eta_dot = (a-self.last_a)/dt, (b-self.last_b)/dt, (eta-self.last_eta)/dt
-        self.last_a, self.last_b, self.last_eta = a, b, eta'''
-        #[[a_dot], [b_dot], [eta_dot]] = rotationMatrix@np.array([[a_dot], [b_dot], [eta_dot]])
+       
         print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
-        #print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
         self.aError.append(a)
         self.bError.append(b)
         self.b_dotError.append(b_dot)
@@ -419,148 +412,16 @@ class Controller(Node):
         wx = -1*np.array([-12.6320, 125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]])
         wx = (( wx[0]))/100.0
 
-        '''wy = -1*np.array([-31.1105,   -0.0351,    8.0000,   -6.1191,   -0.1099])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0'''
-        #wx = -1*np.array([ 369.2509,   20.0000,   20.6635,   89.5978,    7.8358])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        #wx = (( wx[0]))/100.0
-
-    
-        #wx = -1*np.array([44.5184,    0.1,    8.0000,    1.7335,    0.2])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        #wx = (( wx[0]))/100.0
-        #wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
-        #wx = (( wx[0]))/100.0
-        wy = -1*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/10.0
-        #wx = -10*np.array([122.7619,    2.6497,   121.0000,   81.4809,    3.3667])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        #wx = (( wx[0]))/100.0
-
-        '''penWx, penWy, penWz = self.currentPenPose[10:13]
-        print(f"penWx: {penWx}, penWy: {penWy}, penWz: {penWz}")
-        alpha = math.asin(a/(self.pen_length/2))
-        gamma = p + alpha
-        gammaDot = vp + penWy'''
-        #self.bError.append(gamma)
-        #self.b_dotError.append(gammaDot)
-        wy = -25*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -25*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -31*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -31*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -1000*np.array([-1.5,    -0.0054,    0.3560,    -0.2697,    -0.0118])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([1.5,    0.0054,    0.3560,    0.2697,    0.0118])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -1000*np.array([-1.5,    -0.0037665,    0.359,    -0.2697,    -0.009])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([1.5,    0.0037665,    0.359,    0.2697,    0.009])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -32*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -32*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -33*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -33*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -1000*np.array([-1.9100,    -0.0103,    0.3783,    -0.3387,    -0.0202])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([1.9100,    0.0103,    0.3783,    0.3387,    0.0202])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -1000*np.array([-1.8100,    -0.0103,    0.3783,    -0.3387,    -0.0202])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([1.8100,    0.0103,    0.3783,    0.3387,    0.0202])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -1000*np.array([-2.3299,    -0.0168,    0.4091,    -0.4118,    -0.0346])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([2.3299,    0.0168,    0.4091,    0.4118,    0.0346])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -1000*np.array([-2.6170,    -0.0189,    0.4591,    -0.4625,    -0.0389])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([2.6170,    0.0189,    0.4591,    0.4625,    0.0389])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -1000*np.array([-2.3972,    -0.0093,    0.4291,    -0.4236,    -0.0279])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([2.3972,    0.0093,    0.4291,    0.4236,    0.0279])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -1000*np.array([-2.2678,    -0.0079,    0.4282,    -0.3802,    -0.0239])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([2.2678,    0.0079,    0.4282,    0.3802,    0.0239])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -1000*np.array([-2.1966,    -0.0071,    0.4277,    -0.3565,    -0.0216])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([2.1966,    0.0071,    0.4277,    0.3565,    0.0216])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-       
-        wy = -1000*np.array([-2.2678,    -0.0079,    0.4282,    -0.3802,    -0.0239])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([2.2678,    0.0079,    0.4282,    0.3802,    0.0239])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
         
-        wy = -1000*np.array([-1.9100,    -0.0103,    0.3783,    -0.3387,    -0.0202])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = -33*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
         wy = (( wy[0]))/100.0
-        wx = -1000*np.array([1.9100,    0.0103,    0.3783,    0.3387,    0.0202])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        wx = -33*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
         wx = wx[0]/100.0
 
-        wy = -1000*np.array([-1.8100,    -0.0103,    0.3783,    -0.3387,    -0.0202])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
+        wy = -1*np.array([-1599.1437, -4.0095, 382.8, -285.5952, -9.7878])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
         wy = (( wy[0]))/100.0
-        wx = -1000*np.array([1.8100,    0.0103,    0.3783,    0.3387,    0.0202])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
+        wx = -1*np.array([1599.1437, 4.0095, 382.8, 285.5952, 9.7878])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
         wx = wx[0]/100.0
-
-        wy = -1000*np.array([-1.8100,    -0.0103,    0.3783,    -0.3987,    -0.0212])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([1.8100,    0.0103,    0.3783,    0.3987,    0.0212])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wy = -1000*np.array([-1.8100,    -0.0103,    0.3383,    -0.3987,    -0.0212])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([1.8100,    0.0103,    0.3383,    0.3987,    0.0212])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        #wy = -1000*np.array([-1.8100,    -0.0103,    0.3283,    -0.3887,    -0.0212])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        #wy = (( wy[0]))/100.0
-        '''wx = -1000*np.array([1.590,    0.00903,    0.3283,    0.3787,    0.0212])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-
-        wx = -1000*np.array([1.5,    0.00903,    0.3283,    0.3787,    0.0212])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-        wx = -1000*np.array([1.35,    0.00903,    0.2983,    0.3587,    0.0212])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-        wx = -1000*np.array([1.35,    0.00903,    0.2883,    0.3487,    0.0212])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0'''
-        '''wx = -1000*np.array([1.22,    0.00903,    0.2683,    0.3287,    0.0212])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-        wx = -1000*np.array([1.22,    0.00903,    0.2683,    0.3287,    0.0212])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0'''
-        #wx = -1000*np.array([1.18,    0.00903,    0.2685,    0.327,    0.0212])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        #wx = wx[0]/100.0
-        wy = -1000*np.array([-1.9100,    -0.0103,    0.3783,    -0.3387,    -0.0202])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([1.9100,    0.0103,    0.3783,    0.3387,    0.0202])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0
-        wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
-        wy = (( wy[0]))/100.0
-
-        '''wy = -1000*np.array([-2.2845,    -0.0088,    0.4091,    -0.4036,    -0.0266])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) #1*np.array([-50.2038736,-0.000051955,0.5,-101.020,-0.000831289])@np.array([[a],[x],[pitch],[a_dot], [vx]])  #K1@np.array([[a],[x],[pitch],[a_dot], [vx]]) #np,array([1084.475, 6.630223e-05, -10.791, -104.0457, -0.001172803])@np.array([[a],[x],[pitch],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([2.2845,    0.0088,    0.4091,    0.4036,    0.0266])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) #K2@np.array([[b],[y],[roll],[b_dot],[vy]])
-        wx = wx[0]/100.0'''
-
         
         Cf = 1.42e-6
         Ct = 2.84e-7
@@ -579,11 +440,11 @@ class Controller(Node):
             throttle = -1.0
         if throttle > 1:
             throttle = 1.0
-        #sumYawError = sum(self.yawError)
+       
         wz =  -0.5*(yawd-yaw)
         print(f"force: {force}, r: {wx}, p: {wy}, yaw: {wz}")
         self.wxOutput.append(wx)
-        #wx, wy, throttle, wz = 0.0, 0.0, -1.0, 0.0
+        
         u = [wx, wy, throttle, wz]
         return u
 
