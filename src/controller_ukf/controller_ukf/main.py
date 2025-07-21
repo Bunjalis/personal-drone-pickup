@@ -12,7 +12,7 @@ from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller
 from .gui import GUI
-from .trajectories import hover_trajectory
+from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory
 from interfaces.msg import MotionCaptureState, ELRSCommand
 from geometry_msgs.msg import Pose, PoseArray
 from scipy.linalg import cholesky
@@ -39,7 +39,14 @@ class Controller(Node):
 
         self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
 
-        self.traj = hover_trajectory(self.dt)   
+        self.traj = hover_trajectory(self.dt)  
+        self.traj = z_sin_trajectory(self.dt)  
+        self.traj = xyz_sine_trajectory(self.dt)  
+        self.traj = circle_trajectory(self.dt)   
+
+
+        trial_name = "CINEWHOOP_CIRCLE"
+
 
         self.steps = self.traj.shape[1] - 1  # Number of steps in the trajectory
 
@@ -57,7 +64,8 @@ class Controller(Node):
 
 
         # Create a folder to save all CSV files
-        self.output_folder = 'output_data'
+        base_experiment_folder = "/home/mitchell/Documents/PhD/drone_cage_control/ORBSLAM_PAPER_EXPERIMENTS"
+        self.output_folder = os.path.join(base_experiment_folder, trial_name)
         os.makedirs(self.output_folder, exist_ok=True)
 
         # Initialize CSV writers in the constructor
@@ -86,7 +94,7 @@ class Controller(Node):
         self.trajectory_writer = csv.writer(self.trajectory_file)
         self.trajectory_writer.writerows(self.traj.T)  # Save trajectory as rows
 
-        self.est_params = np.array([50.0])  # Initialize thrust ratio parameter to a reasonable value
+        self.est_params = np.array([25.0])  # Initialize thrust ratio parameter to a reasonable value
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -104,11 +112,11 @@ class Controller(Node):
                           1e-5, 1e-5, 1e-5, 1e-5,  # Quaternion process noise
                           1e-3, 1e-3, 1e-3,  # Velocity process noise
                           1e-3, 1e-3, 1e-3,  # Angular rates process noise
-                          1e-5])  # Thrust ratio process noise
-        self.R = np.diag([0.1]*13)  # Measurement noise for all 13 state elements
+                          1e-6])  # Thrust ratio process noise
+        self.R = np.diag([0.05]*13)  # Measurement noise for all 13 state elements
 
 
-        self.delay_states = 1
+        self.delay_states = 6
         self.delay_states_float = float(self.delay_states)
 
         
@@ -210,7 +218,7 @@ class Controller(Node):
                 optimal_delay = delay
 
         # Apply a low-pass filter to smooth the delay value
-        alpha = 0.01  # Reduced low-pass filter coefficient for slower updates
+        alpha = 0.05  # Reduced low-pass filter coefficient for slower updates
         #self.delay_states_float = getattr(self, 'delay_states_float', float(self.delay_states))  # Initialize if not present
         self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
         self.delay_states = round(self.delay_states_float)
@@ -256,8 +264,12 @@ class Controller(Node):
 
 
             ### ESTIMATE CURRENT STATE AFTER DELAY
+            #estimated_state = copy.deepcopy(self.x_est[:13])
             estimated_state = copy.deepcopy(self.current_pose[:13])
-            delayed_control_history = self.control_history[-self.delay_states:]
+
+
+            
+            delayed_control_history = self.control_history[-self.delay_states:-1]
 
             for i, val in enumerate(delayed_control_history):
                 self.sim_integrator.set("x", np.concatenate((estimated_state, np.array(val[0:4]).flatten())))  # Ensure state dimension matches expected size
@@ -320,6 +332,11 @@ class Controller(Node):
             self.x_est = x_pred + K @ ((self.current_pose[:13]) - z_pred)
             self.P = P_pred - K @ P_zz @ K.T
 
+            ### Normalize quaternion to ensure it remains a valid unit quaternion
+            quat_norm = np.linalg.norm(self.x_est[3:7])
+            if quat_norm > 0:
+                self.x_est[3:7] = self.x_est[3:7] / quat_norm
+
 
 
 
@@ -331,7 +348,9 @@ class Controller(Node):
             ### Append control inputs and rates to control history as separate elements
             self.control_history.append(u.tolist() + u_rate.tolist())
             self.observed_state_history.append(self.current_pose.tolist())
-            self.motion_capture_history.append(self.motion_capture_pose.tolist())
+
+            if (self.motion_capture_pose is not None):
+                self.motion_capture_history.append(self.motion_capture_pose.tolist())
             self.parameter_estimation_history.append(self.est_params.tolist())
             self.estimated_state_history.append(estimated_state.tolist())
             self.delay_state_estimation_history.append(self.delay_states)
@@ -399,8 +418,8 @@ class Controller(Node):
         # Convert control history to a numpy array and remove the first 10 commands
         control_history = np.array(self.control_history[10:])
 
-        # Create a figure with four subplots
-        figure, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(10, 16))
+        # Create a figure with six subplots
+        figure, (ax1, ax2, ax3, ax4, ax5, ax6) = plt.subplots(6, 1, figsize=(10, 24))
 
         # Plot all control actions on the first subplot
         ax1.plot(control_history[:, 0], label='Roll', color='blue')
@@ -415,14 +434,15 @@ class Controller(Node):
         # Extract state_history height, desired trajectory height, motion capture height, estimated state height, and UKF state height
         state_history = np.array(self.observed_state_history)
         trajectory_height = self.traj[2, :len(state_history)]  # Assuming z-axis is the height
-        motion_capture_height = np.array(self.motion_capture_history)[:, 2]  # Extract z-axis from motion capture data
         estimated_state_height = np.array(self.estimated_state_history)[:, 2]  # Extract z-axis from estimated state
         UKF_state_height = np.array(self.UKF_state_estimation_history)[:, 2]  # Extract z-axis from UKF state
 
         # Plot state_history height, desired trajectory height, motion capture height, estimated state height, and UKF state height on the second subplot
         ax2.plot(state_history[:, 2], label='Observed State Height', color='purple')
         ax2.plot(trajectory_height, label='Desired Trajectory Height', color='cyan', linestyle='dashed')
-        ax2.plot(motion_capture_height, label='Motion Capture Height', color='magenta', linestyle='dotted')
+        if self.motion_capture_pose is not None:
+            motion_capture_height = np.array(self.motion_capture_history)[:, 2]  # Extract z-axis from motion capture data
+            ax2.plot(motion_capture_height, label='Motion Capture Height', color='magenta', linestyle='dotted')
         ax2.plot(estimated_state_height, label='Estimated State Height', color='green', linestyle='dashdot')
         ax2.plot(UKF_state_height, label='UKF State Height', color='orange', linestyle='solid')
         ax2.set_title('Height Comparison over Time')
@@ -445,6 +465,40 @@ class Controller(Node):
         ax4.set_ylabel('Delay States')
         ax4.set_xlabel('Time Steps')
         ax4.legend()
+
+        # Plot the y-axis values on the fifth subplot
+        trajectory_y = self.traj[1, :len(state_history)]  # Assuming y-axis is the second row
+        estimated_state_y = np.array(self.estimated_state_history)[:, 1]  # Extract y-axis from estimated state
+        UKF_state_y = np.array(self.UKF_state_estimation_history)[:, 1]  # Extract y-axis from UKF state
+
+        ax5.plot(state_history[:, 1], label='Observed State Y', color='purple')
+        ax5.plot(trajectory_y, label='Desired Trajectory Y', color='cyan', linestyle='dashed')
+        if self.motion_capture_pose is not None:
+            motion_capture_y = np.array(self.motion_capture_history)[:, 1]  # Extract y-axis from motion capture data
+            ax5.plot(motion_capture_y, label='Motion Capture Y', color='magenta', linestyle='dotted')
+        ax5.plot(estimated_state_y, label='Estimated State Y', color='green', linestyle='dashdot')
+        ax5.plot(UKF_state_y, label='UKF State Y', color='orange', linestyle='solid')
+        ax5.set_title('Y-Axis Comparison over Time')
+        ax5.set_ylabel('Y-Axis (m)')
+        ax5.set_xlabel('Time Steps')
+        ax5.legend()
+
+        # Plot the x-axis values on the sixth subplot
+        trajectory_x = self.traj[0, :len(state_history)]  # Assuming x-axis is the first row
+        estimated_state_x = np.array(self.estimated_state_history)[:, 0]  # Extract x-axis from estimated state
+        UKF_state_x = np.array(self.UKF_state_estimation_history)[:, 0]  # Extract x-axis from UKF state
+
+        ax6.plot(state_history[:, 0], label='Observed State X', color='purple')
+        ax6.plot(trajectory_x, label='Desired Trajectory X', color='cyan', linestyle='dashed')
+        if self.motion_capture_pose is not None:
+            motion_capture_x = np.array(self.motion_capture_history)[:, 0]  # Extract x-axis from motion capture data
+            ax6.plot(motion_capture_x, label='Motion Capture X', color='magenta', linestyle='dotted')
+        ax6.plot(estimated_state_x, label='Estimated State X', color='green', linestyle='dashdot')
+        ax6.plot(UKF_state_x, label='UKF State X', color='orange', linestyle='solid')
+        ax6.set_title('X-Axis Comparison over Time')
+        ax6.set_ylabel('X-Axis (m)')
+        ax6.set_xlabel('Time Steps')
+        ax6.legend()
 
         plt.tight_layout()
         plt.show()
@@ -480,7 +534,10 @@ class Controller(Node):
         self.trajectory_file.close()
 
         # Plot system response and shutdown
-        self.plotSystemResponse()
+        #self.plotSystemResponse()
+        #self.gui.quit()
+        #rclpy.shutdown()
+        #sys.exit(0)
         self.gui.quit()
         rclpy.shutdown()
         sys.exit(0)

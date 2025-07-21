@@ -39,7 +39,7 @@ class PentaVerify(Node):
         self.current_orientation = Pose().orientation
 
 
-        self.delay_buffer_length = 8
+        self.delay_buffer_length = 6
         
         # Initialize delay buffer
         self.delay_buffer = []
