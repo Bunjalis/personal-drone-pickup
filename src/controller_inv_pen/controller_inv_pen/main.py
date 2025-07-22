@@ -26,7 +26,7 @@ class Controller(Node):
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
-        self.control_frequency = 60.0 #120.0 # 120.0
+        self.control_frequency = 240.0 # 120.0
         self.dt = 1.0 / self.control_frequency
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -106,7 +106,7 @@ class Controller(Node):
 
         ######################## MPC variables #######################
         #self.steps = 90 * 30
-        self.dt = 1.0 / 120.0
+        #self.dt = 1.0 / 120.0
         self.step_counter = 0
         #self.timer = self.create_timer(self.dt, self.control_loop)
         self.traj = hover_trajectory(self.dt)  
@@ -379,6 +379,11 @@ class Controller(Node):
         wx = -1000.0*np.array([1.6726,    0.0097,    0.3308,    0.2966,    0.0183])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
         wx = wx[0]/100.0'''
 
+        wy = -31*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -31*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
         Cf = 1.42e-6
         Ct = 2.84e-7
         l_x = 0.0865
@@ -498,7 +503,7 @@ class Controller(Node):
 
             self.pre_start_counter += 1
 
-        if self.armed and self.current_pose is not None:
+        if self.armed and self.current_pose is not None and self.currentPenPose is not None:
             if self.step_counter + self.N * self.skip_steps > self.steps:
                 self.step_counter = 0
                 self.armed = False
@@ -748,9 +753,10 @@ class Controller(Node):
             #ax4[0].plot(time, self.bError, label="actual data")
             
             #ax4[0].plot(time, self.modelOutputA, label="model data A")
-            ax4[0].plot(time, self.modelOutputB, label="model data B")
-            ax4[0].set_title('b model over time')
-            ax4[0].set_ylabel('b')
+            ax4[0].plot(time, self.aError, label="a")
+            #ax4[0].plot(time, self.modelOutputB, label="model data B")
+            ax4[0].set_title('a over time')
+            ax4[0].set_ylabel('a')
             ax4[0].set_xlabel('time (s)')
             #ax4[0].legend('lower right')
 
