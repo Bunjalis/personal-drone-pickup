@@ -26,7 +26,7 @@ class Controller(Node):
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
-        self.control_frequency = 120.0 # 120.0
+        self.control_frequency = 60.0 #120.0 # 120.0
         self.dt = 1.0 / self.control_frequency
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -273,6 +273,26 @@ class Controller(Node):
         wy = (( wy[0]))/100.0
         wx = -1*np.array([1599.1437, 4.0095, 382.8, 285.5952, 9.7878])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
         wx = wx[0]/100.0
+
+        wy = -1000*np.array([-1.9656,    -0.0221,    0.3099,    -0.3464,    -0.0370])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -1000*np.array([1.9656,    0.0221,    0.3099,    0.3464,    0.0370])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        wy = -31*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -31*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        wy = -1*np.array([-1502.2259,-3.7665, 359.6, -268.2864, -9.1946])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -1*np.array([1502.2259, 3.7665, 359.6, 268.2864, 9.1946])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        wy = -1*np.array([-1502.2259,-3.7665, 359.6, -268.2864, -9.1946])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -1*np.array([1502.2259, 4.7665, 359.6, 268.2864, 9.1946])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
         
         Cf = 1.42e-6
         Ct = 2.84e-7
@@ -329,6 +349,7 @@ class Controller(Node):
             raise Exception(f'acados returned status {status}.')
 
         u = self.ocp.get(0, "u")
+        x = self.ocp.get(1, "x")
         cost = self.ocp.get_cost()
         print("Optimal cost:", cost)
         #if self.enable_L1_augmentation:
