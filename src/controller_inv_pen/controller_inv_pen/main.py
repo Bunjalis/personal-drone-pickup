@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 from tf_transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_matrix
 import time
-from .acados import generate_ocp_controller
+#from .acados import generate_ocp_controller
 
 
 class Controller(Node):
@@ -112,7 +112,7 @@ class Controller(Node):
         self.traj = hover_trajectory(self.dt)  
         self.steps = self.traj.shape[1] - 1   
         # Get both the OCP solver and the integrator
-        self.ocp, self.sim_integrator = generate_ocp_controller()
+        self.ocp, self.sim_integrator = None, None #generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         # Original trajectories
