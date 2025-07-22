@@ -46,7 +46,7 @@ def generate_ocp_controller(dynamics=None):
 
     # Cost matrices (tune as needed)
     Q_mat = 2 * np.diag([
-        10.0, 10.0, 10.0,    # position
+        5.0, 5.0, 10.0,    # position
         2.5, 2.5, 2.5, 2.5,  # quaternion
         1.0, 1.0, 1.0,      # velocity
         1.0, 1.0, 1.0,      # angular rates

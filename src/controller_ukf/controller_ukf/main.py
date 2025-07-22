@@ -41,11 +41,15 @@ class Controller(Node):
 
         self.traj = hover_trajectory(self.dt)  
         self.traj = z_sin_trajectory(self.dt)  
-        #self.traj = xyz_sine_trajectory(self.dt)  
+        self.traj = xyz_sine_trajectory(self.dt)  
         #self.traj = circle_trajectory(self.dt)   
 
 
-        trial_name = "BIGQUAD_Z_SINE"
+        trial_name = "BIGQUAD_XYZ_SINE"
+
+
+        self.est_params = np.array([50.0])  # Initialize thrust ratio parameter to a reasonable value
+
 
 
         self.steps = self.traj.shape[1] - 1  # Number of steps in the trajectory
@@ -94,8 +98,7 @@ class Controller(Node):
         self.trajectory_writer = csv.writer(self.trajectory_file)
         self.trajectory_writer.writerows(self.traj.T)  # Save trajectory as rows
 
-        self.est_params = np.array([50.0])  # Initialize thrust ratio parameter to a reasonable value
-
+        
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
         self.x_est = np.array([0.0, 0.0, 0.0, 
