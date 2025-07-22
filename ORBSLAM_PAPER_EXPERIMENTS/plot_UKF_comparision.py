@@ -6,61 +6,54 @@ import sys
 import argparse
 
 # Configuration settings
-MAX_TIMESTEPS = 500
+MAX_TIMESTEPS = 1000  # Adjusted for your data length
 
 # Plot settings
-FIGURE_SIZE = (12, 18)
+FIGURE_SIZE_3D = (12, 8)
+FIGURE_SIZE_2D = (12, 6)
 MAIN_TITLE_SIZE = 24
-SUBPLOT_TITLE_SIZE = 36
-AXIS_LABEL_SIZE = 28
+SUBPLOT_TITLE_SIZE = 38
+AXIS_LABEL_SIZE = 30
 TICK_LABEL_SIZE = 24
-LEGEND_SIZE = 20
+LEGEND_SIZE = 26
 LINE_WIDTH = 4
 GRID_ALPHA = 0.3
-DPI = 600  # High resolution for journal publication
+
+# Tick settings - Control the number of ticks on axes
+MAX_TICKS_3D = 5        # Maximum number of ticks per axis on 3D plot
+MAX_TICKS_2D = 6        # Maximum number of ticks per axis on 2D plot
+
+# 3D plot label positioning
+LABEL_PAD_3D = 20       # Distance of axis labels from the axis (in points)
+TICK_PAD_Z = 10         # Distance of z-axis tick labels from the axis (in points)
 
 # Colors - Custom palette (converted from D3.js)
 # Palette: ['#00429d', '#415395', '#59668a', '#657b7d', '#68926c', '#5dab55', '#31c52f']
-DESIRED_HEIGHT_COLOR = '#657b7d'        # Gray-green - reference line
-UKF_HEIGHT_COLOR = '#00429d'            # Dark blue - UKF enabled
-THRUST_RATIO_COLOR = '#59668a'          # Blue-gray - UKF enabled
-NO_UKF_HEIGHT_COLOR = '#31c52f'         # Bright green - UKF disabled
-NO_UKF_THRUST_COLOR = '#5dab55'         # Medium green - UKF disabled
-NO_DATA_TEXT_SIZE = 48
+DESIRED_TRAJECTORY_COLOR = '#657b7d'    # Gray-green - reference line
+WITH_UKF_COLOR = '#00429d'              # Dark blue - with UKF
+WITHOUT_UKF_COLOR = '#31c52f'           # Bright green - without UKF
+PARAMETER_WITH_UKF_COLOR = '#415395'    # Medium blue - parameter estimation with UKF
+PARAMETER_WITHOUT_UKF_COLOR = '#5dab55' # Medium green - parameter estimation without UKF
 
-# Line styles - Different patterns for black/white distinction
-DESIRED_HEIGHT_STYLE = ':'              # Dotted for reference
-UKF_HEIGHT_STYLE = '-'                  # Solid for UKF enabled
-THRUST_RATIO_STYLE = '-'                # Solid for UKF enabled
-NO_UKF_STYLE = '-'                      # Solid for UKF disabled
+# Line styles
+DESIRED_TRAJECTORY_STYLE = ':'         # Dashed for reference
+WITH_UKF_STYLE = '-'                   # Solid for with UKF
+WITHOUT_UKF_STYLE = '-'                # Solid for without UKF
 
-# Labels - All text labels used in the plots
-DESIRED_HEIGHT_LABEL = 'Desired Height'
-UKF_HEIGHT_LABEL = 'UKF State Height'
-THRUST_RATIO_LABEL = 'Estimated Thrust Ratio'
-
-# Plot-specific labels
-UKF_HEIGHT_ENABLED_LABEL = 'w/ UKF'
-UKF_HEIGHT_DISABLED_LABEL = 'w/o UKF'
-THRUST_RATIO_ENABLED_LABEL = 'w/ UKF'
-THRUST_RATIO_DISABLED_LABEL = 'w/o UKF'
+# Labels
+DESIRED_TRAJECTORY_LABEL = 'Desired Trajectory'
+WITH_UKF_LABEL = 'w UKF enabled'
+WITHOUT_UKF_LABEL = 'w/o UKF enabled'
 
 # Axis labels
-HEIGHT_YLABEL = 'Height (m)'
-THRUST_YLABEL = 'Est. Thrust Ratio'
 XLABEL = 'Time Steps'
+PARAMETER_YLABEL = 'Est. Thrust Ratio'
 
-# Error messages
-NO_THRUST_DATA_MSG = 'No thrust ratio data available'
+with_UKF_dataset = 'BIGQUAD_CIRCLE_2_WITH_UKF'
+without_UKF_dataset = 'BIGQUAD_CIRCLE_3_WITHOUT_UKF'
 
-# Additional labels for dual-dataset plotting
-LABEL_HEIGHT_REFERENCE = 'Reference Height'
-LABEL_HEIGHT_ESTIMATED_UKF = 'UKF Enabled'
-LABEL_HEIGHT_ESTIMATED_NO_UKF = 'UKF Disabled'
-LABEL_THRUST_UKF = 'UKF Enabled'
-LABEL_THRUST_NO_UKF = 'UKF Disabled'
-LABEL_SPEED_UKF = 'UKF Enabled'
-LABEL_SPEED_NO_UKF = 'UKF Disabled'
+
+
 
 def load_trial_data(trial_directory):
     """Load all CSV files from a trial directory"""
@@ -94,130 +87,134 @@ def load_trial_data(trial_directory):
     return data
 
 
-
 def main():
-    ukf_disabled_dir = 'BIGQUAD_HOVER_NO_UKF'
-    ukf_enabled_dir = 'BIGQUAD_HOVER_2'
+    # Set up the paths to both datasets
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    with_ukf_path = os.path.join(base_path, with_UKF_dataset)
+    without_ukf_path = os.path.join(base_path, without_UKF_dataset)
     
-    # Load data for both trials
-    print("Loading UKF enabled data...")
-    data_ukf_enabled = load_trial_data(ukf_enabled_dir)
+    # Load both datasets
+    ukf_data = load_trial_data(with_ukf_path)
+    no_ukf_data = load_trial_data(without_ukf_path)
     
-    print("Loading UKF disabled data...")
-    data_ukf_disabled = load_trial_data(ukf_disabled_dir)
+    # Extract data from UKF dataset
+    ukf_states = ukf_data['UKF_state_estimation_history'][:-180]
+    no_ukf_states = no_ukf_data['UKF_state_estimation_history'][:-180]
+    desired_trajectory = ukf_data['trajectory'][:-180]
     
-    # Create a figure with 3x1 grid of subplots (3 rows, 1 column)
-    figure, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=FIGURE_SIZE)
+    # Extract parameter estimation data
+    ukf_params = ukf_data['parameter_estimation_history'][:-180]
+    no_ukf_params = no_ukf_data['parameter_estimation_history'][:-180]
     
-    # Add subplot labels (a), (b), (c) for academic papers
-    ax1.text(-0.1, 1.02, '(a)', transform=ax1.transAxes, fontsize=SUBPLOT_TITLE_SIZE, fontweight='bold')
-    ax2.text(-0.1, 1.02, '(b)', transform=ax2.transAxes, fontsize=SUBPLOT_TITLE_SIZE, fontweight='bold')
-    ax3.text(-0.1, 1.02, '(c)', transform=ax3.transAxes, fontsize=SUBPLOT_TITLE_SIZE, fontweight='bold')
+    # Extract position coordinates (first 3 columns: x, y, z)
+    # UKF dataset
+    x_ukf, y_ukf, z_ukf = ukf_states[:, 0], ukf_states[:, 1], ukf_states[:, 2]
+    x_no_ukf, y_no_ukf, z_no_ukf = no_ukf_states[:, 0], no_ukf_states[:, 1], no_ukf_states[:, 2]
+    x_des, y_des, z_des = desired_trajectory[:, 0], desired_trajectory[:, 1], desired_trajectory[:, 2]
 
-    def plot_height_comparison(ax, data_ukf, data_no_ukf, label_ref, label_ukf, label_no_ukf):
-        """Helper function to plot height comparison data for both datasets"""
-        # Get trajectory data if available (use from UKF data as reference)
-        trajectory_height = None
-        if data_ukf['trajectory'] is not None:
-            traj = data_ukf['trajectory'].T  # Transpose to match expected format
-            if len(traj) >= 3:
-                # Match trajectory length to state history if available
-                if data_ukf['observed_state_history'] is not None:
-                    trajectory_height = traj[2, :min(len(data_ukf['observed_state_history']), MAX_TIMESTEPS)] if len(traj[2]) >= min(len(data_ukf['observed_state_history']), MAX_TIMESTEPS) else traj[2][:MAX_TIMESTEPS]
-                else:
-                    trajectory_height = traj[2][:MAX_TIMESTEPS]
+    # Create time vector for parameter estimation plot
+    time_steps = np.arange(len(ukf_params))
 
-        # Plot desired trajectory height
-        if trajectory_height is not None:
-            ax.plot(trajectory_height, label=label_ref, color=DESIRED_HEIGHT_COLOR, 
-                   linestyle=DESIRED_HEIGHT_STYLE, linewidth=LINE_WIDTH)
-        
-        # Plot UKF state estimation height
-        if data_ukf['UKF_state_estimation_history'] is not None and data_ukf['UKF_state_estimation_history'].shape[1] >= 3:
-            ukf_height = data_ukf['UKF_state_estimation_history'][:MAX_TIMESTEPS, 2]
-            ax.plot(ukf_height, label=label_ukf, color=UKF_HEIGHT_COLOR, 
-                   linestyle=UKF_HEIGHT_STYLE, linewidth=LINE_WIDTH)
-        
-        # Plot non-UKF height estimation (observed state)
-        if data_no_ukf['observed_state_history'] is not None and data_no_ukf['observed_state_history'].shape[1] >= 3:
-            no_ukf_height = data_no_ukf['observed_state_history'][:MAX_TIMESTEPS, 2]
-            ax.plot(no_ukf_height, label=label_no_ukf, color=NO_UKF_HEIGHT_COLOR, 
-                   linestyle=NO_UKF_STYLE, linewidth=LINE_WIDTH)
-        
-        ax.set_ylabel(HEIGHT_YLABEL, fontsize=AXIS_LABEL_SIZE)
-        ax.set_xlabel(XLABEL, fontsize=AXIS_LABEL_SIZE)
-        ax.tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
-        ax.legend(fontsize=LEGEND_SIZE)
+    # Camera position settings for 3D plot (azimuth, elevation)
+    # You can modify these values to change the default camera view
+    camera_azimuth = -140  # Rotation around z-axis (degrees)
+    camera_elevation = 20  # Angle above the xy-plane (degrees)
 
-    def plot_thrust_ratio(ax, data_ukf, data_no_ukf, label_ukf, label_no_ukf):
-        """Helper function to plot estimated thrust ratio (parameter estimation) for both datasets"""
-        # Plot UKF thrust ratio
-        if data_ukf['parameter_estimation_history'] is not None:
-            parameter_estimation = data_ukf['parameter_estimation_history'].flatten()[:MAX_TIMESTEPS]
-            ax.plot(parameter_estimation, label=label_ukf, color=THRUST_RATIO_COLOR, 
-                   linestyle=THRUST_RATIO_STYLE, linewidth=LINE_WIDTH)
-        
-        # Plot non-UKF thrust ratio
-        if data_no_ukf['parameter_estimation_history'] is not None:
-            parameter_estimation_no_ukf = data_no_ukf['parameter_estimation_history'].flatten()[:MAX_TIMESTEPS]
-            ax.plot(parameter_estimation_no_ukf, label=label_no_ukf, color=NO_UKF_THRUST_COLOR, 
-                   linestyle=NO_UKF_STYLE, linewidth=LINE_WIDTH)
-        
-        # If no data available for either
-        if (data_ukf['parameter_estimation_history'] is None and 
-            data_no_ukf['parameter_estimation_history'] is None):
-            ax.text(0.5, 0.5, NO_THRUST_DATA_MSG, 
-                   horizontalalignment='center', verticalalignment='center', 
-                   transform=ax.transAxes, fontsize=NO_DATA_TEXT_SIZE)
-        
-        ax.set_ylabel(THRUST_YLABEL, fontsize=AXIS_LABEL_SIZE)
-        ax.set_xlabel(XLABEL, fontsize=AXIS_LABEL_SIZE)
-        ax.tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
-        ax.legend(fontsize=LEGEND_SIZE)
-
-    def plot_speed_estimation(ax, data_ukf, data_no_ukf, label_ukf, label_no_ukf):
-        """Helper function to plot speed estimation comparison for both datasets"""
-        # Calculate speed from velocity components for UKF data
-        if data_ukf['UKF_state_estimation_history'] is not None and data_ukf['UKF_state_estimation_history'].shape[1] >= 6:
-            # Assuming columns 3,4,5 are vx, vy, vz
-            ukf_velocities = data_ukf['UKF_state_estimation_history'][:MAX_TIMESTEPS, 3:6]
-            ukf_speed = np.linalg.norm(ukf_velocities, axis=1)
-            ax.plot(ukf_speed, label=label_ukf, color=UKF_HEIGHT_COLOR, 
-                   linestyle=UKF_HEIGHT_STYLE, linewidth=LINE_WIDTH)
-        
-        # Calculate speed from velocity components for non-UKF data
-        if data_no_ukf['observed_state_history'] is not None and data_no_ukf['observed_state_history'].shape[1] >= 6:
-            # Assuming columns 3,4,5 are vx, vy, vz
-            no_ukf_velocities = data_no_ukf['observed_state_history'][:MAX_TIMESTEPS, 3:6]
-            no_ukf_speed = np.linalg.norm(no_ukf_velocities, axis=1)
-            ax.plot(no_ukf_speed, label=label_no_ukf, color=NO_UKF_HEIGHT_COLOR, 
-                   linestyle=NO_UKF_STYLE, linewidth=LINE_WIDTH)
-        
-        # If no data available for either
-        if ((data_ukf['UKF_state_estimation_history'] is None or data_ukf['UKF_state_estimation_history'].shape[1] < 6) and 
-            (data_no_ukf['observed_state_history'] is None or data_no_ukf['observed_state_history'].shape[1] < 6)):
-            ax.text(0.5, 0.5, 'No velocity data available', 
-                   horizontalalignment='center', verticalalignment='center', 
-                   transform=ax.transAxes, fontsize=NO_DATA_TEXT_SIZE)
-        
-        ax.set_ylabel('Speed (m/s)', fontsize=AXIS_LABEL_SIZE)
-        ax.set_xlabel(XLABEL, fontsize=AXIS_LABEL_SIZE)
-        ax.tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
-        ax.legend(fontsize=LEGEND_SIZE)
-
-    # Plot all comparisons on the same axes for direct comparison
-    plot_height_comparison(ax1, data_ukf_enabled, data_ukf_disabled, LABEL_HEIGHT_REFERENCE, LABEL_HEIGHT_ESTIMATED_UKF, LABEL_HEIGHT_ESTIMATED_NO_UKF)
-    plot_thrust_ratio(ax2, data_ukf_enabled, data_ukf_disabled, LABEL_THRUST_UKF, LABEL_THRUST_NO_UKF)
-    plot_speed_estimation(ax3, data_ukf_enabled, data_ukf_disabled, LABEL_SPEED_UKF, LABEL_SPEED_NO_UKF)
+    # Create first figure: 3D trajectory plot
+    fig1 = plt.figure(figsize=FIGURE_SIZE_3D)
+    ax1 = fig1.add_subplot(111, projection='3d')
     
-    # Adjust layout to prevent overlapping
+    # Plot trajectories with consistent styling
+    ax1.plot(x_ukf, y_ukf, z_ukf, color=WITH_UKF_COLOR, linestyle=WITH_UKF_STYLE, 
+             linewidth=LINE_WIDTH, label=WITH_UKF_LABEL, alpha=0.9)
+    ax1.plot(x_no_ukf, y_no_ukf, z_no_ukf, color=WITHOUT_UKF_COLOR, linestyle=WITHOUT_UKF_STYLE, 
+             linewidth=LINE_WIDTH, label=WITHOUT_UKF_LABEL, alpha=0.9)
+    ax1.plot(x_des, y_des, z_des, color=DESIRED_TRAJECTORY_COLOR, linestyle=DESIRED_TRAJECTORY_STYLE, 
+             linewidth=LINE_WIDTH, label=DESIRED_TRAJECTORY_LABEL, alpha=0.8)
+
+    # Set labels and title for 3D plot with consistent styling
+    ax1.set_xlabel('X (m)', fontsize=AXIS_LABEL_SIZE, labelpad=LABEL_PAD_3D)
+    ax1.set_ylabel('Y (m)', fontsize=AXIS_LABEL_SIZE, labelpad=LABEL_PAD_3D)
+    ax1.set_zlabel('Z (m)', fontsize=AXIS_LABEL_SIZE, labelpad=LABEL_PAD_3D)
+    ax1.tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
+    
+    # Move z-axis tick labels further away
+    ax1.tick_params(axis='z', which='major', pad=TICK_PAD_Z)
+    
+    # Control the number of ticks on 3D plot
+    from matplotlib.ticker import MaxNLocator
+    ax1.xaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_3D))
+    ax1.yaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_3D))
+    ax1.zaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_3D))
+    
+    # Add subplot label (a) closer to the plot area
+    ax1.text2D(0.0, 0.9, '(a)', transform=ax1.transAxes, fontsize=SUBPLOT_TITLE_SIZE, 
+               fontweight='bold', verticalalignment='bottom')
+
+    # Set camera position
+    ax1.view_init(elev=camera_elevation, azim=camera_azimuth)
+    ax1.set_box_aspect([1,1,1])
+    ax1.grid(True, alpha=GRID_ALPHA)
+    
     plt.tight_layout()
     
-    # Save the figure as a PDF with high DPI for journal quality
-    plt.savefig('UKF_comparison.pdf', dpi=DPI, bbox_inches='tight', format='pdf')
+    # Create separate figure for the 3D plot legend
+    fig_legend = plt.figure(figsize=(8, 2))
+    ax_legend = fig_legend.add_subplot(111)
+    ax_legend.axis('off')  # Hide the axes
+    
+    # Create dummy plots for the legend
+    ax_legend.plot([], [], color=WITH_UKF_COLOR, linestyle=WITH_UKF_STYLE, 
+                   linewidth=LINE_WIDTH, label=WITH_UKF_LABEL)
+    ax_legend.plot([], [], color=WITHOUT_UKF_COLOR, linestyle=WITHOUT_UKF_STYLE, 
+                   linewidth=LINE_WIDTH, label=WITHOUT_UKF_LABEL)
+    ax_legend.plot([], [], color=DESIRED_TRAJECTORY_COLOR, linestyle=DESIRED_TRAJECTORY_STYLE, 
+                   linewidth=LINE_WIDTH, label=DESIRED_TRAJECTORY_LABEL)
+    
+    # Create the legend
+    legend = ax_legend.legend(fontsize=LEGEND_SIZE, ncol=3, loc='center', frameon=False)
+    
+    plt.tight_layout()
+    
+    # Create second figure: Parameter estimation plot
+    fig2 = plt.figure(figsize=FIGURE_SIZE_2D)
+    ax2 = fig2.add_subplot(111)
+    
+    # Plot parameter estimation history with consistent styling
+    ax2.plot(time_steps, ukf_params, color=PARAMETER_WITH_UKF_COLOR, linestyle=WITH_UKF_STYLE, 
+             linewidth=LINE_WIDTH, label=WITH_UKF_LABEL, alpha=1.0)
+    ax2.plot(time_steps, no_ukf_params, color=PARAMETER_WITHOUT_UKF_COLOR, linestyle=WITHOUT_UKF_STYLE, 
+             linewidth=LINE_WIDTH, label=WITHOUT_UKF_LABEL, alpha=1.0)
+    
+    # Set labels for parameter estimation plot with consistent styling
+    ax2.set_xlabel(XLABEL, fontsize=AXIS_LABEL_SIZE)
+    ax2.set_ylabel(PARAMETER_YLABEL, fontsize=AXIS_LABEL_SIZE)
+    
+    # Add subplot label (b) closer to the plot area
+    ax2.text(-0.05, 1.01, '(b)', transform=ax2.transAxes, fontsize=SUBPLOT_TITLE_SIZE, 
+             fontweight='bold', verticalalignment='bottom')
+    ax2.tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
+    
+    # Control the number of ticks on 2D plot
+    ax2.xaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_2D))
+    ax2.yaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_2D))
+    
+    ax2.legend(fontsize=LEGEND_SIZE)
+    ax2.grid(True, alpha=GRID_ALPHA)
+    
+    plt.tight_layout()
+    
+    # Save the plots as PDFs
+    fig1.savefig('UKF_3D_trajectory_comparison.pdf', format='pdf', dpi=400, bbox_inches='tight')
+    fig_legend.savefig('UKF_3D_trajectory_legend.pdf', format='pdf', dpi=400, bbox_inches='tight')
+    fig2.savefig('UKF_parameter_estimation_comparison.pdf', format='pdf', dpi=400, bbox_inches='tight')
+    print("Plots saved as:")
+    print("  - 'UKF_3D_trajectory_comparison.pdf'")
+    print("  - 'UKF_3D_trajectory_legend.pdf'")
+    print("  - 'UKF_parameter_estimation_comparison.pdf'")
+    
     plt.show()
-
-
+    
 
 if __name__ == "__main__":
     main()
