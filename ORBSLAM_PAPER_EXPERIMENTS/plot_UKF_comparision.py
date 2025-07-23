@@ -46,7 +46,7 @@ WITH_UKF_LABEL = 'w UKF enabled'
 WITHOUT_UKF_LABEL = 'w/o UKF enabled'
 
 # Axis labels
-XLABEL = 'Time Steps'
+XLABEL = 'Time (s)'
 PARAMETER_YLABEL = 'Est. Thrust Ratio'
 
 with_UKF_dataset = 'BIGQUAD_CIRCLE_2_WITH_UKF'
@@ -106,14 +106,18 @@ def main():
     ukf_params = ukf_data['parameter_estimation_history'][:-180]
     no_ukf_params = no_ukf_data['parameter_estimation_history'][:-180]
     
+    # Convert parameter estimation to thrust ratio by dividing by 9.81
+    ukf_thrust_ratio = ukf_params / 9.81
+    no_ukf_thrust_ratio = no_ukf_params / 9.81
+    
     # Extract position coordinates (first 3 columns: x, y, z)
     # UKF dataset
     x_ukf, y_ukf, z_ukf = ukf_states[:, 0], ukf_states[:, 1], ukf_states[:, 2]
     x_no_ukf, y_no_ukf, z_no_ukf = no_ukf_states[:, 0], no_ukf_states[:, 1], no_ukf_states[:, 2]
     x_des, y_des, z_des = desired_trajectory[:, 0], desired_trajectory[:, 1], desired_trajectory[:, 2]
 
-    # Create time vector for parameter estimation plot
-    time_steps = np.arange(len(ukf_params))
+    # Create time vector for parameter estimation plot in seconds
+    time_steps = np.arange(len(ukf_thrust_ratio)) / 30.0
 
     # Camera position settings for 3D plot (azimuth, elevation)
     # You can modify these values to change the default camera view
@@ -181,9 +185,9 @@ def main():
     ax2 = fig2.add_subplot(111)
     
     # Plot parameter estimation history with consistent styling
-    ax2.plot(time_steps, ukf_params, color=PARAMETER_WITH_UKF_COLOR, linestyle=WITH_UKF_STYLE, 
+    ax2.plot(time_steps, ukf_thrust_ratio, color=PARAMETER_WITH_UKF_COLOR, linestyle=WITH_UKF_STYLE, 
              linewidth=LINE_WIDTH, label=WITH_UKF_LABEL, alpha=1.0)
-    ax2.plot(time_steps, no_ukf_params, color=PARAMETER_WITHOUT_UKF_COLOR, linestyle=WITHOUT_UKF_STYLE, 
+    ax2.plot(time_steps, no_ukf_thrust_ratio, color=PARAMETER_WITHOUT_UKF_COLOR, linestyle=WITHOUT_UKF_STYLE, 
              linewidth=LINE_WIDTH, label=WITHOUT_UKF_LABEL, alpha=1.0)
     
     # Set labels for parameter estimation plot with consistent styling

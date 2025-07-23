@@ -54,7 +54,7 @@ LATENCY_DISABLED_LABEL = 'w/o Latency Est.'
 HEIGHT_YLABEL = 'Height (m)'
 THRUST_YLABEL = 'Est. Thrust Ratio'
 LATENCY_YLABEL = 'Latency State Est.'
-XLABEL = 'Time Steps'
+XLABEL = 'Time (s)'
 
 # Error messages
 NO_THRUST_DATA_MSG = 'No thrust ratio data available'
@@ -125,18 +125,21 @@ def main():
                     trajectory_height_enabled = traj[2][:MAX_TIMESTEPS]
 
         if trajectory_height_enabled is not None:
-            ax.plot(trajectory_height_enabled, label=DESIRED_HEIGHT_LABEL, color=DESIRED_HEIGHT_COLOR, 
+            time_traj = np.arange(len(trajectory_height_enabled)) / 30.0
+            ax.plot(time_traj, trajectory_height_enabled, label=DESIRED_HEIGHT_LABEL, color=DESIRED_HEIGHT_COLOR, 
                    linestyle=DESIRED_HEIGHT_STYLE, linewidth=LINE_WIDTH)
         
         if data_enabled['UKF_state_estimation_history'] is not None and data_enabled['UKF_state_estimation_history'].shape[1] >= 3:
             ukf_height_enabled = data_enabled['UKF_state_estimation_history'][:MAX_TIMESTEPS, 2]
-            ax.plot(ukf_height_enabled, label=UKF_HEIGHT_ENABLED_LABEL, color=UKF_HEIGHT_COLOR, 
+            time_ukf_enabled = np.arange(len(ukf_height_enabled)) / 30.0
+            ax.plot(time_ukf_enabled, ukf_height_enabled, label=UKF_HEIGHT_ENABLED_LABEL, color=UKF_HEIGHT_COLOR, 
                    linestyle=UKF_HEIGHT_STYLE, linewidth=LINE_WIDTH)
         
         # Plot data for no latency compensation
         if data_disabled['UKF_state_estimation_history'] is not None and data_disabled['UKF_state_estimation_history'].shape[1] >= 3:
             ukf_height_disabled = data_disabled['UKF_state_estimation_history'][:MAX_TIMESTEPS, 2]
-            ax.plot(ukf_height_disabled, label=UKF_HEIGHT_DISABLED_LABEL, color=NO_LATENCY_UKF_COLOR, 
+            time_ukf_disabled = np.arange(len(ukf_height_disabled)) / 30.0
+            ax.plot(time_ukf_disabled, ukf_height_disabled, label=UKF_HEIGHT_DISABLED_LABEL, color=NO_LATENCY_UKF_COLOR, 
                    linestyle=NO_LATENCY_STYLE, linewidth=LINE_WIDTH)
         
         ax.set_ylabel(HEIGHT_YLABEL, fontsize=AXIS_LABEL_SIZE)
@@ -148,12 +151,18 @@ def main():
         """Helper function to plot estimated thrust ratio for both conditions"""
         if data_enabled['parameter_estimation_history'] is not None:
             parameter_estimation_enabled = data_enabled['parameter_estimation_history'].flatten()[:MAX_TIMESTEPS]
-            ax.plot(parameter_estimation_enabled, label=THRUST_RATIO_ENABLED_LABEL, color=THRUST_RATIO_COLOR, 
+            # Convert to thrust ratio by dividing by 9.81
+            thrust_ratio_enabled = parameter_estimation_enabled / 9.81
+            time_enabled = np.arange(len(thrust_ratio_enabled)) / 30.0
+            ax.plot(time_enabled, thrust_ratio_enabled, label=THRUST_RATIO_ENABLED_LABEL, color=THRUST_RATIO_COLOR, 
                    linestyle=THRUST_RATIO_STYLE, linewidth=LINE_WIDTH)
         
         if data_disabled['parameter_estimation_history'] is not None:
             parameter_estimation_disabled = data_disabled['parameter_estimation_history'].flatten()[:MAX_TIMESTEPS]
-            ax.plot(parameter_estimation_disabled, label=THRUST_RATIO_DISABLED_LABEL, color=NO_LATENCY_THRUST_COLOR, 
+            # Convert to thrust ratio by dividing by 9.81
+            thrust_ratio_disabled = parameter_estimation_disabled / 9.81
+            time_disabled = np.arange(len(thrust_ratio_disabled)) / 30.0
+            ax.plot(time_disabled, thrust_ratio_disabled, label=THRUST_RATIO_DISABLED_LABEL, color=NO_LATENCY_THRUST_COLOR, 
                    linestyle=NO_LATENCY_STYLE, linewidth=LINE_WIDTH)
         
         if data_enabled['parameter_estimation_history'] is None and data_disabled['parameter_estimation_history'] is None:
@@ -170,12 +179,14 @@ def main():
         """Helper function to plot delay state estimation for both conditions"""
         if data_enabled['delay_state_estimation_history'] is not None:
             delay_estimation_enabled = data_enabled['delay_state_estimation_history'].flatten()[:MAX_TIMESTEPS]
-            ax.plot(delay_estimation_enabled, label=LATENCY_ENABLED_LABEL, color=LATENCY_COLOR, 
+            time_enabled = np.arange(len(delay_estimation_enabled)) / 30.0
+            ax.plot(time_enabled, delay_estimation_enabled, label=LATENCY_ENABLED_LABEL, color=LATENCY_COLOR, 
                    linestyle=LATENCY_STYLE, linewidth=LINE_WIDTH)
         
         if data_disabled['delay_state_estimation_history'] is not None:
             delay_estimation_disabled = data_disabled['delay_state_estimation_history'].flatten()[:MAX_TIMESTEPS]
-            ax.plot(delay_estimation_disabled, label=LATENCY_DISABLED_LABEL, color=NO_LATENCY_DELAY_COLOR, 
+            time_disabled = np.arange(len(delay_estimation_disabled)) / 30.0
+            ax.plot(time_disabled, delay_estimation_disabled, label=LATENCY_DISABLED_LABEL, color=NO_LATENCY_DELAY_COLOR, 
                    linestyle=NO_LATENCY_STYLE, linewidth=LINE_WIDTH)
         
         if data_enabled['delay_state_estimation_history'] is None and data_disabled['delay_state_estimation_history'] is None:
