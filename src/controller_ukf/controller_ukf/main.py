@@ -12,7 +12,7 @@ from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller
 from .gui import GUI
-from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory
+from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, light_circle_trajectory
 from interfaces.msg import MotionCaptureState, ELRSCommand
 from geometry_msgs.msg import Pose, PoseArray
 from scipy.linalg import cholesky
@@ -41,14 +41,15 @@ class Controller(Node):
 
         self.traj = hover_trajectory(self.dt)  
         self.traj = z_sin_trajectory(self.dt)  
-        self.traj = xyz_sine_trajectory(self.dt)  
-        #self.traj = circle_trajectory(self.dt)   
+        #self.traj = xyz_sine_trajectory(self.dt)  
+        self.traj = circle_trajectory(self.dt)   
+        self.traj = light_circle_trajectory(self.dt)
 
 
-        trial_name = "BIGQUAD_XYZ_SINE"
+        trial_name = "LIGHTTRIAL_2"
 
 
-        self.est_params = np.array([50.0])  # Initialize thrust ratio parameter to a reasonable value
+        self.est_params = np.array([38.0])  # Initialize thrust ratio parameter to a reasonable value
 
 
 
@@ -119,7 +120,7 @@ class Controller(Node):
         self.R = np.diag([0.05]*13)  # Measurement noise for all 13 state elements
 
 
-        self.delay_states = 6
+        self.delay_states = 1
         self.delay_states_float = float(self.delay_states)
 
         
@@ -166,7 +167,7 @@ class Controller(Node):
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
-        self.motion_capture_pose = np.round(np.array([
+        self.current_pose = np.round(np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
         ]), 3) #motion_capture_pose
         #self.current_pose = np.round(np.array([
@@ -176,7 +177,7 @@ class Controller(Node):
 
     def orb_slam_state_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
-        self.current_pose = np.round(np.array([
+        self.motion_capture_pose = np.round(np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
         ]), 3) #orb_slam_pose
 
@@ -223,8 +224,8 @@ class Controller(Node):
         # Apply a low-pass filter to smooth the delay value
         alpha = 0.05  # Reduced low-pass filter coefficient for slower updates
         #self.delay_states_float = getattr(self, 'delay_states_float', float(self.delay_states))  # Initialize if not present
-        self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
-        self.delay_states = round(self.delay_states_float)
+        #self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
+        #self.delay_states = round(self.delay_states_float)
 
         #print(f"Updated delay_states to {self.delay_states} with minimum average position error {round(min_error, 3)}")
         #print("Error latencies:", error_latencies)

@@ -219,7 +219,7 @@ def circle_trajectory(dt):
     time_space = np.linspace(0, steps * dt, steps)
 
     # Circle parameters
-    radius = 1.0  # 1 meter
+    radius = 0.5  # 1 meter
     period = 10.0  # seconds per rotation
     omega = 2 * np.pi / period  # angular velocity (rad/s)
 
@@ -250,6 +250,100 @@ def circle_trajectory(dt):
                            vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
 
     land_traj = land_trajectory(dt, take_off_traj[:, -1])
+    zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
+
+    return np.concatenate((take_off_traj, hover_traj, land_traj, zeros), axis=1)
+
+
+
+def light_circle_trajectory(dt):
+    take_off_traj = takeoff_trajectory(dt)
+
+    # Circle parameters
+    circles = [
+        {'height': 1.0, 'radius': 0.75, 'period': 10.0},  # Circle 1
+        {'height': 1.25, 'radius': 0.5, 'period': 10.0},  # Circle 2
+        {'height': 1.5, 'radius': 0.25, 'period': 10.0}   # Circle 3
+    ]
+    
+    loops_per_circle = 5
+    transition_time = 4.0  # seconds between circles
+    
+    # Initialize trajectory arrays
+    x_traj_total = []
+    y_traj_total = []
+    z_traj_total = []
+    
+    for i, circle in enumerate(circles):
+        # Execute 3 loops for this circle
+        loop_duration = circle['period'] * loops_per_circle
+        steps_loop = int(loop_duration * 30)  # 30 Hz
+        time_space_loop = np.linspace(0, loop_duration, steps_loop)
+        omega = 2 * np.pi / circle['period']
+        
+        # Circle trajectory
+        x_circle = circle['radius'] * np.cos(omega * time_space_loop)
+        y_circle = circle['radius'] * np.sin(omega * time_space_loop)
+        z_circle = circle['height'] * np.ones_like(time_space_loop)
+        
+        x_traj_total.extend(x_circle)
+        y_traj_total.extend(y_circle)
+        z_traj_total.extend(z_circle)
+        
+        # Add transition to next circle (except after the last circle)
+        if i < len(circles) - 1:
+            steps_transition = int(transition_time * 30)  # 2 seconds at 30 Hz
+            
+            # Start and end positions for transition
+            start_x = x_circle[-1]
+            start_y = y_circle[-1]
+            start_z = z_circle[-1]
+            
+            next_circle = circles[i + 1]
+            end_x = next_circle['radius']  # Start next circle at (radius, 0)
+            end_y = 0.0
+            end_z = next_circle['height']
+            
+            # Linear interpolation for transition
+            x_transition = np.linspace(start_x, end_x, steps_transition)
+            y_transition = np.linspace(start_y, end_y, steps_transition)
+            z_transition = np.linspace(start_z, end_z, steps_transition)
+            
+            x_traj_total.extend(x_transition)
+            y_traj_total.extend(y_transition)
+            z_traj_total.extend(z_transition)
+    
+    # Convert to numpy arrays
+    x_traj = np.array(x_traj_total)
+    y_traj = np.array(y_traj_total)
+    z_traj = np.array(z_traj_total)
+    
+    # Create time array for the entire trajectory
+    time_space = np.arange(len(x_traj)) * dt
+
+    roll_traj = np.zeros_like(time_space)
+    pitch_traj = np.zeros_like(time_space)
+    yaw_traj = np.zeros_like(time_space)
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
+    qx_traj = quaternions[:, 0]
+    qy_traj = quaternions[:, 1]
+    qz_traj = quaternions[:, 2]
+    qw_traj = quaternions[:, 3]
+    vx_traj = np.gradient(x_traj, dt)
+    vy_traj = np.gradient(y_traj, dt)
+    vz_traj = np.gradient(z_traj, dt)
+    ax_traj = np.zeros_like(time_space)
+    ay_traj = np.zeros_like(time_space)
+    az_traj = np.zeros_like(time_space)
+    u1 = np.zeros_like(time_space)
+    u2 = np.zeros_like(time_space)
+    u3 = np.zeros_like(time_space)
+    u4 = np.zeros_like(time_space)
+    hover_traj = np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                           vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
+
+    land_traj = land_trajectory(dt, hover_traj[:, -1])
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
     return np.concatenate((take_off_traj, hover_traj, land_traj, zeros), axis=1)
