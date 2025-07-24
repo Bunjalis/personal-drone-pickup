@@ -8,7 +8,10 @@ from rclpy.node import Node
 from .gui import GUI
 from interfaces.msg import MotionCaptureState, ELRSCommand, InvertedPendulumStates
 from geometry_msgs.msg import Pose, PoseArray, PoseStamped, TwistStamped
+import matplotlib
+#matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
+
 from scipy.spatial.transform import Rotation as R
 from tf_transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_matrix
 import time
@@ -26,7 +29,7 @@ class Controller(Node):
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
-        self.control_frequency = 240.0 # 120.0
+        self.control_frequency = 120.0 #240.0 # 120.0
         self.dt = 1.0 / self.control_frequency
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -379,11 +382,45 @@ class Controller(Node):
         wx = -1000.0*np.array([1.6726,    0.0097,    0.3308,    0.2966,    0.0183])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
         wx = wx[0]/100.0'''
 
-        wy = -31*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = -25*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
         wy = (( wy[0]))/100.0
-        wx = -31*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = -25*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
         wx = wx[0]/100.0
 
+        wy = -38*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -38*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        wy = -25*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -25*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        wy = -1000*np.array([ -1.7075,   -0.0113,    0.3096,   -0.3019,   -0.0233])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        #wy = -1000*np.array([  -1.8364,   -0.0157,    0.3101,   -0.3241,   -0.0298])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        #wy = (( wy[0]))/100.0
+        #wx = -1000*np.array([1.7075,   0.0113,    0.3096,   0.3019,   0.0233])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        #wx = wx[0]/100.0
+
+        '''wy = -1000.0*np.array([-2.4484,    -0.0162,    0.4426,    -0.4330,    -0.0336])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -1000.0*np.array([2.4484,    0.0162,    0.4426,    0.4330,    0.0336])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+        #wx = -1*np.array([-12.6320, 125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]])
+        #wx = (( wx[0]))/100.0'''
+
+        '''wy = -27*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -27*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0'''
+
+        '''wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
+        wy = (( wy[0]))/100.0'''
+
+        wx = -1*np.array([-12.6320, 125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]])
+        wx = (( wx[0]))/100.0
         Cf = 1.42e-6
         Ct = 2.84e-7
         l_x = 0.0865
