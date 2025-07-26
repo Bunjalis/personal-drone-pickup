@@ -29,8 +29,8 @@ TICK_PAD_Z = 10
 
 # Colors
 DESIRED_TRAJECTORY_COLOR = '#6795a0'
-MOTION_CAPTURE_COLOR = '#1f4e79'
-OBSERVED_POSE_COLOR = '#e97d00'
+MOTION_CAPTURE_COLOR = '#e97d00'
+OBSERVED_POSE_COLOR = '#1f4e79'
 
 # Line styles
 DESIRED_TRAJECTORY_STYLE = ':'
@@ -130,35 +130,35 @@ def main():
     
     print(f"Using {len(desired_trajectory)} samples after removing {skip_samples} initial samples")
     
-    # Align observed_pose to motion_capture_pose using initial position offset
+    # Align motion_capture_pose to observed_pose using initial position offset
     observed_initial_pos = observed_pose[0, :3]
     motion_capture_initial_pos = motion_capture_pose[0, :3]
     
-    # Calculate offset to align observed_pose to motion_capture_pose
-    position_offset = motion_capture_initial_pos - observed_initial_pos
+    # Calculate offset to align motion_capture_pose to observed_pose
+    position_offset = observed_initial_pos - motion_capture_initial_pos
     
-    # Apply offset to observed_pose to align with motion_capture_pose
-    observed_pose_aligned = observed_pose.copy()
-    observed_pose_aligned[:, :3] += position_offset
+    # Apply offset to motion_capture_pose to align with observed_pose
+    motion_capture_pose_aligned = motion_capture_pose.copy()
+    motion_capture_pose_aligned[:, :3] += position_offset
     
     print(f"Applied position offset to align poses: {position_offset}")
     
     # Apply additional manual shifts if needed
-    # observed_pose_aligned[:, 0] -= 0.2  # Shift along x-axis
-    # observed_pose_aligned[:, 1] -= 0.1  # Shift along y-axis
+    # motion_capture_pose_aligned[:, 0] -= 0.2  # Shift along x-axis
+    # motion_capture_pose_aligned[:, 1] -= 0.1  # Shift along y-axis
     
     # Extract position coordinates (first 3 columns: x, y, z)
     x_des, y_des, z_des = desired_trajectory[:, 0], desired_trajectory[:, 1], desired_trajectory[:, 2]
-    x_mc, y_mc, z_mc = motion_capture_pose[:, 0], motion_capture_pose[:, 1], motion_capture_pose[:, 2]
-    x_obs, y_obs, z_obs = observed_pose_aligned[:, 0], observed_pose_aligned[:, 1], observed_pose_aligned[:, 2]
+    x_mc, y_mc, z_mc = motion_capture_pose_aligned[:, 0], motion_capture_pose_aligned[:, 1], motion_capture_pose_aligned[:, 2]
+    x_obs, y_obs, z_obs = observed_pose[:, 0], observed_pose[:, 1], observed_pose[:, 2]
     
     # Create time vector in seconds
     time_steps = np.arange(len(desired_trajectory)) / 30.0
     
     # Calculate RMSE values
-    rmse_mc = calculate_rmse(motion_capture_pose, desired_trajectory)
-    rmse_obs = calculate_rmse(observed_pose_aligned, desired_trajectory)
-    rmse_pose_error = calculate_rmse(observed_pose_aligned, motion_capture_pose)  # Pose estimation accuracy
+    rmse_mc = calculate_rmse(motion_capture_pose_aligned, desired_trajectory)
+    rmse_obs = calculate_rmse(observed_pose, desired_trajectory)
+    rmse_pose_error = calculate_rmse(observed_pose, motion_capture_pose_aligned)  # Pose estimation accuracy
     
     print("\nRMSE Analysis (m):")
     print(f"Motion Capture vs Desired:")
@@ -253,8 +253,8 @@ def main():
     ax_error = fig_error.add_subplot(111)
     
     # Calculate position errors over time
-    error_mc = np.linalg.norm(motion_capture_pose[:, :3] - desired_trajectory[:, :3], axis=1)
-    error_obs = np.linalg.norm(observed_pose_aligned[:, :3] - desired_trajectory[:, :3], axis=1)
+    error_mc = np.linalg.norm(motion_capture_pose_aligned[:, :3] - desired_trajectory[:, :3], axis=1)
+    error_obs = np.linalg.norm(observed_pose[:, :3] - desired_trajectory[:, :3], axis=1)
     
     # Plot error over time
     ax_error.plot(time_steps, error_mc, color=MOTION_CAPTURE_COLOR, linestyle=MOTION_CAPTURE_STYLE, 
@@ -264,7 +264,7 @@ def main():
     
     # Set labels and formatting
     ax_error.set_xlabel(XLABEL, fontsize=AXIS_LABEL_SIZE)
-    ax_error.set_ylabel('Position Error (m)', fontsize=AXIS_LABEL_SIZE)
+    ax_error.set_ylabel('Trajectory Tracking\nPosition Error (m)', fontsize=AXIS_LABEL_SIZE)
     
     # Add subplot label
     ax_error.text(-0.05, 1.01, '(b)', transform=ax_error.transAxes, fontsize=SUBPLOT_TITLE_SIZE, 
