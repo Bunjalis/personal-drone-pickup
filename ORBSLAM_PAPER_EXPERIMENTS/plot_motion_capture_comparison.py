@@ -6,7 +6,7 @@ import sys
 import argparse
 
 # Configuration settings
-MAX_TIMESTEPS = 1000  # Adjusted for your data length
+MAX_TIMESTEPS = 1000
 
 # Plot settings
 FIGURE_SIZE_3D = (12, 8)
@@ -19,49 +19,34 @@ LEGEND_SIZE = 26
 LINE_WIDTH = 3
 GRID_ALPHA = 0.3
 
-# Tick settings - Control the number of ticks on axes
-MAX_TICKS_3D = 5        # Maximum number of ticks per axis on 3D plot
-MAX_TICKS_2D = 6        # Maximum number of ticks per axis on 2D plot
+# Tick settings
+MAX_TICKS_3D = 5
+MAX_TICKS_2D = 6
 
 # 3D plot label positioning
-LABEL_PAD_3D = 20       # Distance of axis labels from the axis (in points)
-TICK_PAD_Z = 10         # Distance of z-axis tick labels from the axis (in points)
+LABEL_PAD_3D = 20
+TICK_PAD_Z = 10
 
-# Colors - Custom palette (converted from D3.js)
-# Palette: ['#00429d', '#415395', '#59668a', '#657b7d', '#68926c', '#5dab55', '#31c52f']
-DESIRED_TRAJECTORY_COLOR = '#6795a0'    # Gray-green - reference line
-
+# Colors
+DESIRED_TRAJECTORY_COLOR = '#6795a0'
+MOTION_CAPTURE_COLOR = '#1f4e79'
+OBSERVED_POSE_COLOR = '#e97d00'
 
 # Line styles
-DESIRED_TRAJECTORY_STYLE = ':'         # Dashed for reference
-WITH_UKF_STYLE = '-'                   # Solid for with UKF
-WITHOUT_UKF_STYLE = '-'                # Solid for without UKF
+DESIRED_TRAJECTORY_STYLE = ':'
+MOTION_CAPTURE_STYLE = '-'
+OBSERVED_POSE_STYLE = '-'
 
 # Labels
 DESIRED_TRAJECTORY_LABEL = 'Desired Trajectory'
-WITH_UKF_LABEL = 'w UKF enabled'
-WITHOUT_UKF_LABEL = 'w/o UKF enabled'
+MOTION_CAPTURE_LABEL = 'Motion Capture Pose'
+OBSERVED_POSE_LABEL = 'Observed Pose'
 
 # Axis labels
 XLABEL = 'Time (s)'
-PARAMETER_YLABEL = 'Est. Thrust Ratio'
 
-# Dataset names for comparison
-motion_capture_dataset = 'BIGQUAD_CIRCLE_4_MOTION_CAPTURE'
-orbslam_dataset = 'BIGQUAD_CIRCLE_6_MOTION_CAPTURE_ORB_SLAM'
-
-motion_capture_dataset = 'BIGQUAD_XYZ_SINE_3_MOTION_CAPTURE'
+# Dataset names
 orbslam_dataset = 'BIGQUAD_XYZ_SINE_4_MOTION_CAPTURE_ORB_SLAM'
-
-# Additional colors for the new trajectories
-# MOTION_CAPTURE_COLOR = '#4a90e2'        # Navy blue - motion capture input
-# ORBSLAM_ESTIMATED_COLOR = '#1f4e79'     # Bright blue - ORB-SLAM estimated
-ORBSLAM_ACTUAL_COLOR = '#e97d00'        # Bright green - actual trajectory with ORB-SLAM
-
-# Labels for the plot
-# MOTION_CAPTURE_LABEL = 'Motion Capture pose'
-# ORBSLAM_ESTIMATED_LABEL = 'ORB-SLAM pose w/ Latency Compensation'
-ORBSLAM_ACTUAL_LABEL = 'Motion Capture Pose'
 
 def calculate_rmse(predicted, actual):
     """Calculate Root Mean Square Error between predicted and actual trajectories"""
@@ -118,211 +103,194 @@ def load_trial_data(trial_directory):
 def main():
     # Set up the paths to both datasets
     base_path = os.path.dirname(os.path.abspath(__file__))
-    motion_capture_path = os.path.join(base_path, motion_capture_dataset)
     orbslam_path = os.path.join(base_path, orbslam_dataset)
     
     # Load both datasets
-    motion_capture_data = load_trial_data(motion_capture_path)
+    print("Loading motion capture data...")
+    print("Loading ORB-SLAM data...")
     orbslam_data = load_trial_data(orbslam_path)
     
     # Determine the minimum length to synchronize data
     min_length = min(
-        len(motion_capture_data['UKF_state_estimation_history']),
-        len(orbslam_data['UKF_state_estimation_history']),
+        len(orbslam_data['observed_state_history']),
         len(orbslam_data['motion_capture_history']),
-        len(orbslam_data['estimated_state_history'])
-    ) - 90 # Remove last 240 samples as in original code
-
+        len(orbslam_data['trajectory'])
+    ) - 90  # Remove last 90 samples for stability
+    
     # Extract trajectories - trim to common length
     desired_trajectory = orbslam_data['trajectory'][:min_length]
-    motion_capture_result = motion_capture_data['observed_state_history'][:min_length]
-    orbslam_estimated = orbslam_data['estimated_state_history'][:min_length]  # ORB-SLAM pose estimates
-    orbslam_actual = orbslam_data['motion_capture_history'][:min_length]     # Ground truth when using ORB-SLAM
+    motion_capture_pose = orbslam_data['motion_capture_history'][:min_length]  # Ground truth
+    observed_pose = orbslam_data['observed_state_history'][:min_length]  # State estimation from motion capture
     
-    # Remove the first 8 seconds of movement (240 samples at 30Hz)
-    skip_samples = 0 * 30  # 8 seconds * 30 Hz = 240 samples
+    # Skip initial samples if needed (remove startup transients)
+    skip_samples = 0 * 30  # 0 seconds * 30 Hz
     desired_trajectory = desired_trajectory[skip_samples:]
-    motion_capture_result = motion_capture_result[skip_samples:]
-    orbslam_estimated = orbslam_estimated[skip_samples:]
-    orbslam_actual = orbslam_actual[skip_samples:]
+    motion_capture_pose = motion_capture_pose[skip_samples:]
+    observed_pose = observed_pose[skip_samples:]
     
-    print(f"Removed first {skip_samples} samples ({skip_samples/30:.1f} seconds) from all trajectories")
+    print(f"Using {len(desired_trajectory)} samples after removing {skip_samples} initial samples")
     
-    # Keep all motion capture data unchanged - no normalization needed
-    # Align orbslam_actual trajectory so its first state lines up with orbslam_estimated
+    # Align observed_pose to motion_capture_pose using initial position offset
+    observed_initial_pos = observed_pose[0, :3]
+    motion_capture_initial_pos = motion_capture_pose[0, :3]
     
-    # Get initial positions for alignment
-    orb_estimated_initial_pos = orbslam_estimated[0, :3]  # ORB-SLAM estimated start position
-    orb_actual_initial_pos = orbslam_actual[0, :3]  # Motion capture ground truth start position
+    # Calculate offset to align observed_pose to motion_capture_pose
+    position_offset = motion_capture_initial_pos - observed_initial_pos
     
-    # Calculate offset to align orbslam_actual to orbslam_estimated
-    orb_offset = orb_estimated_initial_pos - orb_actual_initial_pos
+    # Apply offset to observed_pose to align with motion_capture_pose
+    observed_pose_aligned = observed_pose.copy()
+    observed_pose_aligned[:, :3] += position_offset
     
-    # Apply offset to orbslam_actual to align with orbslam_estimated
-    orbslam_actual[:, :3] += orb_offset
+    print(f"Applied position offset to align poses: {position_offset}")
     
-    # Shift motion_capture_result trajectory
-    motion_capture_result[:, 0] -= 0.2  # Shift back along x-axis by 0.2
-    motion_capture_result[:, 1] -= 0.1  # Shift back along y-axis by 0.1
+    # Apply additional manual shifts if needed
+    # observed_pose_aligned[:, 0] -= 0.2  # Shift along x-axis
+    # observed_pose_aligned[:, 1] -= 0.1  # Shift along y-axis
     
-    print(f"Shifted motion_capture_result trajectory: x -= 0.2, y -= 0.1")
-    
-    # Extract position coordinates (first 3 columns: x, y, z) from final data
+    # Extract position coordinates (first 3 columns: x, y, z)
     x_des, y_des, z_des = desired_trajectory[:, 0], desired_trajectory[:, 1], desired_trajectory[:, 2]
-    x_mc, y_mc, z_mc = motion_capture_result[:, 0], motion_capture_result[:, 1], motion_capture_result[:, 2]
-    x_orb_est, y_orb_est, z_orb_est = orbslam_estimated[:, 0], orbslam_estimated[:, 1], orbslam_estimated[:, 2]
-    x_orb_act, y_orb_act, z_orb_act = orbslam_actual[:, 0], orbslam_actual[:, 1], orbslam_actual[:, 2]
-
-    # Create time vector in seconds (accounting for removed samples)
-    remaining_length = len(desired_trajectory)
-    time_steps = np.arange(remaining_length) / 30.0
-
-    # Calculate RMSE values using final trajectories
-    # rmse_mc = calculate_rmse(motion_capture_result, desired_trajectory)
-    # rmse_orb_est = calculate_rmse(orbslam_estimated, desired_trajectory)
-    rmse_orb_act = calculate_rmse(orbslam_actual, desired_trajectory)
-    rmse_orb_pose_error = calculate_rmse(orbslam_estimated, orbslam_actual)  # ORB-SLAM pose estimation accuracy
+    x_mc, y_mc, z_mc = motion_capture_pose[:, 0], motion_capture_pose[:, 1], motion_capture_pose[:, 2]
+    x_obs, y_obs, z_obs = observed_pose_aligned[:, 0], observed_pose_aligned[:, 1], observed_pose_aligned[:, 2]
+    
+    # Create time vector in seconds
+    time_steps = np.arange(len(desired_trajectory)) / 30.0
+    
+    # Calculate RMSE values
+    rmse_mc = calculate_rmse(motion_capture_pose, desired_trajectory)
+    rmse_obs = calculate_rmse(observed_pose_aligned, desired_trajectory)
+    rmse_pose_error = calculate_rmse(observed_pose_aligned, motion_capture_pose)  # Pose estimation accuracy
     
     print("\nRMSE Analysis (m):")
-    # print(f"Motion Capture Input vs Desired:")
-    # print(f"  X: {rmse_mc[0]:.4f}, Y: {rmse_mc[1]:.4f}, Z: {rmse_mc[2]:.4f}, Overall: {rmse_mc[3]:.4f}")
-    # print(f"ORB-SLAM Estimated vs Desired:")
-    # print(f"  X: {rmse_orb_est[0]:.4f}, Y: {rmse_orb_est[1]:.4f}, Z: {rmse_orb_est[2]:.4f}, Overall: {rmse_orb_est[3]:.4f}")
-    print(f"Actual w/ ORB-SLAM Input vs Desired:")
-    print(f"  X: {rmse_orb_act[0]:.4f}, Y: {rmse_orb_act[1]:.4f}, Z: {rmse_orb_act[2]:.4f}, Overall: {rmse_orb_act[3]:.4f}")
-    print(f"ORB-SLAM Pose Estimation Error (Estimated vs Ground Truth):")
-    print(f"  X: {rmse_orb_pose_error[0]:.4f}, Y: {rmse_orb_pose_error[1]:.4f}, Z: {rmse_orb_pose_error[2]:.4f}, Overall: {rmse_orb_pose_error[3]:.4f}")
-
+    print(f"Motion Capture vs Desired:")
+    print(f"  X: {rmse_mc[0]:.4f}, Y: {rmse_mc[1]:.4f}, Z: {rmse_mc[2]:.4f}, Overall: {rmse_mc[3]:.4f}")
+    print(f"Observed Pose vs Desired:")
+    print(f"  X: {rmse_obs[0]:.4f}, Y: {rmse_obs[1]:.4f}, Z: {rmse_obs[2]:.4f}, Overall: {rmse_obs[3]:.4f}")
+    print(f"Pose Estimation Error (Observed vs Motion Capture):")
+    print(f"  X: {rmse_pose_error[0]:.4f}, Y: {rmse_pose_error[1]:.4f}, Z: {rmse_pose_error[2]:.4f}, Overall: {rmse_pose_error[3]:.4f}")
+    
     # Camera position settings for 3D plot
     camera_azimuth = 45
     camera_elevation = 55
-
-    # Calculate global data ranges for all trajectories to ensure consistent axis bounds
-    all_x_global = np.concatenate([x_des, x_orb_est, x_orb_act])
-    all_y_global = np.concatenate([y_des, y_orb_est, y_orb_act])
-    all_z_global = np.concatenate([z_des, z_orb_est, z_orb_act])
+    
+    # Calculate global data ranges for consistent axis bounds
+    all_x = np.concatenate([x_des, x_mc, x_obs])
+    all_y = np.concatenate([y_des, y_mc, y_obs])
+    all_z = np.concatenate([z_des, z_mc, z_obs])
     
     # Calculate ranges for consistent scaling
-    x_range_global = np.max(all_x_global) - np.min(all_x_global)
-    y_range_global = np.max(all_y_global) - np.min(all_y_global)
-    z_range_global = np.max(all_z_global) - np.min(all_z_global)
+    x_range = np.max(all_x) - np.min(all_x)
+    y_range = np.max(all_y) - np.min(all_y)
+    z_range = np.max(all_z) - np.min(all_z)
     
-    # Use the maximum range for all three axes to make them equal scale
-    max_range_global = max(x_range_global, y_range_global, z_range_global)
+    # Use the maximum range for equal scale
+    max_range = max(x_range, y_range, z_range)
     
-    # Set equal limits for all axes using the same scale (global)
-    x_center_global = (np.max(all_x_global) + np.min(all_x_global)) / 2
-    y_center_global = (np.max(all_y_global) + np.min(all_y_global)) / 2
-    z_center_global = (np.max(all_z_global) + np.min(all_z_global)) / 2
+    # Set equal limits for all axes
+    x_center = (np.max(all_x) + np.min(all_x)) / 2
+    y_center = (np.max(all_y) + np.min(all_y)) / 2
+    z_center = (np.max(all_z) + np.min(all_z)) / 2
 
-    # Create figure: ORB-SLAM comparison
-    fig2 = plt.figure(figsize=FIGURE_SIZE_3D)
-    ax2 = fig2.add_subplot(111, projection='3d')
+    # Create main 3D trajectory plot
+    fig_main = plt.figure(figsize=FIGURE_SIZE_3D)
+    ax_main = fig_main.add_subplot(111, projection='3d')
     
-    # Plot desired trajectory and ORB-SLAM trajectories
-    ax2.plot(x_des, y_des, z_des, color=DESIRED_TRAJECTORY_COLOR, linestyle=DESIRED_TRAJECTORY_STYLE, 
-             linewidth=LINE_WIDTH, label=DESIRED_TRAJECTORY_LABEL, alpha=0.8)
-    # ax2.plot(x_orb_est, y_orb_est, z_orb_est, color=ORBSLAM_ESTIMATED_COLOR, linestyle='-', 
-    #          linewidth=LINE_WIDTH, label=ORBSLAM_ESTIMATED_LABEL, alpha=0.9)
-    ax2.plot(x_orb_act, y_orb_act, z_orb_act, color=ORBSLAM_ACTUAL_COLOR, linestyle='-', 
-             linewidth=LINE_WIDTH, label=ORBSLAM_ACTUAL_LABEL, alpha=0.9)
-
-    # Set labels and formatting for second plot
-    ax2.set_xlabel('X (m)', fontsize=AXIS_LABEL_SIZE, labelpad=LABEL_PAD_3D)
-    ax2.set_ylabel('Y (m)', fontsize=AXIS_LABEL_SIZE, labelpad=LABEL_PAD_3D)
-    ax2.set_zlabel('Z (m)', fontsize=AXIS_LABEL_SIZE, labelpad=LABEL_PAD_3D)
-    ax2.tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
-    ax2.tick_params(axis='z', which='major', pad=TICK_PAD_Z)
+    # Plot trajectories
+    ax_main.plot(x_des, y_des, z_des, color=DESIRED_TRAJECTORY_COLOR, linestyle=DESIRED_TRAJECTORY_STYLE, 
+                 linewidth=LINE_WIDTH, label=DESIRED_TRAJECTORY_LABEL, alpha=0.8)
+    ax_main.plot(x_mc, y_mc, z_mc, color=MOTION_CAPTURE_COLOR, linestyle=MOTION_CAPTURE_STYLE, 
+                 linewidth=LINE_WIDTH, label=MOTION_CAPTURE_LABEL, alpha=0.9)
+    ax_main.plot(x_obs, y_obs, z_obs, color=OBSERVED_POSE_COLOR, linestyle=OBSERVED_POSE_STYLE, 
+                 linewidth=LINE_WIDTH, label=OBSERVED_POSE_LABEL, alpha=0.9)
+    
+    # Set labels and formatting
+    ax_main.set_xlabel('X (m)', fontsize=AXIS_LABEL_SIZE, labelpad=LABEL_PAD_3D)
+    ax_main.set_ylabel('Y (m)', fontsize=AXIS_LABEL_SIZE, labelpad=LABEL_PAD_3D)
+    ax_main.set_zlabel('Z (m)', fontsize=AXIS_LABEL_SIZE, labelpad=LABEL_PAD_3D)
+    ax_main.tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
+    ax_main.tick_params(axis='z', which='major', pad=TICK_PAD_Z)
     
     # Control tick density
     from matplotlib.ticker import MaxNLocator
-    ax2.xaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_3D))
-    ax2.yaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_3D))
-    ax2.zaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_3D))
+    ax_main.xaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_3D))
+    ax_main.yaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_3D))
+    ax_main.zaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_3D))
     
     # Add subplot label
-    ax2.text2D(0.0, 0.9, '(a)', transform=ax2.transAxes, fontsize=SUBPLOT_TITLE_SIZE, 
-               fontweight='bold', verticalalignment='bottom')
-
-    # Use the same global bounds for consistency between plots
-    ax2.set_xlim([x_center_global - max_range_global/2, x_center_global + max_range_global/2])
-    ax2.set_ylim([y_center_global - max_range_global/2, y_center_global + max_range_global/2])
-    ax2.set_zlim([z_center_global - max_range_global/2, z_center_global + max_range_global/2])
+    ax_main.text2D(0.0, 0.9, '(a)', transform=ax_main.transAxes, fontsize=SUBPLOT_TITLE_SIZE, 
+                   fontweight='bold', verticalalignment='bottom')
+    
+    # Set equal axis limits
+    ax_main.set_xlim([x_center - max_range/2, x_center + max_range/2])
+    ax_main.set_ylim([y_center - max_range/2, y_center + max_range/2])
+    ax_main.set_zlim([z_center - max_range/2, z_center + max_range/2])
     
     # Set camera position and formatting
-    ax2.view_init(elev=camera_elevation, azim=camera_azimuth)
-    ax2.set_box_aspect([1,1,1])  # Equal aspect ratio for all three axes
-    ax2.grid(True, alpha=GRID_ALPHA)
+    ax_main.view_init(elev=camera_elevation, azim=camera_azimuth)
+    ax_main.set_box_aspect([1,1,1])
+    ax_main.grid(True, alpha=GRID_ALPHA)
     
     plt.tight_layout()
     
-    # Create single combined legend for both 3D plots
+    # Create legend figure
     fig_legend = plt.figure(figsize=(12, 1.5))
     ax_legend = fig_legend.add_subplot(111)
     ax_legend.axis('off')
     
-    # Create dummy plots for all trajectory types
+    # Create dummy plots for legend
     ax_legend.plot([], [], color=DESIRED_TRAJECTORY_COLOR, linestyle=DESIRED_TRAJECTORY_STYLE, 
                    linewidth=LINE_WIDTH, label=DESIRED_TRAJECTORY_LABEL)
-    # ax_legend.plot([], [], color=MOTION_CAPTURE_COLOR, linestyle='-', 
-    #                linewidth=LINE_WIDTH, label=MOTION_CAPTURE_LABEL)
-    # ax_legend.plot([], [], color=ORBSLAM_ESTIMATED_COLOR, linestyle='-', 
-    #                linewidth=LINE_WIDTH, label=ORBSLAM_ESTIMATED_LABEL)
-    ax_legend.plot([], [], color=ORBSLAM_ACTUAL_COLOR, linestyle='-', 
-                   linewidth=LINE_WIDTH, label=ORBSLAM_ACTUAL_LABEL)
+    ax_legend.plot([], [], color=MOTION_CAPTURE_COLOR, linestyle=MOTION_CAPTURE_STYLE, 
+                   linewidth=LINE_WIDTH, label=MOTION_CAPTURE_LABEL)
+    ax_legend.plot([], [], color=OBSERVED_POSE_COLOR, linestyle=OBSERVED_POSE_STYLE, 
+                   linewidth=LINE_WIDTH, label=OBSERVED_POSE_LABEL)
     
-    # Create the combined legend
+    # Create the legend
     legend = ax_legend.legend(fontsize=LEGEND_SIZE, ncol=2, loc='center', frameon=False)
     plt.tight_layout()
     
-    # Create third figure: Error analysis over time
-    fig3 = plt.figure(figsize=FIGURE_SIZE_2D)
-    ax3 = fig3.add_subplot(111)
+    # Create error analysis plot
+    fig_error = plt.figure(figsize=FIGURE_SIZE_2D)
+    ax_error = fig_error.add_subplot(111)
     
-    # Calculate position errors over time using final trajectories
-    # error_mc = np.linalg.norm(motion_capture_result[:, :3] - desired_trajectory[:, :3], axis=1)
-    # error_orb_est = np.linalg.norm(orbslam_estimated[:, :3] - desired_trajectory[:, :3], axis=1)
-    error_orb_act = np.linalg.norm(orbslam_actual[:, :3] - desired_trajectory[:, :3], axis=1)
-    error_orb_pose = np.linalg.norm(orbslam_estimated[:, :3] - orbslam_actual[:, :3], axis=1)  # ORB-SLAM pose error (for terminal output only)
+    # Calculate position errors over time
+    error_mc = np.linalg.norm(motion_capture_pose[:, :3] - desired_trajectory[:, :3], axis=1)
+    error_obs = np.linalg.norm(observed_pose_aligned[:, :3] - desired_trajectory[:, :3], axis=1)
     
-    # Plot error over time (excluding ORB-SLAM pose error)
-    # ax3.plot(time_steps, error_mc, color=MOTION_CAPTURE_COLOR, linestyle='-', 
-    #          linewidth=LINE_WIDTH, alpha=1.0)
-    # ax3.plot(time_steps, error_orb_est, color=ORBSLAM_ESTIMATED_COLOR, linestyle='-', 
-    #          linewidth=LINE_WIDTH, alpha=1.0)
-    ax3.plot(time_steps, error_orb_act, color=ORBSLAM_ACTUAL_COLOR, linestyle='-', 
-             linewidth=LINE_WIDTH, alpha=1.0)
+    # Plot error over time
+    ax_error.plot(time_steps, error_mc, color=MOTION_CAPTURE_COLOR, linestyle=MOTION_CAPTURE_STYLE, 
+                  linewidth=LINE_WIDTH, label=MOTION_CAPTURE_LABEL, alpha=1.0)
+    ax_error.plot(time_steps, error_obs, color=OBSERVED_POSE_COLOR, linestyle=OBSERVED_POSE_STYLE, 
+                  linewidth=LINE_WIDTH, label=OBSERVED_POSE_LABEL, alpha=1.0)
     
     # Set labels and formatting
-    ax3.set_xlabel(XLABEL, fontsize=AXIS_LABEL_SIZE)
-    ax3.set_ylabel('Position Error (m)', fontsize=AXIS_LABEL_SIZE)
+    ax_error.set_xlabel(XLABEL, fontsize=AXIS_LABEL_SIZE)
+    ax_error.set_ylabel('Position Error (m)', fontsize=AXIS_LABEL_SIZE)
     
     # Add subplot label
-    ax3.text(-0.05, 1.01, '(b)', transform=ax3.transAxes, fontsize=SUBPLOT_TITLE_SIZE, 
-             fontweight='bold', verticalalignment='bottom')
-    ax3.tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
+    ax_error.text(-0.05, 1.01, '(b)', transform=ax_error.transAxes, fontsize=SUBPLOT_TITLE_SIZE, 
+                  fontweight='bold', verticalalignment='bottom')
+    ax_error.tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
     
     # Control tick density  
-    from matplotlib.ticker import MaxNLocator
-    ax3.xaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_2D))
-    ax3.yaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_2D))
+    ax_error.xaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_2D))
+    ax_error.yaxis.set_major_locator(MaxNLocator(nbins=MAX_TICKS_2D))
     
     # Set y-axis to start from 0
-    ax3.set_ylim(bottom=0)
-    
-    ax3.grid(True, alpha=GRID_ALPHA)
+    ax_error.set_ylim(bottom=0)
+    ax_error.legend(fontsize=LEGEND_SIZE)
+    ax_error.grid(True, alpha=GRID_ALPHA)
     
     plt.tight_layout()
     
     # Save the plots as PDFs
-    fig2.savefig('motion_capture_trajectory_main.pdf', format='pdf', dpi=400, bbox_inches='tight', pad_inches=0.4)
+    fig_main.savefig('motion_capture_trajectory_main.pdf', format='pdf', dpi=400, bbox_inches='tight', pad_inches=0.4)
     fig_legend.savefig('motion_capture_trajectory_legend.pdf', format='pdf', dpi=400, bbox_inches='tight', pad_inches=0.1)
-    fig3.savefig('motion_capture_trajectory_analysis.pdf', format='pdf', dpi=400, bbox_inches='tight', pad_inches=0.1)
+    fig_error.savefig('motion_capture_trajectory_analysis.pdf', format='pdf', dpi=400, bbox_inches='tight', pad_inches=0.1)
     
     print("\nPlots saved as:")
-    print("  - 'orbslam_3D_comparison.pdf'")
-    print("  - '3D_trajectories_legend.pdf'")
-    print("  - 'trajectory_error_analysis.pdf'")
+    print("  - 'motion_capture_trajectory_main.pdf'")
+    print("  - 'motion_capture_trajectory_legend.pdf'")
+    print("  - 'motion_capture_trajectory_analysis.pdf'")
     
     plt.show()
     

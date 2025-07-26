@@ -52,7 +52,7 @@ MOTION_CAPTURE_VELOCITY_LABEL = 'Motion Capture Velocity'
 
 # Axis labels
 HEIGHT_YLABEL = 'z pos (m)'
-LATENCY_YLABEL = 'Est. Delay States'
+LATENCY_YLABEL = 'Est. Delay'
 VELOCITY_YLABEL = 'z vel (m/s)'
 THRUST_RATIO_YLABEL = 'Est. Ratio'
 XLABEL = 'Time (s)'
@@ -178,7 +178,7 @@ def main():
         actual_length = min(reference_length, MAX_TIMESTEPS)
         
         if data_enabled['delay_state_estimation_history'] is not None:
-            delay_estimation_enabled = data_enabled['delay_state_estimation_history'].flatten()[:actual_length]
+            delay_estimation_enabled = data_enabled['delay_state_estimation_history'].flatten()[:actual_length] - 1
             time_enabled = np.arange(len(delay_estimation_enabled)) / 30.0
             ax.plot(time_enabled, delay_estimation_enabled, label=LATENCY_ENABLED_LABEL, color=LATENCY_COLOR, 
                    linestyle=LATENCY_STYLE, linewidth=LINE_WIDTH)
@@ -192,6 +192,7 @@ def main():
         ax.set_xlabel(XLABEL, fontsize=AXIS_LABEL_SIZE)
         ax.tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
         ax.legend(fontsize=LEGEND_SIZE)
+        ax.set_ylim(-1, 5)  # Set y-axis limits from 0 to 6
 
     def plot_vertical_velocity(ax, data_enabled):
         """Helper function to plot vertical velocity (z dot) for latency compensation enabled condition"""

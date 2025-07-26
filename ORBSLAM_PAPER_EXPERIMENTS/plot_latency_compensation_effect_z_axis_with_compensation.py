@@ -179,7 +179,7 @@ def main():
         actual_length = min(reference_length, MAX_TIMESTEPS)
         
         if data_enabled['delay_state_estimation_history'] is not None:
-            delay_estimation_enabled = data_enabled['delay_state_estimation_history'].flatten()[:actual_length]
+            delay_estimation_enabled = data_enabled['delay_state_estimation_history'].flatten()[:actual_length] - 1
             time_enabled = np.arange(len(delay_estimation_enabled)) / 30.0
             ax.plot(time_enabled, delay_estimation_enabled, label=LATENCY_ENABLED_LABEL, color=LATENCY_COLOR, 
                    linestyle=LATENCY_STYLE, linewidth=LINE_WIDTH)
