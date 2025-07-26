@@ -20,13 +20,13 @@ GRID_ALPHA = 0.3
 
 # Colors - Custom palette (converted from D3.js)
 # Palette: ['#00429d', '#415395', '#59668a', '#657b7d', '#68926c', '#5dab55', '#31c52f']
-DESIRED_HEIGHT_COLOR = '#657b7d'        # Dark blue - reference line
-UKF_HEIGHT_COLOR = '#00429d'            # Medium blue - latency compensation enabled
-THRUST_RATIO_COLOR = '#59668a'          # Blue-gray - latency compensation enabled
-LATENCY_COLOR = '#415395'               # Gray-green - latency compensation enabled
-NO_LATENCY_UKF_COLOR = '#31c52f'        # Green-gray - no latency compensation
-NO_LATENCY_THRUST_COLOR = '#5dab55'     # Medium green - no latency compensation
-NO_LATENCY_DELAY_COLOR = '#68926c'      # Bright green - no latency compensation
+DESIRED_HEIGHT_COLOR = '#6795a0'        # Dark blue - reference line
+UKF_HEIGHT_COLOR = '#0049bd'            # Medium blue - latency compensation enabled
+THRUST_RATIO_COLOR = '#0049bd'          # Blue-gray - latency compensation enabled
+LATENCY_COLOR = '#0049bd'               # Gray-green - latency compensation enabled
+NO_LATENCY_UKF_COLOR = '#008e00'        # Green-gray - no latency compensation
+NO_LATENCY_THRUST_COLOR = '#008e00'     # Medium green - no latency compensation
+NO_LATENCY_DELAY_COLOR = '#008e00'      # Bright green - no latency compensation
 NO_DATA_TEXT_SIZE = 48
 
 # Line styles - Different patterns for black/white distinction

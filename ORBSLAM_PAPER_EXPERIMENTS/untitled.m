@@ -1,5 +1,0 @@
-startup_rvc
-
-
-
-

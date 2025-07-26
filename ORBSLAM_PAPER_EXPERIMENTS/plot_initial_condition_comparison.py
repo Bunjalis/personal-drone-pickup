@@ -21,11 +21,11 @@ GRID_ALPHA = 0.3
 
 # Colors - Custom palette (converted from D3.js)
 # Palette: ['#00429d', '#415395', '#59668a', '#657b7d', '#68926c', '#5dab55', '#31c52f']
-DESIRED_HEIGHT_COLOR = '#657b7d'        # Gray-green - reference line
-UKF_HEIGHT_COLOR = '#00429d'            # Dark blue - with UKF
-THRUST_RATIO_COLOR = '#59668a'          # Blue-gray - thrust ratio
-NO_LATENCY_UKF_COLOR = '#31c52f'        # Bright green - without UKF
-NO_LATENCY_THRUST_COLOR = '#5dab55'     # Medium green - thrust ratio comparison
+DESIRED_HEIGHT_COLOR = '#6795a0'        # Gray-green - reference line
+UKF_HEIGHT_COLOR = '#0049bd'            # Dark blue - with UKF
+THRUST_RATIO_COLOR = '#0049bd'          # Blue-gray - thrust ratio
+NO_LATENCY_UKF_COLOR = '#b697ff'        # Bright green - without UKF
+NO_LATENCY_THRUST_COLOR = '#b697ff'     # Medium green - thrust ratio comparison
 NO_DATA_TEXT_SIZE = 48
 
 # Line styles - Different patterns for black/white distinction
@@ -178,7 +178,7 @@ def main():
     plt.tight_layout()
     
     # Save the plot as a PDF
-    plt.savefig('plot_init_condition_comparison.pdf', format='pdf', dpi=400, bbox_inches='tight')
+    plt.savefig('initial_estimation_comparison.pdf', format='pdf', dpi=400, bbox_inches='tight')
     print("Plot saved as 'latency_compensation_comparison.pdf'")
     
     # Show the plot

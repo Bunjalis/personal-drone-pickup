@@ -29,11 +29,11 @@ TICK_PAD_Z = 10         # Distance of z-axis tick labels from the axis (in point
 
 # Colors - Custom palette (converted from D3.js)
 # Palette: ['#00429d', '#415395', '#59668a', '#657b7d', '#68926c', '#5dab55', '#31c52f']
-DESIRED_TRAJECTORY_COLOR = '#657b7d'    # Gray-green - reference line
-WITH_UKF_COLOR = '#00429d'              # Dark blue - with UKF
-WITHOUT_UKF_COLOR = '#31c52f'           # Bright green - without UKF
-PARAMETER_WITH_UKF_COLOR = '#415395'    # Medium blue - parameter estimation with UKF
-PARAMETER_WITHOUT_UKF_COLOR = '#5dab55' # Medium green - parameter estimation without UKF
+DESIRED_TRAJECTORY_COLOR = '#6795a0'    # Gray-green - reference line
+WITH_UKF_COLOR = '#0049bd'              # Dark blue - with UKF
+WITHOUT_UKF_COLOR = '#008e00'           # Bright green - without UKF
+PARAMETER_WITH_UKF_COLOR = '#0049bd'    # Medium blue - parameter estimation with UKF
+PARAMETER_WITHOUT_UKF_COLOR = '#008e00' # Medium green - parameter estimation without UKF
 
 # Line styles
 DESIRED_TRAJECTORY_STYLE = ':'         # Dashed for reference
@@ -86,6 +86,46 @@ def load_trial_data(trial_directory):
     
     return data
 
+
+def calculate_position_rmse(actual_trajectory, desired_trajectory):
+    """Calculate RMSE for position tracking"""
+    if actual_trajectory is None or desired_trajectory is None:
+        return None
+    
+    # Ensure same length
+    min_len = min(len(actual_trajectory), len(desired_trajectory))
+    actual_pos = actual_trajectory[:min_len, :3]  # x, y, z position
+    desired_pos = desired_trajectory[:min_len, :3]  # x, y, z position
+    
+    # Calculate position errors
+    position_errors = actual_pos - desired_pos
+    
+    # Calculate RMSE for each axis
+    rmse_x = np.sqrt(np.mean(position_errors[:, 0]**2))
+    rmse_y = np.sqrt(np.mean(position_errors[:, 1]**2))
+    rmse_z = np.sqrt(np.mean(position_errors[:, 2]**2))
+    
+    # Calculate overall 3D RMSE (Root Mean Square of Euclidean distances)
+    euclidean_distances = np.sqrt(np.sum(position_errors**2, axis=1))
+    rmse_3d = np.sqrt(np.mean(euclidean_distances**2))
+    
+    # Alternative: Combined RMSE across all axes (another common approach)
+    rmse_combined = np.sqrt(np.mean(position_errors**2))
+    
+    return rmse_x, rmse_y, rmse_z, rmse_3d, rmse_combined
+
+
+def calculate_average_throttle(control_history):
+    """Calculate average throttle from control history"""
+    if control_history is None:
+        return None
+    
+    # Assuming throttle is the first column of control history
+    # Adjust the column index if throttle is in a different position
+    throttle_values = control_history[:, 2]  # Assuming throttle is column 0
+    avg_throttle = np.mean(throttle_values)
+    
+    return avg_throttle
 
 def main():
     # Set up the paths to both datasets
@@ -176,7 +216,7 @@ def main():
                    linewidth=LINE_WIDTH, label=DESIRED_TRAJECTORY_LABEL)
     
     # Create the legend
-    legend = ax_legend.legend(fontsize=LEGEND_SIZE, ncol=3, loc='center', frameon=False)
+    legend = ax_legend.legend(fontsize=LEGEND_SIZE, ncol=2, loc='center', frameon=False)
     
     plt.tight_layout()
     
@@ -209,13 +249,67 @@ def main():
     plt.tight_layout()
     
     # Save the plots as PDFs
-    fig1.savefig('UKF_3D_trajectory_comparison.pdf', format='pdf', dpi=400, bbox_inches='tight')
-    fig_legend.savefig('UKF_3D_trajectory_legend.pdf', format='pdf', dpi=400, bbox_inches='tight')
-    fig2.savefig('UKF_parameter_estimation_comparison.pdf', format='pdf', dpi=400, bbox_inches='tight')
+    fig1.savefig('UKF_circle_trajectory_comparison_main.pdf', format='pdf', dpi=400, bbox_inches='tight', pad_inches=0.4)
+    fig_legend.savefig('UKF_circle_trajectory_comparison_legend.pdf', format='pdf', dpi=400, bbox_inches='tight', pad_inches=0.4)
+    fig2.savefig('UKF_circle_trajectory_comparison_parameter_estimation_comparison.pdf', format='pdf', dpi=400, bbox_inches='tight', pad_inches=0.4)
     print("Plots saved as:")
-    print("  - 'UKF_3D_trajectory_comparison.pdf'")
-    print("  - 'UKF_3D_trajectory_legend.pdf'")
-    print("  - 'UKF_parameter_estimation_comparison.pdf'")
+    print("  - 'UKF_circle_trajectory_comparison_main.pdf'")
+    print("  - 'UKF_circle_trajectory_comparison_legend.pdf'")
+    print("  - 'UKF_circle_trajectory_comparison_parameter_estimation_comparison.pdf'")
+    
+    # Calculate and print RMSE statistics
+    print("\n" + "="*60)
+    print("TRAJECTORY TRACKING PERFORMANCE ANALYSIS")
+    print("="*60)
+    
+    # Calculate RMSE for UKF enabled approach
+    ukf_rmse = calculate_position_rmse(ukf_states, desired_trajectory)
+    if ukf_rmse is not None:
+        rmse_x_ukf, rmse_y_ukf, rmse_z_ukf, rmse_3d_ukf, rmse_combined_ukf = ukf_rmse
+        print(f"\nUKF ENABLED APPROACH:")
+        print(f"  RMSE X: {rmse_x_ukf:.4f} m")
+        print(f"  RMSE Y: {rmse_y_ukf:.4f} m") 
+        print(f"  RMSE Z: {rmse_z_ukf:.4f} m")
+        print(f"  RMSE 3D (Euclidean): {rmse_3d_ukf:.4f} m")
+        print(f"  RMSE Combined: {rmse_combined_ukf:.4f} m")
+    
+    # Calculate RMSE for UKF disabled approach  
+    no_ukf_rmse = calculate_position_rmse(no_ukf_states, desired_trajectory)
+    if no_ukf_rmse is not None:
+        rmse_x_no_ukf, rmse_y_no_ukf, rmse_z_no_ukf, rmse_3d_no_ukf, rmse_combined_no_ukf = no_ukf_rmse
+        print(f"\nUKF DISABLED APPROACH:")
+        print(f"  RMSE X: {rmse_x_no_ukf:.4f} m")
+        print(f"  RMSE Y: {rmse_y_no_ukf:.4f} m")
+        print(f"  RMSE Z: {rmse_z_no_ukf:.4f} m") 
+        print(f"  RMSE 3D (Euclidean): {rmse_3d_no_ukf:.4f} m")
+        print(f"  RMSE Combined: {rmse_combined_no_ukf:.4f} m")
+    
+    # Calculate improvement percentage
+    if ukf_rmse is not None and no_ukf_rmse is not None:
+        improvement_3d = ((rmse_3d_no_ukf - rmse_3d_ukf) / rmse_3d_no_ukf) * 100
+        improvement_combined = ((rmse_combined_no_ukf - rmse_combined_ukf) / rmse_combined_no_ukf) * 100
+        print(f"\nPERFORMANCE IMPROVEMENT:")
+        print(f"  3D RMSE Improvement: {improvement_3d:.1f}% (UKF vs No-UKF)")
+        print(f"  Combined RMSE Improvement: {improvement_combined:.1f}% (UKF vs No-UKF)")
+    
+    # Calculate and print average throttle
+    print(f"\nTHROTTLE USAGE ANALYSIS:")
+    
+    ukf_avg_throttle = calculate_average_throttle(ukf_data['control_history'][:-180] if ukf_data['control_history'] is not None else None)
+    if ukf_avg_throttle is not None:
+        print(f"  UKF Enabled - Average Throttle: {ukf_avg_throttle:.4f}")
+    
+    no_ukf_avg_throttle = calculate_average_throttle(no_ukf_data['control_history'][:-180] if no_ukf_data['control_history'] is not None else None)
+    if no_ukf_avg_throttle is not None:
+        print(f"  UKF Disabled - Average Throttle: {no_ukf_avg_throttle:.4f}")
+    
+    # Calculate throttle difference
+    if ukf_avg_throttle is not None and no_ukf_avg_throttle is not None:
+        throttle_diff = ukf_avg_throttle - no_ukf_avg_throttle
+        throttle_diff_percent = (throttle_diff / no_ukf_avg_throttle) * 100
+        print(f"  Throttle Difference: {throttle_diff:+.4f} ({throttle_diff_percent:+.1f}%)")
+    
+    print("="*60)
     
     plt.show()
     
