@@ -63,12 +63,12 @@
         </collision>
         </link>
 
-        <joint name='pendulum_pivot' type='revolute'>
+        <joint name='pendulum_pivot' type='universal'>
             <parent>base</parent>
             <child>pendulum_link</child>
             <pose relative_to="base">0 0 0.01 0 -0 0</pose>
             <axis>
-                <xyz> 0 1 0</xyz>
+                <xyz> 1 1 0</xyz>
                 <use_parent_model_frame>1</use_parent_model_frame>
                 <limit>
                 <lower>-1.57</lower>
