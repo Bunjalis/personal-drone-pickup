@@ -40,7 +40,7 @@ class Controller(Node):
         self.gui = GUI(self)
 
         self.g = 9.81
-        self.M = 0.65
+        self.M = 0.45 #0.65
         self.Ixx = 0.001744744189
         self.Iyy = 0.001400539551
         self.Izz = 0.002782410904
@@ -273,14 +273,14 @@ class Controller(Node):
         wx = wx[0]/100.0
 
       
-        Cf = 1.42e-6
-        Ct = 2.84e-7
+        Cf = 0.8e-06 #1.42e-6
+        #Ct = 2.84e-7
         l_x = 0.0865
         l_y = 0.073
 
         max_motor_speed = 4631.0
         maxForce = (Cf*max_motor_speed**2) 
-        maxTorque = (Ct*max_motor_speed**2)
+        #maxTorque = (Ct*max_motor_speed**2)
         kpz, kiz, kdz = 35.0, 10.0, 10.0  #15.0, 10.0, 10.0 
         dt = self.dt
         force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.055) #*self.M
