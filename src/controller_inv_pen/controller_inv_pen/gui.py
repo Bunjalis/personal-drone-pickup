@@ -1,5 +1,6 @@
 import pygame
-
+import re
+import numpy as np
 class GUI:
     def __init__(self, controller):
         self.controller = controller
@@ -21,7 +22,14 @@ class GUI:
         self.button_land = pygame.Rect(500, 100, 150, 50)
         self.button_land_text = "Land"
         self.button_land_color = (0, 255, 0)
-        
+
+        # Set point input 
+        self.setpoint_button = pygame.Rect(300, 250, 150, 50)
+        self.setpoint_text = "x,y,z"
+        self.setpoint_active_color = (255, 0, 0)
+        self.setpoint_inactive_color = (0, 255, 0)
+        self.setpoint_color = self.setpoint_inactive_color
+        self.setpoint_active = False
 
 
     def handle_events(self):
@@ -53,12 +61,69 @@ class GUI:
                     if not self.controller.land:
                         self.controller.land = True
                    
-                
+                # setpoint 
+                if self.setpoint_button.collidepoint(event.pos):
+                    self.setpoint_active = not self.setpoint_active
+                else:
+                    self.setpoint_active = False 
+                    
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE: 
                     self.controller.armed = False 
                     self.update_button("Arm", (0, 255, 0))
+
+                # setpoint stuff 
+                if self.setpoint_active:
+                    
+                    if event.key == pygame.K_RETURN: # Reset setpoint text
+                        print(self.setpoint_text)
+                        # send setpoint to controller 
+                        
+                        dataToParse = self.setpoint_text
+                        setpoint = []
+                        valid = True
+                        if dataToParse != "" and re.sub(",", "", dataToParse) != "":
+                            dataToParse = re.sub("\s", "", dataToParse)
+                            dataSegments = re.split(",", dataToParse)
+                            for data in dataSegments:
+                                try:
+                                    val = float(data)
+                                    setpoint.append(val)
+                                except Exception as e:
+                                    valid = False
+                                    print(f"Error: cannot convert {data} to float")
+                               
+                            if valid and len(setpoint) != 3:
+                                valid = False
+                                print(f"Error: setpoint length was {len(setpoint)} but expected length is 3")
+                          
+                                
+                            if valid:
+                                try:
+                                    setpoint = np.array(setpoint)
+                                    if -3.0 <= setpoint[0] and setpoint[0] <= 3.0 and -3.0 <= setpoint[1]  and setpoint[1] <= 3.0 and 0.0 <= setpoint[2] and setpoint[2] <= 3.0:
+                                        self.controller.setpoint = setpoint
+                                        print(f"Setpoint changed to x: {setpoint[0]}, y: {setpoint[1]}, z: {setpoint[2]}")
+                                    else:
+                                        print(f"Invalid ranges, expected ranges are -3 <= x <= 3, -3 <= y <= 3, 0 <= z <= 3 ")
+                                except Exception as e:
+                                    print(f"Caught exception: {e}")
+
+                            self.setpoint_text = "x,y,z"
+
+
+                                
+
+                    elif event.key == pygame.K_BACKSPACE: # Delete previous character 
+                        self.setpoint_text = self.setpoint_text[:-1]
+                    else:
+                        self.setpoint_text += event.unicode
+
+            if self.setpoint_active:
+                self.setpoint_color = self.setpoint_active_color
+            else: 
+                self.setpoint_color = self.setpoint_inactive_color
 
         self.screen.fill((0, 0, 0))
         
@@ -79,6 +144,12 @@ class GUI:
         land_text_surface = self.font.render(self.button_land_text, True, (255, 255, 255))
         land_text_rect = land_text_surface.get_rect(center=self.button_land.center)
         self.screen.blit(land_text_surface, land_text_rect)
+
+        # Draw setpoint
+        pygame.draw.rect(self.screen, self.setpoint_color, self.setpoint_button)
+        setpoint_text_surface = self.font.render(self.setpoint_text, True, (255, 255, 255))
+        setpoint_text_rect = setpoint_text_surface.get_rect(center=self.setpoint_button.center)
+        self.screen.blit(setpoint_text_surface, setpoint_text_rect)
 
 
         pygame.display.flip()
