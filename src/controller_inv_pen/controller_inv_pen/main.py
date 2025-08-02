@@ -285,6 +285,7 @@ class Controller(Node):
         wx = -1000*np.array([3.1798, 0.0170, 0.6284, 0.5639, 0.0336])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
         wx = wx[0]/100.0
 
+
       
         Cf = 0.8e-06 #1.42e-6
         #Ct = 2.84e-7

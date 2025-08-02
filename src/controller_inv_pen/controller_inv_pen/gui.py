@@ -110,7 +110,7 @@ class GUI:
                                 except Exception as e:
                                     print(f"Caught exception: {e}")
 
-                            self.setpoint_text = "x,y,z"
+                        self.setpoint_text = "x,y,z"
 
 
                                 
