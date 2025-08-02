@@ -67,7 +67,10 @@ class Controller(Node):
         self.testMPC = False
         self.usingBetaFlight = True
         self.pen_length = 0.6
-        self.pen_mass =  0.01
+        self.pen_mass =  0.04
+        self.penIxx = 0.0
+        self.penIyy = 0.0
+        self.penIzz = 0.0
         self.a = 0.0
         self.b = 0.0
         self.a_dot = 0.0
@@ -237,207 +240,39 @@ class Controller(Node):
         r, p, yaw = self.quaternion_to_euler(*state[3:7])
         vx, vy, vz = state[7:10]
         vr, vp, vyaw = state[10:13]
-        aModel, bModel, a_dotModel, b_dotModel = self.computePenPosition()
+        '''aModel, bModel, a_dotModel, b_dotModel = self.computePenPosition()
         self.modelOutputA.append(aModel)
         self.modelOutputB.append(bModel)
         self.modelOutputAdot.append(a_dotModel)
-        self.modelOutputBdot.append(b_dotModel)
+        self.modelOutputBdot.append(b_dotModel)'''
         
         penState = self.currentPenPose
         a, b, eta = penState[0:3]
         a_dot, b_dot, eta_dot = penState[7:10]
        
-        print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
+        #print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
         self.aError.append(a)
         self.bError.append(b)
         self.b_dotError.append(b_dot)
         self.a_dotError.append(a_dot)
         self.y_dotError.append(vy)
         
-        wy = -1*np.array([ -78.1342,   -0.0648,   13.2000,  -11.4676,   -0.2087])@np.array([[a], [x-xd], [p], [a_dot], [vx]])
-        wy = (( wy[0]))/100.0
-        
-        wx = -1*np.array([ 269.4669,   12.5000,   24.1688,   38.4820,    8.7607])@np.array([[b], [y-yd], [r], [b_dot], [vy]])
-        wx = (( wx[0]))/100.0
-      
-        wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
-        wy = (( wy[0]))/100.0
-
-        wx = -1*np.array([-12.6320, 125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]])
-        wx = (( wx[0]))/100.0
-
-        
-        wy = -33*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -33*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1*np.array([-1599.1437, -4.0095, 382.8, -285.5952, -9.7878])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1*np.array([1599.1437, 4.0095, 382.8, 285.5952, 9.7878])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000*np.array([-1.9656,    -0.0221,    0.3099,    -0.3464,    -0.0370])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000*np.array([1.9656,    0.0221,    0.3099,    0.3464,    0.0370])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -31*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -31*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1*np.array([-1502.2259,-3.7665, 359.6, -268.2864, -9.1946])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1*np.array([1502.2259, 3.7665, 359.6, 268.2864, 9.1946])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.4639,    -0.0041,    0.3496,    -0.2615,    -0.0097])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([ 1.4639,    0.0041,    0.3496,    0.2615,    0.0097])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.4218,    -0.0040,    0.3396,    -0.2540,    -0.0095])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([ 1.4218,    0.0040,    0.3396,    0.2540,    0.0095])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.3798,    -0.0039,    0.3296,    -0.2465,    -0.0092])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([ 1.3798,    0.0039,    0.3296,    0.2465,    0.0092])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.2958,    -0.0036,    0.3096,    -0.2314,    -0.0086])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.2958,    0.0036,    0.3096,    0.2314,    0.0086])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.2537,    -0.0035,    0.2996,    -0.2239,    -0.0083])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.2537,    0.0035,    0.2996,    0.2239,    0.0083])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.2117,    -0.0034,    0.2896,    -0.2164,    -0.0080])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.2117,    0.0034,    0.2896,    0.2164,    0.0080])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.1277,    -0.0031,    0.2696,    -0.2014,    -0.0075])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.1277,    0.0031,    0.2696,    0.2014,    0.0075])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.0436,    -0.0029,    0.2496,    -0.1864,   -0.0069])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.0436,    0.0029,    0.2496,    0.1864,   0.0069])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1.0*np.array([-959.5912,    -2.6665,  229.6000,  -171.3392,    -6.3339])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1.0*np.array([959.5912,    2.6665,  229.6000,  171.3392,    6.3339])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1.0*np.array([-875.5474,    -2.4268,  209.6000,  -156.3163,    -5.7657])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1.0*np.array([875.5474,    2.4268,  209.6000,  156.3163,    5.7657])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1.0*np.array([-847.2985,    -2.0162,  208.6000,  -134.6467,    -4.8596])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1.0*np.array([847.2985,    2.0162,  208.6000,  134.6467,    4.8596])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.3670,    -0.0079,    0.2708,    -0.2423,    -0.0149])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.3670,    0.0079,    0.2708,    0.2423,    0.0149])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.4689,    -0.0085,    0.2908,    -0.2604,    -0.0160])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.4689,    0.0085,    0.2908,    0.2604,    0.0160])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.5198,    -0.0088,    0.3008,    -0.2695,    -0.0166])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.5198,    0.0088,    0.3008,    0.2695,    0.0166])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.5198,    -0.0088,    0.3008,    -0.2695,    -0.0166])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.5198,    0.0088,    0.3008,    0.2695,    0.0166])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.6217,    -0.0094,    0.3208,    -0.2875,    -0.0177])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.6217,    0.0094,    0.3208,    0.2875,    0.0177])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        wy = -1000.0*np.array([-1.3670,    -0.0079,    0.2708,    -0.2423,    -0.0149])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.3670,    0.0079,    0.2708,    0.2423,    0.0149])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-
-        '''wy = -1000.0*np.array([-1.6726,    -0.0097,    0.3308,    -0.2966,    -0.0183])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([1.6726,    0.0097,    0.3308,    0.2966,    0.0183])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0'''
 
         wy = -25*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
         wy = (( wy[0]))/100.0
         wx = -25*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
         wx = wx[0]/100.0
 
-        wy = -38*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -38*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
+     
 
-        wy = -25*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -25*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
 
-        wy = -1000*np.array([ -1.7075,   -0.0113,    0.3096,   -0.3019,   -0.0233])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-
-        wy = -1000*np.array([-2.1645, -0.0457, 0.2626, -0.3799, -0.0673])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-
-        wy = -43*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-
-        wy = -45*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-
-        wy = -47*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-
-        wy = -1000*np.array([  -2.7632,   -0.0148,    0.5464,   -0.49,   -0.0291])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = -1000*np.array([  -3.0172,   -0.0162,    0.5964,   -0.5351,   -0.0318])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = -1000*np.array([-3.0782, -0.0165, 0.6084, -0.5459, -0.0325])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
         wy = -1000*np.array([-3.1798, -0.0170, 0.6284, -0.5639, -0.0336])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
         wy = (( wy[0]))/100.0
         
         wx = -1000*np.array([3.1798, 0.0170, 0.6284, 0.5639, 0.0336])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
         wx = wx[0]/100.0
 
-        '''wy = -1000.0*np.array([-2.4484,    -0.0162,    0.4426,    -0.4330,    -0.0336])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -1000.0*np.array([2.4484,    0.0162,    0.4426,    0.4330,    0.0336])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0
-        #wx = -1*np.array([-12.6320, 125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]])
-        #wx = (( wx[0]))/100.0'''
-
-        '''wy = -27*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
-        wy = (( wy[0]))/100.0
-        wx = -27*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
-        wx = wx[0]/100.0'''
-
-        '''wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
-        wy = (( wy[0]))/100.0'''
-
-        #wx = -1*np.array([-12.6320, 125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]])
-        #wx = (( wx[0]))/100.0
+      
         Cf = 1.42e-6
         Ct = 2.84e-7
         l_x = 0.0865
@@ -446,7 +281,7 @@ class Controller(Node):
         max_motor_speed = 4631.0
         maxForce = (Cf*max_motor_speed**2) 
         maxTorque = (Ct*max_motor_speed**2)
-        kpz, kiz, kdz = 15.0, 10.0, 10.0 
+        kpz, kiz, kdz = 35.0, 10.0, 10.0  #15.0, 10.0, 10.0 
         dt = self.dt
         force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.055) #*self.M
         
@@ -790,10 +625,10 @@ class Controller(Node):
             ax1[0].set_xlabel('time (s)')
             ax1[0].legend('lower right')
 
-            ax1[1].plot(time, self.y_dotError, label="y_dot")
+            #ax1[1].plot(time, self.y_dotError, label="y_dot")
             ax1[1].plot(time, self.b_dotError, label="b_dot")
-            ax1[1].set_title('y_dot and b_dot over time')
-            ax1[1].set_ylabel('y_dot and b_dot')
+            ax1[1].set_title('b_dot over time')
+            ax1[1].set_ylabel('b_dot')
             ax1[1].set_xlabel('time (s)')
             ax1[1].legend('lower right')
     
@@ -812,16 +647,22 @@ class Controller(Node):
             ax4[0].set_title('a over time')
             ax4[0].set_ylabel('a')
             ax4[0].set_xlabel('time (s)')
+
+            ax4[1].plot(time, self.a_dotError, label="a_dot")
+            ax4[1].set_title('a_dot over time')
+            ax4[1].set_ylabel('a_dot')
+            ax4[1].set_xlabel('time (s)')
+            plt.tight_layout()
+            #ax4[1].legend('lower right')
             #ax4[0].legend('lower right')
 
             #ax4[1].plot(time, self.bError, label="actual data")
             #ax4[1].plot(time, self.modelOutputAdot, label="model dataA")
-            ax4[1].plot(time, self.modelOutputBdot, label="model dataB")
-            
+            '''ax4[1].plot(time, self.modelOutputBdot, label="model dataB")
             ax4[1].set_title('b_dot model over time')
             ax4[1].set_ylabel('b_dot')
             ax4[1].set_xlabel('time (s)')
-            ax4[1].legend('lower right')
+            ax4[1].legend('lower right')'''
 
             '''figure6, ax6 = plt.subplots(2,1)
             ax6[0].plot(time, self.a_dotError, label="actual data")
