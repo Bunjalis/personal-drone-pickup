@@ -25,7 +25,7 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
         self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
         self.current_pose = None
-        self.setpoint = np.array([1.0,1.0, 1.0])
+        self.setpoint = np.array([0.0,0.0, 1.0])
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
@@ -63,7 +63,8 @@ class Controller(Node):
         self.modelOutputAdot = []
         self.modelOutputBdot = []
 
-        self.testInvPen = True
+        self.testNav = False
+        self.testInvPen = False
         self.testMPC = False
         self.usingBetaFlight = True
         self.pen_length = 0.6
@@ -109,6 +110,11 @@ class Controller(Node):
 
         self.rd = 0
         self.pd = 0
+
+        ######################## FIP switch flags ###################
+        self.useSwitch = True
+        self.useFIP = False
+        self.land = False
 
         ######################## MPC variables #######################
         #self.steps = 90 * 30
@@ -198,37 +204,44 @@ class Controller(Node):
         a, b, eta = penState[0:3]
         a_dot, b_dot, eta_dot = penState[7:10]
         
+        self.aError.append(a)
+        self.bError.append(b)
+        self.b_dotError.append(b_dot)
+        self.a_dotError.append(a_dot)
+        
+
         yawd = 0.0
         dt = self.dt
         x, y, z = state[0:3]
         r, p, yaw = self.quaternion_to_euler(*state[3:7])
         vx, vy, vz = state[7:10]
         vr, vp, vyaw = state[10:13]
-        print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
-        print(f"x:{x}, y:{y}, z:{z}, x_dot:{vx}, y_dot:{vy}, z_dot:{vz}")
         
+        wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
+        wy = (( wy[0]))/100.0
+        wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
+        wx = (( wx[0]))/100.0
 
+        Cf = 0.8e-06 #1.42e-6
 
-        kpz, kiz, kdz = 15.0, 10.0, 10.0 
-        kpx, kix, kdx = 0.06938, 0.0, 0.14488#0.006, 0.0, 0.0 #6.0, 0, 12.0 
-        kpy, kiy, kdy = 0.07, 0.0, 0.1456 #0.06, 0.0, 0.001#0.006, 0.0, 0.0 #6.0, 0, 12.0 
+        max_motor_speed = 4631.0
+        maxForce = (Cf*max_motor_speed**2) 
+        kpz, kiz, kdz = 35.0, 10.0, 10.0  
+        dt = self.dt
+        force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.055) 
+        
+        throttle = 2*(force)/(maxForce) - 1
+        if throttle < -1:
+            throttle = -1.0
+        if throttle > 1:
+            throttle = 1.0
+       
+        wz =  -0.5*(yawd-yaw)
+        print(f"force: {force}, r: {wx}, p: {wy}, yaw: {wz}")
+        self.wxOutput.append(wx)
 
-        kpp, kip, kdp = 28.8235, 0.0, 8.235 #90.0, 10.0, 20.0 #30.0 # 80.0, 10.0, 50.0 note derivative term is very sensitive to noise (reduce as much as possible)
-        kpr, kir, kdr = 43.64, 0.0, 12.43 #60.0, 10.0, 40.0 # 80.0, 10.0, 50.0 
-        kpyaw, kiyaw, kdyaw =60.0, 10.0, 30.0 
-
-
-        force = (self.g +kpz*(zd-z) + kdz*(0-vz))*(self.M)*(cos(r)*cos(p))
-        Ux =  kpx*(xd-x) + kix*(xd-x)*dt - kdx*vx
-        Uy = kpy*(yd-y) + kiy*(yd-y)*dt - kdy*vy 
-        rd = (Ux*sin(yaw) - Uy*cos(yaw)) #*self.M/force
-        pd = (Ux*cos(yaw) + Uy*sin(yaw)) #*self.M/force
-        rTau = (kpr*(rd-r) + kir*(rd-r)*dt - kdr*vr)*self.Ixx
-        pTau= (kpp*(pd-p) + kip*(pd-p)*dt - kdp*vp)*self.Iyy
-        yawTau = (kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw)*self.Izz
-
-
-        return force, rTau, pTau, yawTau
+        u = [wx, wy, throttle, wz]
+        return u
 
 
     def FIPControllerBeta(self):
@@ -417,85 +430,28 @@ class Controller(Node):
             self.timePoints.append(self.t)
 
             # CONTROL CODE GOES HERE
-            
-            if self.testInvPen and self.usingBetaFlight:
+            if self.useSwitch:
+                if self.useFIP:
+                    u1, u2, u3, u4 = self.FIPControllerBeta()
+                else: 
+                    u1,u2,u3,u4 = self.navController()
+
+                if self.land:
+                    self.setpoint[2] = 0.0
+                    u1,u2,u3,u4 = self.navController()
+
+
+            elif self.testInvPen:
                 u1, u2, u3, u4 = self.FIPControllerBeta()
 
             elif not self.testMPC and not self.testInvPen:
-                force, rTau, pTau, yawTau = self.navController()
-            if self.testMPC:
+                u1,u2,u3,u4 = self.navController()
+            elif self.testMPC:
                 u1,u2,u3,u4 = self.MPC()
-            
-            
-            
-            if not self.testMPC and not self.usingBetaFlight:
-                Cf = 1.42e-6
-                Ct = 2.84e-7
-
-                l_x = 0.0865
-                l_y = 0.073
-
-                max_motor_speed = 4631.0# 1755*25.2
-                
-                
-                if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
-                    u1 = 0.0
-                else:
-                    u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
-
-                if (force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct)) < 0:
-                    u2 = 0.0
-                else:
-                    u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
-
-                if force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct) < 0:
-                    u3 = 0.0
-                else:
-                    u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
-
-                if force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct)< 0:
-                    u4 = 0.0
-                else:
-                    u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
-
-
-                ########################################################
-                print(f"force: {force}, rTau: {rTau}, pTau: {pTau}, yawTau: {yawTau}")
-                '''u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
-                u2 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
-                u3 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
-                u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
-            print(f"x: {x}, y: {y}, z: {z}, r: {r}, p: {p}, yaw: {yaw}, vx: {vx}, vy: {vy}")
             
             u = [u1,u2,u3,u4]
             #u = [0.0,0.0,0.0,0.0]
-            '''Cf = 1.42e-6
-            Ct = 2.84e-7
-            l_x = 0.0865
-            l_y = 0.073
-
-            max_motor_speed = 4631.0
-            maxForce = (Cf*max_motor_speed**2) 
-            maxTorque = (Ct*max_motor_speed**2) 
-        
-            #wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
-            #wy = (( wy[0]))/100.0
-            #wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
-            #wx = (( wx[0]))/100.0
-
-            state = self.current_pose
-            xd, yd, zd = self.setpoint
-            yawd = 0.0
-            dt = self.dt
-            x, y, z = state[0:3]
-            r, p, yaw = self.quaternion_to_euler(*state[3:7])
-            vx, vy, vz = state[7:10]
-            vr, vp, vyaw = state[10:13]
             
-            penState = self.currentPenPose
-            a, b, eta = penState[0:3]
-            a_dot, b_dot, eta_dot = penState[7:10]
-            '''
             
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 8), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
             self.cmd_publisher_.publish(msg)
