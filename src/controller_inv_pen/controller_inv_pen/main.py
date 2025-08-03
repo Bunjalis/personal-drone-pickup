@@ -29,7 +29,7 @@ class Controller(Node):
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
-        self.control_frequency = 120.0 #240.0 # 120.0
+        self.control_frequency = 120.0 #120.0 #240.0 # 120.0
         self.dt = 1.0 / self.control_frequency
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -65,13 +65,14 @@ class Controller(Node):
 
         self.testNav = False
         self.testInvPen = False
-        self.testMPC = True
+        self.testMPC = False
         self.usingBetaFlight = True
         self.pen_length = 0.6
         self.pen_mass =  0.04
         self.penIxx = 0.0
         self.penIyy = 0.0
         self.penIzz = 0.0
+        self.penXoffset = 0.03
         self.a = 0.0
         self.b = 0.0
         self.a_dot = 0.0
@@ -112,13 +113,14 @@ class Controller(Node):
         self.pd = 0
 
         ######################## FIP switch flags ###################
-        self.useSwitch = False
+        self.useSwitch = True
         self.useFIP = False
         self.land = False
 
         ######################## MPC variables #######################
         #self.steps = 90 * 30
         #self.dt = 1.0 / 120.0
+        
         self.step_counter = 0
         #self.timer = self.create_timer(self.dt, self.control_loop)
         self.traj = hover_trajectory(self.dt)  
@@ -222,13 +224,13 @@ class Controller(Node):
         wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
         wx = (( wx[0]))/100.0
 
-        Cf = 0.8e-06 #1.42e-6
+        Cf = 0.35e-6 #0.8e-06 #1.42e-6
 
         max_motor_speed = 4631.0
         maxForce = (Cf*max_motor_speed**2) 
-        kpz, kiz, kdz = 35.0, 10.0, 10.0  
+        kpz, kiz, kdz = 25.0, 10.0, 10.0  # 35.0, 10.0, 10.0  
         dt = self.dt
-        force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.055) 
+        force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.04) 
         
         throttle = 2*(force)/(maxForce) - 1
         if throttle < -1:
@@ -291,27 +293,49 @@ class Controller(Node):
         wx = -1000*np.array([3.0528,   0.0164,    0.6034,   0.5414,   0.0322])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
         wx = wx[0]/100.0
 
-        Ua = 5.060*a + 0.897*a_dot # (-67.26*a - 11.8*a_dot)/-9.81 # 5.060*a + 0.897*a_dot
+        wy = -45*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        wx = -45*np.array([48.4589,0.1215, 11.6000,8.6544, 0.2966])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        wy = -1000*np.array([-3.5903,   -0.0193,    0.7092,   -0.6367,   -0.0379])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        
+        wx = -1000*np.array([3.5903,   0.0193,    0.7092,   0.6367,   0.0379])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        #Ua = 5.060*(a-self.penXoffset) + 0.897*a_dot # (-67.26*a - 11.8*a_dot)/-9.81 # 5.060*a + 0.897*a_dot
+        Ua = 5.060*a + 0.897*a_dot
         Ux = 0.027*(x-xd) + 0.053*vx
         wy = -690.0*(p-(Ua+Ux)) #-628.4*(p-(Ua+Ux))
         wy = wy/100.0
-
+        
         Ub = -5.060*b - 0.897*b_dot # (-67.26*a - 11.8*a_dot)/-9.81 # 5.060*a + 0.897*a_dot
         Uy = -0.027*(y-yd) - 0.053*vy
-        wx = -690.0*(r-(Ub+Uy)) #-628.4*(p-(Ua+Ux))
+        wx = -790.0*(r-(Ub+Uy)) #-740.0*(r-(Ub+Uy)) #-628.4*(p-(Ua+Ux))
         wx = wx/100.0
 
-        Cf = 0.8e-06 #1.42e-6
+        Ua = 5.060*a + 0.897*a_dot
+        Ux = 0.027*(x-xd) + 0.053*vx
+        wy = -790.0*(p-(Ua+Ux)) #-628.4*(p-(Ua+Ux))
+        wy = wy/100.0
+        
+        Ub = -5.060*b - 0.897*b_dot # (-67.26*a - 11.8*a_dot)/-9.81 # 5.060*a + 0.897*a_dot
+        Uy = -0.027*(y-yd) - 0.053*vy
+        wx = -790.0*(r-(Ub+Uy)) #-628.4*(p-(Ua+Ux))
+        wx = wx/100.0
+
+        Cf = 0.35e-6 #0.8e-06 #1.42e-6
         #Ct = 2.84e-7
         l_x = 0.0865
         l_y = 0.073
 
         max_motor_speed = 4631.0
         maxForce = (Cf*max_motor_speed**2) 
-        #maxTorque = (Ct*max_motor_speed**2)
-        kpz, kiz, kdz = 35.0, 10.0, 10.0  #15.0, 10.0, 10.0 
+      
+        kpz, kiz, kdz = 25.0, 10.0, 10.0  # 35.0, 10.0, 10.0  
         dt = self.dt
-        force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.055) #*self.M
+        force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.04) 
         
         throttle = 2*(force)/(maxForce) - 1
         if throttle < -1:
@@ -331,10 +355,12 @@ class Controller(Node):
             sc = self.step_counter + j * self.skip_steps
             #yref = np.concatenate((self.traj[:, sc], [0.0, 0.0]))
             yref = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+            yref = np.array([1.0, 1.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
             self.ocp.set(j, "yref", yref)
 
         sn = self.step_counter + self.N * self.skip_steps
         yref_N = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) #self.traj[:, sn]
+        yref_N = np.array([1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
         self.ocp.set(self.N, "yref", yref_N)
 
         
@@ -345,12 +371,13 @@ class Controller(Node):
         rotationMatrix = rotate.as_matrix()
         [[vx], [vy], [vz]] = rotationMatrix@np.array([[vx],[vy],[vz]])
         
-
-        state = np.concatenate((self.current_pose[0:2], [r], [p], [self.currentPenPose[1]], self.current_pose[7:9], [vx], [vy], [self.currentPenPose[8]]))
+        #state = np.concatenate((self.current_pose[0:2], [r], [p], [self.currentPenPose[1]], self.current_pose[7:9], [vx], [vy], [self.currentPenPose[8]]))
+        #state = np.concatenate((self.current_pose[0:2], [r], [p], [self.currentPenPose[1]], [vx], [vy],self.current_pose[7:9],  [self.currentPenPose[8]]))
+        state = np.concatenate((self.current_pose[0:2], [r], [p], [self.currentPenPose[1]], [vx], [vy],  [self.currentPenPose[8]]))
         self.ocp.set(0, "lbx", state)
         self.ocp.set(0, "ubx", state)
     
-        print(f" b: {self.currentPenPose[1]}, b_dot: {self.currentPenPose[8]}")
+        print(f"current pos: {currentState[0:3]}, roll: {r}, pitch: {p},  b: {self.currentPenPose[1]}, b_dot: {self.currentPenPose[8]}")
         status = self.ocp.solve()
         if status != 0:
             raise Exception(f'acados returned status {status}.')
@@ -365,7 +392,7 @@ class Controller(Node):
         #        self.augmented_u = self.l1_controller.update(self.current_pose, u)
         #u[2] = u[2]*2 - 1
 
-        Cf = 1.42e-6
+        Cf = 0.8e-06
         Ct = 2.84e-7
 
         max_motor_speed = 4631.0
@@ -374,7 +401,10 @@ class Controller(Node):
         kpz, kiz, kdz = 15.0, 10.0, 10.0 
         zd, yawd  = 1.0, 0.0
         z = currentState[2]
-        force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*self.dt)*(self.M+0.055) #*self.M 
+        kpz, kiz, kdz = 35.0, 10.0, 10.0  #15.0, 10.0, 10.0 
+        dt = self.dt
+        force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.055)
+        
         throttle = 2*(force)/(maxForce) - 1
         if throttle < -1:
             throttle = -1.0
@@ -422,12 +452,12 @@ class Controller(Node):
             self.pre_start_counter += 1
 
         if self.armed and self.current_pose is not None and self.currentPenPose is not None:
-            if self.step_counter + self.N * self.skip_steps > self.steps:
+            '''if self.step_counter + self.N * self.skip_steps > self.steps:
                 self.step_counter = 0
                 self.armed = False
                 msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
                 self.cmd_publisher_.publish(msg)
-                self.on_close()
+                self.on_close()'''
 
             state = self.current_pose
             goal = self.setpoint
@@ -469,7 +499,7 @@ class Controller(Node):
             elif self.testInvPen:
                 u1, u2, u3, u4 = self.FIPControllerBeta()
 
-            elif not self.testMPC and not self.testInvPen:
+            elif self.testNav:
                 u1,u2,u3,u4 = self.navController()
             elif self.testMPC:
                 u1,u2,u3,u4 = self.MPC()

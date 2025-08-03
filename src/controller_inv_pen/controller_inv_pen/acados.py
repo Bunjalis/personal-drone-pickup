@@ -28,26 +28,26 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.tf = 6.0
 
     nu = 2 # Number of control inputs
-    nx = 10# New state dimension (no omega)
+    nx = 8 #10# New state dimension (no omega)
     ny = nx + nu
 
     # Cost matrices (tune as needed)
-    '''Q_mat = 2 * np.diag([
-        5.0, 5.0, 5.0,    # position
-        4.0, 4.0, 4.0, 4.0,  # quaternion
-        1500.0, 1500.0,         # a and b 
-        1.0, 1.0, 1.0,      # velocity
-        1.0, 1.0, 1.0,     # angular rates
-        280.0, 280.0            # a_dot and b_dot 
-    ])'''
 
-    Q_mat = 2 * np.diag([
+
+    '''Q_mat = 2 * np.diag([
         1.0, 1.0,    # position
-        100.0, 100.0,  # roll and pitch
-        40000.0,         # b 
+        1.0, 1.0,  # roll and pitch
+        0.0,         # b 
         1.0, 1.0,       # velocity
         1.0, 1.0,  # angular rates
-        10000.0          #  b_dot 
+        0.0          #  b_dot 
+    ])'''
+    Q_mat = 2 * np.diag([
+        1.0, 1.0,    # position
+        1.0, 1.0,  # roll and pitch
+        0.0,         # b 
+        1.0, 1.0,       # velocity
+        0.0          #  b_dot 
     ])
     R_mat = 2 * np.diag([0.5,0.5])
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
@@ -106,7 +106,7 @@ def generate_ocp_controller(dynamics=None):
     # Create simulation configuration
     sim = AcadosSim()
     sim.model = ocp.model
-    sim.solver_options.T = 1.0 / 120.0  # Set integrator to run at 30Hz
+    sim.solver_options.T = 1.0 / 30.0  # Set integrator to run at 30Hz
     sim_solver = AcadosSimSolver(sim)
 
     return ocp_solver, sim_solver
