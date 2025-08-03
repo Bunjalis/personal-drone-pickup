@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 from tf_transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_matrix
 import time
-#from .acados import generate_ocp_controller
+from .acados import generate_ocp_controller
 
 
 class Controller(Node):
@@ -65,7 +65,7 @@ class Controller(Node):
 
         self.testNav = False
         self.testInvPen = False
-        self.testMPC = False
+        self.testMPC = True
         self.usingBetaFlight = True
         self.pen_length = 0.6
         self.pen_mass =  0.04
@@ -112,7 +112,7 @@ class Controller(Node):
         self.pd = 0
 
         ######################## FIP switch flags ###################
-        self.useSwitch = True
+        self.useSwitch = False
         self.useFIP = False
         self.land = False
 
@@ -124,7 +124,7 @@ class Controller(Node):
         self.traj = hover_trajectory(self.dt)  
         self.steps = self.traj.shape[1] - 1   
         # Get both the OCP solver and the integrator
-        self.ocp, self.sim_integrator = None, None #generate_ocp_controller()
+        self.ocp, self.sim_integrator = generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         # Original trajectories
@@ -200,14 +200,14 @@ class Controller(Node):
 
         state = self.current_pose
         xd, yd, zd = self.setpoint
-        penState = self.currentPenPose
+        '''penState = self.currentPenPose
         a, b, eta = penState[0:3]
         a_dot, b_dot, eta_dot = penState[7:10]
         
         self.aError.append(a)
         self.bError.append(b)
         self.b_dotError.append(b_dot)
-        self.a_dotError.append(a_dot)
+        self.a_dotError.append(a_dot)'''
         
 
         yawd = 0.0
@@ -264,11 +264,11 @@ class Controller(Node):
         a_dot, b_dot, eta_dot = penState[7:10]
        
         #print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
-        self.aError.append(a)
+        '''self.aError.append(a)
         self.bError.append(b)
         self.b_dotError.append(b_dot)
         self.a_dotError.append(a_dot)
-        self.y_dotError.append(vy)
+        self.y_dotError.append(vy)'''
         
 
         wy = -25*np.array([-48.4589, -0.1215, 11.6000, -8.6544, -0.2966])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
@@ -359,6 +359,7 @@ class Controller(Node):
         x = self.ocp.get(1, "x")
         cost = self.ocp.get_cost()
         print("Optimal cost:", cost)
+        print(f"predicted state: {x}")
         #if self.enable_L1_augmentation:
         #        u[2] += self.augmented_u
         #        self.augmented_u = self.l1_controller.update(self.current_pose, u)
@@ -442,6 +443,15 @@ class Controller(Node):
             self.rollError.append(r)
             self.pitchError.append(p)
             self.yawError.append(yaw)
+
+            penState = self.currentPenPose
+            a, b, eta = penState[0:3]
+            a_dot, b_dot, eta_dot = penState[7:10]
+            
+            self.aError.append(a)
+            self.bError.append(b)
+            self.b_dotError.append(b_dot)
+            self.a_dotError.append(a_dot)
             self.timePoints.append(self.t)
 
             # CONTROL CODE GOES HERE
@@ -586,8 +596,8 @@ class Controller(Node):
 
     def plotSystemResponse(self):
         time = self.timePoints
-        if self.testInvPen:
-            figure1, ax1 = plt.subplots(3,1)
+        if self.testInvPen or self.useSwitch:
+            figure1, ax1 = plt.subplots(2,1)
   
             #ax1[0].plot(time, self.aError, label="a")
             ax1[0].plot(time, self.bError, label="b")
@@ -603,10 +613,10 @@ class Controller(Node):
             ax1[1].set_xlabel('time (s)')
             ax1[1].legend('lower right')
     
-            ax1[2].plot(time, self.wxOutput)
+            '''ax1[2].plot(time, self.wxOutput)
             ax1[2].set_title('wx output over time')
             ax1[2].set_ylabel('wx output')
-            ax1[2].set_xlabel('time (s)')
+            ax1[2].set_xlabel('time (s)')'''
             plt.tight_layout()
 
             figure4, ax4 = plt.subplots(2,1)

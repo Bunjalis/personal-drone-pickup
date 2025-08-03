@@ -38,9 +38,9 @@
         <link name="pendulum_link">
         <pose relative_to='pendulum_pivot'>0.0 0.0 0.3 0.0 0.0 0</pose>
         <inertial>
-            <mass>0.005</mass>
+            <mass>0.04</mass>
             <inertia>
-            <ixx>0.0006</ixx> <iyy>0.0006</iyy> <izz>3.33e-7</izz>
+            <ixx>0.0048</ixx> <iyy>0.0048</iyy> <izz>0.000001333</izz>
             <ixy>0</ixy> <ixz>0</ixz> <iyz>0</iyz>
             </inertia>
         </inertial>

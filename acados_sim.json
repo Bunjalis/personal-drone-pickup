@@ -1,9 +1,9 @@
 {
-    "acados_include_path": "/home/r3ht53/acados_repo/acados/include",
-    "acados_lib_path": "/home/r3ht53/acados_repo/acados/lib",
-    "code_export_directory": "/home/r3ht53/drone_sim_wsl/drone_cage_control/c_generated_code",
+    "acados_include_path": "/home/esther/acados/include",
+    "acados_lib_path": "/home/esther/acados/lib",
+    "code_export_directory": "/home/esther/drone_sim/drone_cage_control/c_generated_code",
     "cython_include_dirs": [
-        "/home/r3ht53/.local/lib/python3.10/site-packages/numpy/core/include",
+        "/usr/lib/python3/dist-packages/numpy/core/include",
         "/usr/include/python3.10"
     ],
     "dims": {
