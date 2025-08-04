@@ -28,26 +28,31 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.tf = 6.0
 
     nu = 2 # Number of control inputs
-    nx = 8 #10# New state dimension (no omega)
+    nx = 6 #8 #10# New state dimension (no omega)
     ny = nx + nu
 
     # Cost matrices (tune as needed)
 
 
-    '''Q_mat = 2 * np.diag([
-        1.0, 1.0,    # position
-        1.0, 1.0,  # roll and pitch
+    Q_mat = 2 * np.diag([
+        5.0, 5.0,    # position
+        4.0, 4.0,  # roll and pitch
         0.0,         # b 
         1.0, 1.0,       # velocity
         1.0, 1.0,  # angular rates
         0.0          #  b_dot 
-    ])'''
+    ])
     Q_mat = 2 * np.diag([
-        1.0, 1.0,    # position
-        1.0, 1.0,  # roll and pitch
+        5.0, 5.0,    # position
+        5.0, 5.0,  # roll and pitch
         0.0,         # b 
         1.0, 1.0,       # velocity
         0.0          #  b_dot 
+    ])
+    Q_mat = 2 * np.diag([
+        5.0, 5.0,    # position
+        5.0, 5.0,  # roll and pitch
+        1.0, 1.0,       # velocity
     ])
     R_mat = 2 * np.diag([0.5,0.5])
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)

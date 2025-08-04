@@ -11,17 +11,22 @@ class QuadDynamics:
     def __init__(self):
         # Declare model variables
         self.p = cs.MX.sym('p', 2)  #  xy position
-        self.q = cs.MX.sym('a', 2)  # euler angles (roll and pitch)
-        self.penPos = cs.MX.sym('penPos', 1) # b
+        #self.q = cs.MX.sym('a', 2)  # euler angles (roll and pitch)
+        self.q = cs.MX.sym('q', 2)  # euler angles (roll and pitch)
+        #self.penPos = cs.MX.sym('penPos', 1) # b
         self.v = cs.MX.sym('v', 2)  # x and y velocity (previously rotated to global frame)
         #self.r = cs.MX.sym('r', 2)  # roll and pitch angular velocity
-        self.penVel = cs.MX.sym('penVel', 1) # b_dot 
+        #self.penVel = cs.MX.sym('penVel', 1) # b_dot 
         
 
         # State vector: position, quaternion, velocity, angular velocity
         #self.x = cs.vertcat(self.p, self.q, self.penPos, self.v, self.r, self.penVel)
-        self.x = cs.vertcat(self.p, self.q, self.penPos, self.v, self.penVel)
-        self.state_dim = 8 #10
+        #self.x = cs.vertcat(self.p, self.q, self.penPos, self.v, self.penVel)
+
+
+        #self.x = cs.vertcat(self.p, self.penPos, self.q, self.v, self.penVel)
+        self.x = cs.vertcat(self.p, self.q, self.v)
+        self.state_dim = 6 #10
 
         # Control input: throttle, desired roll rate, pitch rate, yaw rate (Betaflight style)
         #throttle = cs.MX.sym('throttle')
@@ -42,7 +47,9 @@ class QuadDynamics:
 
     def quad_dynamics(self):
         #x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(),self.penPos_dynamics(), self.v_dynamics(), self.w_dynamics(), self.penVel_dynamics())
-        x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(),self.penPos_dynamics(), self.v_dynamics(), self.penVel_dynamics())
+        #x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(),self.penPos_dynamics(), self.v_dynamics(), self.penVel_dynamics())
+        #x_dot = cs.vertcat(self.p_dynamics(), self.penPos_dynamics(), self.q_dynamics(), self.v_dynamics(), self.penVel_dynamics())
+        x_dot = cs.vertcat(self.p_dynamics(), self.q_dynamics(), self.v_dynamics())
         return cs.Function('x_dot', [self.x, self.u], [x_dot], ['x', 'u'], ['x_dot'])
 
     def p_dynamics(self):
@@ -55,7 +62,7 @@ class QuadDynamics:
             self.u[0] * max_rate_rad,
             self.u[1] * max_rate_rad,
         )
-        return r_cmd  #cs.mtimes(self.skew_symmetric(self.r), self.q) # self.q #self.r #self.q #1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
+        return r_cmd#self.q #1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
 
     def v_dynamics(self):
         #f_thrust = self.thrust_constant * self.u[2]
@@ -65,7 +72,7 @@ class QuadDynamics:
         return cs.vertcat(self.q[1]*9.81,self.q[0]*-9.81)
         
 
-    def w_dynamics(self):
+    '''def w_dynamics(self):
         max_rate_deg = 100
         max_rate_rad = max_rate_deg * np.pi / 180.0
         r_cmd = cs.vertcat(
@@ -73,7 +80,7 @@ class QuadDynamics:
             self.u[1] * max_rate_rad,
         )
         r_dot = (1 / self.tau_rate) * (r_cmd - self.r)
-        return r_dot
+        return r_dot'''
 
 
     def penPos_dynamics(self):

@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 from tf_transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_matrix
 import time
-#from .acados import generate_ocp_controller
+from .acados import generate_ocp_controller
 
 
 class Controller(Node):
@@ -29,7 +29,15 @@ class Controller(Node):
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
-        self.control_frequency = 120.0 #120.0 #240.0 # 120.0
+        self.testNav = False
+        self.testInvPen = False
+        self.testMPC = True
+        self.usingBetaFlight = True
+        if self.testMPC:
+            self.control_frequency = 30.0 
+        else:
+            self.control_frequency = 120.0 #120.0 #240.0 # 120.0
+
         self.dt = 1.0 / self.control_frequency
         self.timer = self.create_timer(self.dt, self.control_loop)
 
@@ -63,10 +71,7 @@ class Controller(Node):
         self.modelOutputAdot = []
         self.modelOutputBdot = []
 
-        self.testNav = False
-        self.testInvPen = False
-        self.testMPC = False
-        self.usingBetaFlight = True
+        
         self.pen_length = 0.6
         self.pen_mass =  0.04
         self.penIxx = 0.0
@@ -113,7 +118,7 @@ class Controller(Node):
         self.pd = 0
 
         ######################## FIP switch flags ###################
-        self.useSwitch = True
+        self.useSwitch = False
         self.useFIP = False # DON'T CHANGE
         self.land = False # DON'T CHNAGE
 
@@ -126,7 +131,7 @@ class Controller(Node):
         self.traj = hover_trajectory(self.dt)  
         self.steps = self.traj.shape[1] - 1   
         # Get both the OCP solver and the integrator
-        self.ocp, self.sim_integrator = None, None#generate_ocp_controller()
+        self.ocp, self.sim_integrator = generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         # Original trajectories
@@ -354,13 +359,15 @@ class Controller(Node):
         for j in range(self.N):
             sc = self.step_counter + j * self.skip_steps
             #yref = np.concatenate((self.traj[:, sc], [0.0, 0.0]))
-            yref = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
-            yref = np.array([1.0, 1.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+            #yref = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+            #yref = np.array([1.0, 1.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+            yref = np.array([0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
             self.ocp.set(j, "yref", yref)
 
         sn = self.step_counter + self.N * self.skip_steps
-        yref_N = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) #self.traj[:, sn]
-        yref_N = np.array([1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
+        #yref_N = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) #self.traj[:, sn]
+        #yref_N = np.array([1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
+        yref_N = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0])
         self.ocp.set(self.N, "yref", yref_N)
 
         
@@ -370,14 +377,18 @@ class Controller(Node):
         rotate = R.from_euler('zyx', [yaw, p, r], degrees=False)
         rotationMatrix = rotate.as_matrix()
         [[vx], [vy], [vz]] = rotationMatrix@np.array([[vx],[vy],[vz]])
+        #vr, vp, vyaw = currentState[10:13]
+        #[[vr], [vp], [vyaw]] = rotationMatrix@np.array([[vr],[vp],[vyaw]])
         
         #state = np.concatenate((self.current_pose[0:2], [r], [p], [self.currentPenPose[1]], self.current_pose[7:9], [vx], [vy], [self.currentPenPose[8]]))
-        #state = np.concatenate((self.current_pose[0:2], [r], [p], [self.currentPenPose[1]], [vx], [vy],self.current_pose[7:9],  [self.currentPenPose[8]]))
-        state = np.concatenate((self.current_pose[0:2], [r], [p], [self.currentPenPose[1]], [vx], [vy],  [self.currentPenPose[8]]))
+        #state = np.concatenate((self.current_pose[0:2], [r, p], [self.currentPenPose[1]], [vx, vy],self.current_pose[10:12],  [self.currentPenPose[8]]))
+        #state = np.concatenate((self.current_pose[0:2], [r, p], [self.currentPenPose[1]], [vx, vy],  [self.currentPenPose[8]]))
+        #state = np.concatenate((self.current_pose[0:2],  [self.currentPenPose[1]], [r, p], [vx, vy],  [self.currentPenPose[8]]))
+        state = np.concatenate((self.current_pose[0:2],  [r, p], [vx, vy]))
         self.ocp.set(0, "lbx", state)
         self.ocp.set(0, "ubx", state)
     
-        print(f"current pos: {currentState[0:3]}, roll: {r}, pitch: {p},  b: {self.currentPenPose[1]}, b_dot: {self.currentPenPose[8]}")
+        print(f"current pos: {currentState[0:2]}, roll: {r},  pitch: {p}, v: {currentState[7:9]}, roll_dot: {self.current_pose[10]}, pitch_dot: {self.current_pose[11]}, b: {self.currentPenPose[1]}, b_dot: {self.currentPenPose[8]}")
         status = self.ocp.solve()
         if status != 0:
             raise Exception(f'acados returned status {status}.')
