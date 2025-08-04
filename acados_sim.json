@@ -10,7 +10,7 @@
         "np": 0,
         "np_global": 0,
         "nu": 2,
-        "nx": 6,
+        "nx": 10,
         "nz": 0
     },
     "external_function_files_model": [
@@ -46,9 +46,9 @@
         "cost_r_in_psi_expr": [],
         "cost_r_in_psi_expr_0": [],
         "cost_r_in_psi_expr_e": [],
-        "cost_y_expr": "vertcat(p, q, v, roll_rate_cmd, pitch_rate_cmd)",
-        "cost_y_expr_0": "vertcat(p, q, v, roll_rate_cmd, pitch_rate_cmd)",
-        "cost_y_expr_e": "vertcat(p, q, v)",
+        "cost_y_expr": "vertcat(p, penPos, q, v, penVel, roll_rate_cmd, pitch_rate_cmd)",
+        "cost_y_expr_0": "vertcat(p, penPos, q, v, penVel, roll_rate_cmd, pitch_rate_cmd)",
+        "cost_y_expr_e": "vertcat(p, penPos, q, v, penVel)",
         "disc_dyn_expr": [],
         "dyn_disc_fun": null,
         "dyn_disc_fun_jac": null,
@@ -58,7 +58,7 @@
         "dyn_impl_dae_fun": null,
         "dyn_impl_dae_fun_jac": null,
         "dyn_impl_dae_jac": null,
-        "f_expl_expr": "vertcat(v, (1.74533*roll_rate_cmd), (1.74533*pitch_rate_cmd), (9.81*q[1]), (-9.81*q[0]))",
+        "f_expl_expr": "vertcat(v, penVel, (1.74533*roll_rate_cmd), (1.74533*pitch_rate_cmd), (9.81*q[1]), (-9.81*q[0]), (((9.81*penPos[0])/0.3)-(9.81*q[1])), (((9.81*penPos[1])/0.3)+(9.81*q[0])))",
         "f_impl_expr": [],
         "gnsf_nontrivial_f_LO": 1,
         "gnsf_purely_linear": 0,
@@ -71,7 +71,7 @@
         "t_label": "t",
         "u": "vertcat(roll_rate_cmd, pitch_rate_cmd)",
         "u_labels": null,
-        "x": "vertcat(p, q, v)",
+        "x": "vertcat(p, penPos, q, v, penVel)",
         "x_labels": null,
         "xdot": "xdot",
         "z": "0x1"
@@ -81,7 +81,7 @@
     "shared_lib_ext": ".so",
     "simulink_opts": null,
     "solver_options": {
-        "Tsim": 0.03333333333333333,
+        "Tsim": 0.016666666666666666,
         "collocation_type": "GAUSS_LEGENDRE",
         "ext_fun_compile_flags": "-O2",
         "ext_fun_expand_dyn": false,

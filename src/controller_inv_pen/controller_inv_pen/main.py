@@ -25,7 +25,7 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
         self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
         self.current_pose = None
-        self.setpoint = np.array([0.0,0.0, 1.0])
+        self.setpoint = np.array([1.0,1.0, 1.0])
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
@@ -34,7 +34,7 @@ class Controller(Node):
         self.testMPC = True
         self.usingBetaFlight = True
         if self.testMPC:
-            self.control_frequency = 30.0 
+            self.control_frequency = 60.0 
         else:
             self.control_frequency = 120.0 #120.0 #240.0 # 120.0
 
@@ -180,7 +180,7 @@ class Controller(Node):
         self.pre_start_counter = 0  # Counter to track pre-start steps
         self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
 
-        self.N = 60
+        self.N = 200 #60
         self.skip_steps = 3
         self.augmented_u = 0.0  # Initialize the augmented control input
 
@@ -361,13 +361,15 @@ class Controller(Node):
             #yref = np.concatenate((self.traj[:, sc], [0.0, 0.0]))
             #yref = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
             #yref = np.array([1.0, 1.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
-            yref = np.array([0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+            yref = np.array([0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+            #yref = np.array([1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0])
             self.ocp.set(j, "yref", yref)
 
         sn = self.step_counter + self.N * self.skip_steps
         #yref_N = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) #self.traj[:, sn]
         #yref_N = np.array([1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
-        yref_N = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0])
+        yref_N = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+        #yref_N = np.array([1.0, 1.0, 0.0,0.0,0.0,0.0])
         self.ocp.set(self.N, "yref", yref_N)
 
         
@@ -383,14 +385,17 @@ class Controller(Node):
         #state = np.concatenate((self.current_pose[0:2], [r], [p], [self.currentPenPose[1]], self.current_pose[7:9], [vx], [vy], [self.currentPenPose[8]]))
         #state = np.concatenate((self.current_pose[0:2], [r, p], [self.currentPenPose[1]], [vx, vy],self.current_pose[10:12],  [self.currentPenPose[8]]))
         #state = np.concatenate((self.current_pose[0:2], [r, p], [self.currentPenPose[1]], [vx, vy],  [self.currentPenPose[8]]))
-        #state = np.concatenate((self.current_pose[0:2],  [self.currentPenPose[1]], [r, p], [vx, vy],  [self.currentPenPose[8]]))
-        state = np.concatenate((self.current_pose[0:2],  [r, p], [vx, vy]))
+        state = np.concatenate((self.current_pose[0:2],  self.currentPenPose[0:2], [r, p], [vx, vy],  self.currentPenPose[7:9]))
+        #state = np.concatenate((self.current_pose[0:2],  [r, p], [vx, vy]))
         self.ocp.set(0, "lbx", state)
         self.ocp.set(0, "ubx", state)
     
         print(f"current pos: {currentState[0:2]}, roll: {r},  pitch: {p}, v: {currentState[7:9]}, roll_dot: {self.current_pose[10]}, pitch_dot: {self.current_pose[11]}, b: {self.currentPenPose[1]}, b_dot: {self.currentPenPose[8]}")
         status = self.ocp.solve()
         if status != 0:
+            print(f"status: {self.ocp.get_status()}")
+            print(f"statistics: {self.ocp.print_statistics()}")
+            self.plotSystemResponse()
             raise Exception(f'acados returned status {status}.')
 
         u = self.ocp.get(0, "u")
@@ -412,7 +417,7 @@ class Controller(Node):
         kpz, kiz, kdz = 15.0, 10.0, 10.0 
         zd, yawd  = 1.0, 0.0
         z = currentState[2]
-        kpz, kiz, kdz = 35.0, 10.0, 10.0  #15.0, 10.0, 10.0 
+        kpz, kiz, kdz = 25.0, 10.0, 10.0  #15.0, 10.0, 10.0 
         dt = self.dt
         force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.055)
         
@@ -637,7 +642,9 @@ class Controller(Node):
 
     def plotSystemResponse(self):
         time = self.timePoints
-        if self.testInvPen or self.useSwitch:
+        #print(f"MAX wx OUTPUT: {max(self.wxOutput)}")
+        #print(f"MIN wx OUTPUT: {min(self.wxOutput)}")
+        if self.testInvPen or self.useSwitch or self.testMPC:
             figure1, ax1 = plt.subplots(2,1)
   
             #ax1[0].plot(time, self.aError, label="a")
