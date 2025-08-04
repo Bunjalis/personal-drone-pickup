@@ -2,7 +2,7 @@
 <sdf version="1.6">
     <model name="pendulum">
         <static>false</static>
-        <pose>0.0 0 0.025 0 0 0</pose>
+        <pose>0 0 0.04 0 0 0</pose>
         <link name="base">
             <pose frame="">0 0 0 0 0 0</pose>
             <inertial>
@@ -38,7 +38,7 @@
         <link name="pendulum_link">
         <pose relative_to='pendulum_pivot'>0.0 0.0 0.3 0.0 0.0 0</pose>
         <inertial>
-            <mass>0.04</mass>
+            <mass>0.032</mass>
             <inertia>
             <ixx>0.0048</ixx> <iyy>0.0048</iyy> <izz>0.000001333</izz>
             <ixy>0</ixy> <ixz>0</ixz> <iyz>0</iyz>
