@@ -25,13 +25,13 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
         self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
         self.current_pose = None
-        self.setpoint = np.array([1.0,1.0, 1.0])
+        self.setpoint = np.array([0.0,0.0, 1.0])
         self.currentPenPose = None
         #self.pendulumVelocity = None
         # Set up control loop
         self.testNav = False
         self.testInvPen = False
-        self.testMPC = True
+        self.testMPC = False
         self.usingBetaFlight = True
         if self.testMPC:
             self.control_frequency = 60.0 
@@ -118,7 +118,7 @@ class Controller(Node):
         self.pd = 0
 
         ######################## FIP switch flags ###################
-        self.useSwitch = False
+        self.useSwitch = True
         self.useFIP = False # DON'T CHANGE
         self.land = False # DON'T CHNAGE
 
@@ -361,14 +361,14 @@ class Controller(Node):
             #yref = np.concatenate((self.traj[:, sc], [0.0, 0.0]))
             #yref = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
             #yref = np.array([1.0, 1.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
-            yref = np.array([0.25,0.25,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+            yref = np.array([0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
             #yref = np.array([1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0])
             self.ocp.set(j, "yref", yref)
 
         sn = self.step_counter + self.N * self.skip_steps
         #yref_N = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) #self.traj[:, sn]
         #yref_N = np.array([1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
-        yref_N = np.array([0.25, 0.25, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+        yref_N = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
         #yref_N = np.array([1.0, 1.0, 0.0,0.0,0.0,0.0])
         self.ocp.set(self.N, "yref", yref_N)
 
@@ -503,7 +503,11 @@ class Controller(Node):
             # CONTROL CODE GOES HERE
             if self.useSwitch:
                 if self.useFIP:
-                    u1, u2, u3, u4 = self.FIPControllerBeta()
+                    if self.testMPC:
+                        u1, u2, u3, u4 = self.MPC()
+                    else:
+                        u1, u2, u3, u4 = self.FIPControllerBeta()
+                
                 else: 
                     u1,u2,u3,u4 = self.navController()
 
