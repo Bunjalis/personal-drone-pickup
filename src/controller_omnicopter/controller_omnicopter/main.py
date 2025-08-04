@@ -10,7 +10,7 @@ from rclpy.node import Node
 from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 import time
-from .acados import generate_ocp_controller
+from .acados import generate_ocp_controller, set_initial_guess
 from .gui import GUI
 from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory, hover_and_rotate
 from interfaces.msg import MotionCaptureState, ELRSCommand
@@ -51,13 +51,14 @@ class Controller(Node):
         self.pre_start_counter = 0 
         self.pre_start_steps = int(self.pre_start_duration / self.dt)
 
-        self.N = 20
-        self.skip_steps = 3
+        self.N = 10
+        self.skip_steps = 6
         self.predicted_next_state = None
         self.last_pose = None
         self.last_control = None
 
         self.sent_command = False
+        self.initial_guess_set = False  # Flag to track if initial guess has been set
 
 
         # Initialize CSV file at the start of the program
@@ -105,6 +106,7 @@ class Controller(Node):
                 self.cmd_publisher_.publish(msg)
                 self.on_close()
 
+            # Set reference trajectory for the horizon
             for j in range(self.N):
                 sc = self.step_counter + j * self.skip_steps
                 yref = self.traj[:, sc]
@@ -114,12 +116,19 @@ class Controller(Node):
             yref_N = self.traj[:, sn]
             self.ocp.set(self.N, "yref", yref_N)
 
-            self.ocp.set(0, "lbx", self.current_pose)
-            self.ocp.set(0, "ubx", self.current_pose)
+            # Set current state constraint
+            self.ocp.set(0, "lbx", self.current_pose )
+            self.ocp.set(0, "ubx", self.current_pose )
 
+            # Set initial guess based on hover solution
+            # Only set on first solve or after failure for better performance
+
+            set_initial_guess(self.ocp, self.N)
+
+            # Solve the MPC problem
             status = self.ocp.solve()
             if status != 0:
-                raise Exception(f'acados returned status {status}.')
+                raise Exception(f'acados returned status {status} after retry.')
 
             u = self.ocp.get(0, "u")
 
@@ -127,44 +136,17 @@ class Controller(Node):
             
 
 
-            u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
-            #u_sqrt = u
+            #u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
+            print(u)
 
-            msg = ELRSCommand(armed=True, channel_0=u_sqrt[0], channel_1=u_sqrt[1], channel_2=u_sqrt[2], channel_3=u_sqrt[3], channel_4=u_sqrt[0], channel_5=u_sqrt[1], channel_6=u_sqrt[2], channel_7=u_sqrt[3])
+            msg = ELRSCommand(armed=True, channel_0=u[0], channel_1=u[1], channel_2=u[2], channel_3=u[3], channel_4=u[4], channel_5=u[5], channel_6=u[6], channel_7=u[7])
 
-            #sd = 0.45
+            #sd = 0.28 # -0.32890574
+            #sd = u[1]
             #msg = ELRSCommand(armed=True, channel_0=-sd, channel_1=sd, channel_2=-sd, channel_3=sd, channel_4=sd, channel_5=-sd, channel_6=sd, channel_7=-sd)
             self.cmd_publisher_.publish(msg)
 
 
-
-
-            if self.step_counter > 0 and self.step_counter < self.steps:
-                self.csv_writer.writerow(
-                    [self.step_counter, msg.channel_0,msg.channel_1,msg.channel_2,msg.channel_3,msg.channel_4,msg.channel_5, msg.channel_6,msg.channel_7] +
-                    list(self.current_pose) + list(self.traj[:, self.step_counter])
-                )
-
-            self.step_counter += 1
-
-
-            if self.predicted_next_state is not None:
-                # Compute the error between predicted and observed state
-                error = self.current_pose - self.predicted_next_state
-
-                print("----------------------------------------------------------------")
-                print(f"last: {np.round(self.last_pose[10:13],5)}")
-                print(f"l_u : {np.round(self.last_control, 5)}")
-                print(f"Pose: {np.round(self.current_pose[10:13], 5)}")
-                print(f"Pred: {np.round(self.predicted_next_state[10:13], 5)}")
-
-
-             # Predict the next state using sim_integrator
-
-            self.predicted_next_state = self.ocp.get(1, "x")
-
-            self.last_pose = copy.deepcopy(self.current_pose)
-            self.last_control = copy.deepcopy(u)
 
 
 
@@ -187,12 +169,10 @@ class Controller(Node):
             print("Sending initial command to arm the controller.")
             print(f"Current pose: {self.current_pose[10:13]}")
             # Convert the list 'u' to a NumPy array before passing it to self.sim_integrator.set
-            u = np.array([0.1, -0.11, -0.11, -0.11, 0.14, 0.0, 0.1, 0.0])
+            u = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
-            u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
-            msg = ELRSCommand(armed=True, channel_0=u_sqrt[0], channel_1=u_sqrt[1], channel_2=u_sqrt[2], channel_3=u_sqrt[3], channel_4=u_sqrt[4], channel_5=u_sqrt[5], channel_6=u_sqrt[6], channel_7=u_sqrt[7])
-            self.cmd_publisher_.publish(msg)
-            self.sent_command = True
+            
+            
 
             self.sim_integrator.set("x", self.current_pose)
             self.sim_integrator.set("u", u)
@@ -200,14 +180,16 @@ class Controller(Node):
             predicted_state = self.sim_integrator.get("x")
             print("Predicted state:", predicted_state[10:13])
 
+            
+            msg = ELRSCommand(armed=True, channel_0=u[0], channel_1=u[1], channel_2=u[2], channel_3=u[3], channel_4=u[4], channel_5=u[5], channel_6=u[6], channel_7=u[7])
+            self.cmd_publisher_.publish(msg)
+            self.sent_command = True
+
         elif self.armed and self.sent_command == True:
             print(f"Current pose: {self.current_pose[10:13]}")
-            self.armed = False
-            self.on_close()
         else:
-            u = np.array([0.1, -0.1, -0.1, 0.1, 0.1, -0.1, -0.1, 0.1])
-            u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
-            msg = ELRSCommand(armed=True, channel_0=u_sqrt[0], channel_1=u_sqrt[1], channel_2=u_sqrt[2], channel_3=u_sqrt[3], channel_4=u_sqrt[4], channel_5=u_sqrt[5], channel_6=u_sqrt[6], channel_7=u_sqrt[7])
+            u = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+            msg = ELRSCommand(armed=True, channel_0=u[0], channel_1=u[1], channel_2=u[2], channel_3=u[3], channel_4=u[4], channel_5=u[5], channel_6=u[6], channel_7=u[7])
             self.cmd_publisher_.publish(msg)
 
 

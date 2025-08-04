@@ -47,14 +47,14 @@
             <pose frame="X3/base_link">0.1 -0.1 0.1 2.20271  -0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.001</mass>
+                <mass>0.01</mass>
                 <inertia>
-                    <ixx>9.75e-08</ixx>
+                    <ixx>1.0e-06</ixx>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
-                    <iyy>4.17041e-06</iyy>
+                    <iyy>1.0e-06</iyy>
                     <iyz>0</iyz>
-                    <izz>4.26041e-06</izz>
+                    <izz>1.0e-06</izz>
                 </inertia>
             </inertial>
             <visual name="X3/rotor_0_visual">
@@ -101,14 +101,14 @@
             <pose frame="X3/base_link">-0.1 -0.1 0.1 0.350879 0.908651 0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.001</mass>
+                <mass>0.01</mass>
                 <inertia>
-                    <ixx>9.75e-08</ixx>
+                    <ixx>1.0e-06</ixx>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
-                    <iyy>4.17041e-06</iyy>
+                    <iyy>1.0e-06</iyy>
                     <iyz>0</iyz>
-                    <izz>4.26041e-06</izz>
+                    <izz>1.0e-06</izz>
                 </inertia>
             </inertial>
             <visual name="X3/rotor_1_visual">
@@ -153,14 +153,14 @@
             <pose frame="X3/base_link">0.1 -0.1 -0.1 -2.20271   0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.001</mass>
+                <mass>0.01</mass>
                 <inertia>
-                    <ixx>9.75e-08</ixx>
+                    <ixx>1.0e-06</ixx>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
-                    <iyy>4.17041e-06</iyy>
+                    <iyy>1.0e-06</iyy>
                     <iyz>0</iyz>
-                    <izz>4.26041e-06</izz>
+                    <izz>1.0e-06</izz>
                 </inertia>
             </inertial>
             <visual name="X3/rotor_2_visual">
@@ -204,14 +204,14 @@
             <pose frame="X3/base_link">-0.1 -0.1 -0.1 -0.350879 -0.908651  0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.001</mass>
+                <mass>0.01</mass>
                 <inertia>
-                    <ixx>9.75e-08</ixx>
+                    <ixx>1.0e-06</ixx>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
-                    <iyy>4.17041e-06</iyy>
+                    <iyy>1.0e-06</iyy>
                     <iyz>0</iyz>
-                    <izz>4.26041e-06</izz>
+                    <izz>1.0e-06</izz>
                 </inertia>
             </inertial>
             <visual name="X3/rotor_3_visual">
@@ -256,14 +256,14 @@
             <pose frame="X3/base_link">0.1 0.1 -0.1 0.350879 0.908651 0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.001</mass>
+                <mass>0.01</mass>
                 <inertia>
-                    <ixx>9.75e-08</ixx>
+                    <ixx>1.0e-06</ixx>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
-                    <iyy>4.17041e-06</iyy>
+                    <iyy>1.0e-06</iyy>
                     <iyz>0</iyz>
-                    <izz>4.26041e-06</izz>
+                    <izz>1.0e-06</izz>
                 </inertia>
             </inertial>
             <visual name="X3/rotor_4_visual">
@@ -307,14 +307,14 @@
             <pose frame="X3/base_link">-0.1 0.1 -0.1 2.20271 -0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.001</mass>
+                <mass>0.01</mass>
                 <inertia>
-                    <ixx>9.75e-08</ixx>
+                    <ixx>1.0e-06</ixx>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
-                    <iyy>4.17041e-06</iyy>
+                    <iyy>1.0e-06</iyy>
                     <iyz>0</iyz>
-                    <izz>4.26041e-06</izz>
+                    <izz>1.0e-06</izz>
                 </inertia>
             </inertial>
             <visual name="X3/rotor_5_visual">
@@ -360,14 +360,14 @@
             <pose frame="X3/base_link">0.1 0.1 0.1 -0.350879 -0.908651  0.172719</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.001</mass>
+                <mass>0.01</mass>
                 <inertia>
-                    <ixx>9.75e-08</ixx>
+                    <ixx>1.0e-06</ixx>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
-                    <iyy>4.17041e-06</iyy>
+                    <iyy>1.0e-06</iyy>
                     <iyz>0</iyz>
-                    <izz>4.26041e-06</izz>
+                    <izz>1.0e-06</izz>
                 </inertia>
             </inertial>
             <visual name="X3/rotor_6_visual">
@@ -410,14 +410,14 @@
             <pose frame="X3/base_link">-0.1 0.1 0.1 -2.20271 0.21293 -0.415283</pose>
             <inertial>
                 <pose frame="">0 0 0 0 -0 0</pose>
-                <mass>0.001</mass>
+                <mass>0.01</mass>
                 <inertia>
-                    <ixx>9.75e-08</ixx>
+                    <ixx>1.0e-06</ixx>
                     <ixy>0</ixy>
                     <ixz>0</ixz>
-                    <iyy>4.17041e-06</iyy>
+                    <iyy>1.0e-06</iyy>
                     <iyz>0</iyz>
-                    <izz>4.26041e-06</izz>
+                    <izz>1.0e-06</izz>
                 </inertia>
             </inertial>
             <visual name="X3/rotor_7_visual">

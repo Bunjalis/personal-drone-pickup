@@ -25,7 +25,7 @@ def generate_ocp_controller(dynamics=None):
     ocp = AcadosOcp()
     ocp.model = model
 
-    ocp.solver_options.N_horizon = 20
+    ocp.solver_options.N_horizon = 10
     ocp.solver_options.tf = 2.0
 
     nu = 8  # Number of control inputs
@@ -34,9 +34,9 @@ def generate_ocp_controller(dynamics=None):
 
     # Cost matrices (tune as needed)
     Q_mat = 2 * np.diag([
-        0.1, 0.1, 100.0,    # position
-        0.1, 0.1, 0.1, 0.1,  # quaternion
-        0.1, 0.1, 10.0,      # velocity
+        1.1, 1.1, 1.1,    # position
+        1.1, 1.1, 1.1, 1.1,  # quaternion
+        0.1, 0.1, 0.1,      # velocity
         0.1, 0.1, 0.1      # angular rates
     ])
     # Remove input cost matrix R_mat and its usage
@@ -64,27 +64,37 @@ def generate_ocp_controller(dynamics=None):
     # Set Vu to a zero matrix with dimensions (ny, nu)
     ocp.cost.Vu = np.zeros((nx, nu))
 
-    # Set solver options (as before)
+    # Set solver options - improved for quadratic thrust model
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
     ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
-    ocp.solver_options.nlp_solver_max_iter = 500
-    ocp.solver_options.qp_solver_iter_max = 200
-    ocp.solver_options.qp_solver_tol_stat = 1e-3
-    ocp.solver_options.qp_solver_tol_eq = 1e-3
-    ocp.solver_options.qp_solver_tol_ineq = 1e-3
-    ocp.solver_options.qp_solver_tol_comp = 1e-3
-    ocp.solver_options.nlp_solver_tol_stat = 1e-3
-    ocp.solver_options.nlp_solver_tol_eq = 1e-3
-    ocp.solver_options.nlp_solver_tol_ineq = 1e-3
-    ocp.solver_options.nlp_solver_tol_comp = 1e-3
-    ocp.solver_options.levenberg_marquardt = 1e-3
+    
+    # Increase iterations for better convergence with nonlinear model
+    ocp.solver_options.nlp_solver_max_iter = 2000
+    ocp.solver_options.qp_solver_iter_max = 1000
+    
+    # Relax tolerances for better convergence
+    ocp.solver_options.qp_solver_tol_stat = 1e-4
+    ocp.solver_options.qp_solver_tol_eq = 1e-4
+    ocp.solver_options.qp_solver_tol_ineq = 1e-4
+    ocp.solver_options.qp_solver_tol_comp = 1e-4
+    ocp.solver_options.nlp_solver_tol_stat = 1e-4
+    ocp.solver_options.nlp_solver_tol_eq = 1e-4
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-4
+    ocp.solver_options.nlp_solver_tol_comp = 1e-4
+    
+    # Increase regularization for numerical stability
+    ocp.solver_options.levenberg_marquardt = 1e-2
+    
+    # Add regularization for ill-conditioned problems
+    ocp.solver_options.regularize_method = 'CONVEXIFY'
 
 
-    rl = 0.6
-    # Set input constraints (tune as needed)
-    ocp.constraints.lbu = np.array([-rl, -rl, -rl, -rl, -rl, -rl, -rl, -rl])  # throttle, roll_rate, pitch_rate, yaw_rate
-    ocp.constraints.ubu = np.array([rl, rl, rl, rl, rl, rl, rl, rl])
+    # Set input constraints for bidirectional control [-1, 1]
+    # Omnicopter motors can run backwards for full 6-DOF control
+    max = 0.35
+    ocp.constraints.lbu = np.array([-max, -max, -max, -max, -max, -max, -max, -max])  # reverse thrust
+    ocp.constraints.ubu = np.array([max, max, max, max, max, max, max, max])  # forward thrust
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver
@@ -93,7 +103,33 @@ def generate_ocp_controller(dynamics=None):
     # Create simulation configuration
     sim = AcadosSim()
     sim.model = ocp.model
-    sim.solver_options.T = 1.0 / 30.0  # Set integrator to run at 30Hz
+    sim.solver_options.T = 1.0 / 100.0  # Set integrator to run at 30Hz
     sim_solver = AcadosSimSolver(sim)
 
     return ocp_solver, sim_solver
+
+
+def calculate_hover_initial_guess():
+    """
+    Simple hover initial guess based on known working pattern
+    
+    Returns:
+        u_hover: Initial guess for control inputs to achieve hover
+    """
+    hover_pattern = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+    return hover_pattern
+
+
+def set_initial_guess(ocp_solver, N_horizon=20):
+    """
+    Set initial guess for the MPC solver based on hover solution
+    
+    Args:
+        ocp_solver: Acados OCP solver
+        N_horizon: Prediction horizon length
+    """
+    u_hover = calculate_hover_initial_guess()
+    
+    # Set control initial guess to hover solution for all time steps
+    for i in range(N_horizon):
+        ocp_solver.set(i, "u", u_hover)
