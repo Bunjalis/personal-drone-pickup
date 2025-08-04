@@ -361,14 +361,14 @@ class Controller(Node):
             #yref = np.concatenate((self.traj[:, sc], [0.0, 0.0]))
             #yref = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
             #yref = np.array([1.0, 1.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
-            yref = np.array([0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+            yref = np.array([0.25,0.25,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
             #yref = np.array([1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0])
             self.ocp.set(j, "yref", yref)
 
         sn = self.step_counter + self.N * self.skip_steps
         #yref_N = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) #self.traj[:, sn]
         #yref_N = np.array([1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) 
-        yref_N = np.array([0.0, 0.0, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
+        yref_N = np.array([0.25, 0.25, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0])
         #yref_N = np.array([1.0, 1.0, 0.0,0.0,0.0,0.0])
         self.ocp.set(self.N, "yref", yref_N)
 

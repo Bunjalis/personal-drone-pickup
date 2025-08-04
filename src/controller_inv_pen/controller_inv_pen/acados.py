@@ -72,6 +72,13 @@ def generate_ocp_controller(dynamics=None):
         1.0, 1.0,       # velocity
         1.0, 1.0         #  b_dot 
     ])
+    Q_mat = 2 * np.diag([
+        1.0, 1.0,    # position
+        10.0, 10.0,       # b 
+        5.0, 5.0,  # roll and pitch
+        1.0, 1.0,       # velocity
+        5.0, 5.0         #  b_dot 
+    ])
 
     '''Q_mat = 2 * np.diag([
         5.0, 5.0,    # position
