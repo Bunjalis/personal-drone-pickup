@@ -42,7 +42,7 @@ def generate_launch_description():
             name='pendulum_state_listener'       
         ),
         Node(
-            package='ros_ign_bridge',
+            package='ros_gz_bridge',
             executable='parameter_bridge',
             arguments=['imu@sensor_msgs/msg/Imu[ignition.msgs.IMU']
            

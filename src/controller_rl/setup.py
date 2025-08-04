@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'controller_RL'
+package_name = 'controller_rl'
 
 setup(
     name=package_name,
@@ -10,6 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name, ['best_model_bundle.pt']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -19,7 +20,7 @@ setup(
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
-            'main = controller_RL.main:main'
+            'main = controller_rl.main:main'
         ],
     },
 )
