@@ -107,7 +107,7 @@ def hover_trajectory(dt):
         time_space = np.linspace(0, steps * dt, steps)
         x_traj = np.zeros_like(time_space)
         y_traj = np.zeros_like(time_space)
-        z_traj = np.ones_like(time_space)
+        z_traj = 2*np.ones_like(time_space)
 
         roll_traj = np.zeros_like(time_space)
         pitch_traj = np.zeros_like(time_space)

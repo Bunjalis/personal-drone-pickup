@@ -25,7 +25,7 @@ def generate_ocp_controller(dynamics=None):
     ocp = AcadosOcp()
     ocp.model = model
 
-    ocp.solver_options.N_horizon = 10
+    ocp.solver_options.N_horizon = 20
     ocp.solver_options.tf = 2.0
 
     nu = 8  # Number of control inputs
@@ -74,25 +74,25 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.qp_solver_iter_max = 1000
     
     # Relax tolerances for better convergence
-    ocp.solver_options.qp_solver_tol_stat = 1e-4
-    ocp.solver_options.qp_solver_tol_eq = 1e-4
-    ocp.solver_options.qp_solver_tol_ineq = 1e-4
-    ocp.solver_options.qp_solver_tol_comp = 1e-4
-    ocp.solver_options.nlp_solver_tol_stat = 1e-4
-    ocp.solver_options.nlp_solver_tol_eq = 1e-4
-    ocp.solver_options.nlp_solver_tol_ineq = 1e-4
-    ocp.solver_options.nlp_solver_tol_comp = 1e-4
+    ocp.solver_options.qp_solver_tol_stat = 1e-3
+    ocp.solver_options.qp_solver_tol_eq = 1e-3
+    ocp.solver_options.qp_solver_tol_ineq = 1e-3
+    ocp.solver_options.qp_solver_tol_comp = 1e-3
+    ocp.solver_options.nlp_solver_tol_stat = 1e-3
+    ocp.solver_options.nlp_solver_tol_eq = 1e-3
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-3
+    ocp.solver_options.nlp_solver_tol_comp = 1e-3
     
     # Increase regularization for numerical stability
-    ocp.solver_options.levenberg_marquardt = 1e-2
+    # ocp.solver_options.levenberg_marquardt = 1e-1
     
     # Add regularization for ill-conditioned problems
-    ocp.solver_options.regularize_method = 'CONVEXIFY'
+    # ocp.solver_options.regularize_method = 'CONVEXIFY'
 
 
     # Set input constraints for bidirectional control [-1, 1]
     # Omnicopter motors can run backwards for full 6-DOF control
-    max = 0.35
+    max = 0.5
     ocp.constraints.lbu = np.array([-max, -max, -max, -max, -max, -max, -max, -max])  # reverse thrust
     ocp.constraints.ubu = np.array([max, max, max, max, max, max, max, max])  # forward thrust
     ocp.constraints.idxbu = np.arange(nu)

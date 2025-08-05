@@ -31,7 +31,7 @@ class QuadDynamics:
         
         self.u = cs.vertcat(u0, u1, u2, u3, u4, u5, u6, u7)
 
-        self.mass = 1.00
+        self.mass = 1.0
 
         self.J = np.array([0.015, 0.015, 0.015])
         self.thrust_constant = 1.42e-06
@@ -118,24 +118,14 @@ class QuadDynamics:
         return 1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
 
     def v_dynamics(self):
-        # Correct quadratic thrust model: Thrust = k * (RPM)^2 = k * (max_RPM * u)^2
-        # For bidirectional control: preserve sign, apply quadratic to magnitude
         max_rpm = 4631.0
-        
-        # Calculate individual motor thrusts with signed quadratic model
-        # T = sign(u) * k * (max_rpm * |u|)^2
         motor_thrusts = cs.sign(self.u) * self.thrust_constant * cs.power(max_rpm * cs.fabs(self.u), 2)
-        
-        # Sum thrust forces from all motors in their respective directions
         f_thrust = cs.mtimes(self.mot_rot_vec.T, motor_thrusts)
         
         g = cs.vertcat(0.0, 0.0, 9.81)
         v_dynamics = self.v_dot_q(f_thrust, self.q) / self.mass - g
 
         return v_dynamics
-
-
-
 
 
 

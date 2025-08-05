@@ -22,6 +22,13 @@ from interfaces.msg import MotionCaptureState
 class PentaVerify(Node):
     def __init__(self):
         super().__init__('penta_verify')
+        
+        # Declare parameter for target object ID
+        self.declare_parameter('target_object_id', 5)
+        self.target_object_id = self.get_parameter('target_object_id').get_parameter_value().integer_value
+        
+        self.get_logger().info(f'Motion capture emulator tracking object ID: {self.target_object_id}')
+        
         self.worldPoseSub_ = self.create_subscription(PoseArray, '/model/x3/pose', self.worldPoseCallback, 10)
         self.publisher = self.create_publisher(MotionCaptureState, '/motion_capture_state', 10)
         self.pose_publisher = self.create_publisher(PoseStamped, '/rviz_pose', 10)
@@ -41,11 +48,15 @@ class PentaVerify(Node):
 
     def worldPoseCallback(self, msg):
         print("START")
-        # Extract current pose and time # 9 for omnicopter, 5 for quadcopter
+        # Extract current pose and time using the parameterized object ID
         # when using world_large.sdf quadcopter is 5
         # when using world_inv_pen.sdf quadcopter is 6 and pendulum is 5
-        current_position = msg.poses[9].position
-        current_orientation = msg.poses[9].orientation
+        if len(msg.poses) <= self.target_object_id:
+            self.get_logger().warn(f'Target object ID {self.target_object_id} not available in pose array (length: {len(msg.poses)})')
+            return
+            
+        current_position = msg.poses[self.target_object_id].position
+        current_orientation = msg.poses[self.target_object_id].orientation
        
         # Ensure w is positive
         current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w = self.normalize_quaternion_positive_w(

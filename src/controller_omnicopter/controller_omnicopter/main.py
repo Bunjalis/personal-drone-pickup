@@ -37,8 +37,8 @@ class Controller(Node):
 
         
 
-        #self.traj = circle_trajectory(self.dt)
-        self.traj = hover_trajectory(self.dt)   
+        self.traj = circle_trajectory(self.dt)
+        #self.traj = hover_trajectory(self.dt)   
 
 
         self.steps = self.traj.shape[1] - 1 
@@ -51,8 +51,8 @@ class Controller(Node):
         self.pre_start_counter = 0 
         self.pre_start_steps = int(self.pre_start_duration / self.dt)
 
-        self.N = 10
-        self.skip_steps = 6
+        self.N = 20
+        self.skip_steps = 3
         self.predicted_next_state = None
         self.last_pose = None
         self.last_control = None
@@ -123,7 +123,7 @@ class Controller(Node):
             # Set initial guess based on hover solution
             # Only set on first solve or after failure for better performance
 
-            set_initial_guess(self.ocp, self.N)
+            set_initial_guess(self.ocp, 1)
 
             # Solve the MPC problem
             status = self.ocp.solve()

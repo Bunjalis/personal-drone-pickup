@@ -39,7 +39,8 @@ def generate_launch_description():
         Node(
             package='simulation_communication',
             executable='motion_capture_emulator',
-            name='motion_capture_emulator'
+            name='motion_capture_emulator',
+            parameters=[{'target_object_id': 5}]  # Default for quadcopter in world_large.sdf
         ),
     ])
 

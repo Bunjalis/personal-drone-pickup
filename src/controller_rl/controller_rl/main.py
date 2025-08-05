@@ -53,6 +53,8 @@ class Controller(Node):
         policy_model.eval()
         self.agent = policy_model
 
+        self.counter = 0
+
     # Recieve motion capture data
     def pose_callback(self, msg: MotionCaptureState):
         position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
@@ -140,8 +142,8 @@ class Controller(Node):
             yaw_magnitude = 0.01
             
             # Calculate thrust-to-weight ratio scaling
-            training_tw_ratio = 7.5
-            mass_estimate = 0.6  # kg (adjust based on your actual drone mass)
+            training_tw_ratio = 3.8
+            mass_estimate = 0.65  # kg (adjust based on your actual drone mass)
             g = 9.81
             max_thrust_needed = training_tw_ratio * mass_estimate * g
 
@@ -174,9 +176,8 @@ class Controller(Node):
             u4 = min(omega4 / max_motor_speed, 1.0)
 
             u = [u1, u2, u3, u4]
-            print(f"Roll: {roll:.3f}, Pitch: {pitch:.3f}, Yaw: {yaw:.3f}")
-            print(f"Moments - R: {desired_roll_moment:.6f}, P: {desired_pitch_moment:.6f}, Y: {desired_yaw_moment:.6f}")
-            print(f"Motors: [{u1:.3f}, {u2:.3f}, {u3:.3f}, {u4:.3f}]")
+            print(f"Observation: {np.round(state, 3)}")
+            print(f"Throttle: {action_np[0]:.3f} Roll: {roll:.3f}, Pitch: {pitch:.3f}, Yaw: {yaw:.3f}")
 
 
             msg.armed = True
@@ -184,6 +185,11 @@ class Controller(Node):
             msg.channel_1 = u2
             msg.channel_2 = u3
             msg.channel_3 = u4
+
+            self.counter += 1
+
+            if self.counter > 100:
+                self.on_close()
         else:         
             self.pre_start_counter = 0
 
