@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 from tf_transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_matrix
 import time
-from .acados import generate_ocp_controller
+#from .acados import generate_ocp_controller
 
 
 class Controller(Node):
@@ -23,7 +23,8 @@ class Controller(Node):
         super().__init__('controller')
         self.cmd_publisher_ = self.create_publisher(ELRSCommand, '/ELRSCommand', 10)
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
-        self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
+        #self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
+        self.IP_state_subscription_ = self.create_subscription(MotionCaptureState, '/pendulum_state_publisher', self.IP_state_callback, 10)
         self.current_pose = None
         self.setpoint = np.array([0.0,0.0, 1.0])
         self.currentPenPose = None
@@ -48,7 +49,7 @@ class Controller(Node):
         self.gui = GUI(self)
 
         self.g = 9.81
-        self.M = 0.45 #0.65
+        self.M = 0.5 #0.65
         self.Ixx = 0.001744744189
         self.Iyy = 0.001400539551
         self.Izz = 0.002782410904
@@ -63,6 +64,7 @@ class Controller(Node):
         self.b_dotError = []
         self.a_dotError = []
         self.y_dotError = []
+        self.x_dotError = []
         self.wxOutput = []
         self.timePoints = []
         self.t = 0
@@ -131,7 +133,7 @@ class Controller(Node):
         self.traj = hover_trajectory(self.dt)  
         self.steps = self.traj.shape[1] - 1   
         # Get both the OCP solver and the integrator
-        self.ocp, self.sim_integrator = generate_ocp_controller()
+        self.ocp, self.sim_integrator = None, None #generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         # Original trajectories
@@ -193,7 +195,16 @@ class Controller(Node):
         self.current_pose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
         
     
-    def IP_state_callback(self, msg:InvertedPendulumStates):
+    '''def IP_state_callback(self, msg:InvertedPendulumStates):
+        position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
+        orientation =  np.array([msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z])
+        linear_velocity = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z])
+        angular_velocity = np.array([msg.twist.angular.x, msg.twist.angular.y, msg.twist.angular.z])
+        self.currentPenPose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
+        penState = self.currentPenPose
+        self.currentPenPose = np.concatenate((position, orientation, linear_velocity, angular_velocity))'''
+
+    def IP_state_callback(self, msg:MotionCaptureState):
         position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
         orientation =  np.array([msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z])
         linear_velocity = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z])
@@ -229,11 +240,12 @@ class Controller(Node):
         wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
         wx = (( wx[0]))/100.0
 
-        Cf = 0.35e-6 #0.8e-06 #1.42e-6
+        Cf = 0.8e-06 #0.35e-6 #0.8e-06 #1.42e-6
 
         max_motor_speed = 4631.0
         maxForce = (Cf*max_motor_speed**2) 
         kpz, kiz, kdz = 25.0, 10.0, 10.0  # 35.0, 10.0, 10.0  
+        kpz, kiz, kdz = 15.0, 10.0, 10.0 
         dt = self.dt
         force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.04) 
         
@@ -268,7 +280,10 @@ class Controller(Node):
         
         penState = self.currentPenPose
         a, b, eta = penState[0:3]
+        a, b, eta = a-x, b-y, eta-z
         a_dot, b_dot, eta_dot = penState[7:10]
+        a_dot, b_dot, eta_dot = a_dot-vx, b_dot-vy, eta_dot-vz
+        
        
         #print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
         '''self.aError.append(a)
@@ -330,7 +345,7 @@ class Controller(Node):
         wx = -790.0*(r-(Ub+Uy)) #-628.4*(p-(Ua+Ux))
         wx = wx/100.0
 
-        Cf = 0.35e-6 #0.8e-06 #1.42e-6
+        Cf = 0.8e-06 # 0.35e-6 #0.8e-06 #1.42e-6
         #Ct = 2.84e-7
         l_x = 0.0865
         l_y = 0.073
@@ -339,6 +354,7 @@ class Controller(Node):
         maxForce = (Cf*max_motor_speed**2) 
       
         kpz, kiz, kdz = 25.0, 10.0, 10.0  # 35.0, 10.0, 10.0  
+        kpz, kiz, kdz = 15.0, 10.0, 10.0 
         dt = self.dt
         force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.04) 
         
@@ -457,7 +473,7 @@ class Controller(Node):
             if self.usingBetaFlight:
                 msg.channel_0 = 0.0
                 msg.channel_1 = 0.0
-                msg.channel_2 = -0.999
+                msg.channel_2 = -1.0
                 msg.channel_3 = 0.0
             else:
                 msg.channel_0 = 0.05
@@ -467,7 +483,7 @@ class Controller(Node):
 
             self.pre_start_counter += 1
 
-        if self.armed and self.current_pose is not None and self.currentPenPose is not None:
+        elif self.armed and self.current_pose is not None and self.currentPenPose is not None:
             '''if self.step_counter + self.N * self.skip_steps > self.steps:
                 self.step_counter = 0
                 self.armed = False
@@ -489,10 +505,14 @@ class Controller(Node):
             self.rollError.append(r)
             self.pitchError.append(p)
             self.yawError.append(yaw)
+            self.x_dotError.append(vx)
+            self.y_dotError.append(vy)
 
             penState = self.currentPenPose
             a, b, eta = penState[0:3]
+            a, b_dot, eta= a-x, b-y, eta-z
             a_dot, b_dot, eta_dot = penState[7:10]
+            a_dot, b_dot, eta_dot = a_dot-vx, b_dot-vy, eta_dot-vz
             
             self.aError.append(a)
             self.bError.append(b)
@@ -528,8 +548,8 @@ class Controller(Node):
             #u = [0.0,0.0,0.0,0.0]
             
             
-            msg = ELRSCommand(armed=True, channel_0=round(u[0], 8), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
-            self.cmd_publisher_.publish(msg)
+            msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
+            #self.cmd_publisher_.publish(msg)
             
             
         else:         
@@ -746,6 +766,19 @@ class Controller(Node):
         ax3[1].set_title('pitch position error over time')
         ax3[1].set_ylabel('pitch position error')
         ax3[1].set_xlabel('time (s)')
+        plt.tight_layout()
+        plt.show()
+
+        figure5, ax5 = plt.subplots(2,1)
+        ax5[0].plot(time, self.x_dotError)
+        ax5[0].set_title('x_dot error over time')
+        ax5[0].set_ylabel('x_dot error')
+        ax5[0].set_xlabel('time (s)')
+
+        ax5[1].plot(time, self.y_dotError)
+        ax5[1].set_title('y_dot error over time')
+        ax5[1].set_ylabel('y_dot error')
+        ax5[1].set_xlabel('time (s)')
         plt.tight_layout()
         plt.show()
 

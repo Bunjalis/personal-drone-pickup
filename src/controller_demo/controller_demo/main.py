@@ -31,7 +31,7 @@ class Controller(Node):
         self.armed = False
 
         self.g = 9.81
-        self.M = 0.65
+        self.M = 0.5
         self.Ixx = 0.001744744189
         self.Iyy = 0.001400539551
         self.Izz = 0.002782410904
@@ -50,6 +50,8 @@ class Controller(Node):
         self.rollError = []
         self.pitchError = []
         self.yawError = []
+        self.x_dotError = []
+        self.y_dotError = []
         self.timePoints = []
         self.t = 0
         self.xError_prev = 0.0
@@ -164,6 +166,8 @@ class Controller(Node):
             self.pitchError.append(pd-p)
             self.yawError.append(yawd-yaw)
             self.timePoints.append(self.t)
+            self.x_dotError.append(vx)
+            self.y_dotError.append(vy)
             
             self.dataWriter.writerow({'xError': xd-x, 'yError': yd-y, 'zError': zd-z, 'rollError': rd-r, 'pitchError':pd-p, 'yawError': yawd-yaw})
             
@@ -206,7 +210,7 @@ class Controller(Node):
             u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
             
             
-
+            Cf = 0.8e-6 
             maxForce = (Cf*max_motor_speed**2) 
             maxTorque = (Ct*max_motor_speed**2) 
         
@@ -221,7 +225,9 @@ class Controller(Node):
             
            
             kpz, kiz, kdz = 15.0, 10.0, 10.0 
+            #kpz, kiz, kdz = 10.0, 5.0, 10.0 
             force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M
+            force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M) 
             throttle = 2*(force)/(maxForce) - 1
             if throttle < -1:
                 throttle = -1.0
@@ -278,6 +284,19 @@ class Controller(Node):
         ax3[1].set_title('pitch position error over time')
         ax3[1].set_ylabel('pitch position error')
         ax3[1].set_xlabel('time (s)')
+        plt.tight_layout()
+        plt.show()
+
+        figure5, ax5 = plt.subplots(2,1)
+        ax5[0].plot(time, self.x_dotError)
+        ax5[0].set_title('x_dot error over time')
+        ax5[0].set_ylabel('x_dot error')
+        ax5[0].set_xlabel('time (s)')
+
+        ax5[1].plot(time, self.y_dotError)
+        ax5[1].set_title('y_dot error over time')
+        ax5[1].set_ylabel('y_dot error')
+        ax5[1].set_xlabel('time (s)')
         plt.tight_layout()
         plt.show()
 

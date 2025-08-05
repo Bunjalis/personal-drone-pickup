@@ -14,6 +14,7 @@ import numpy as np
 from collections import deque  # Import deque for the rolling average filter
 import csv
 import scipy.signal  # Import scipy.signal for Butterworth filter
+import re 
 
 @dataclass
 class ObjectData:
@@ -30,7 +31,7 @@ class MotionCapturePublisher(Node):
         # ROS2 Publisher
         self.publisher = self.create_publisher(MotionCaptureState, 'motion_capture_state', 10)
         self.pose_publisher = self.create_publisher(PoseStamped, '/rviz_pose', 10)
-        
+        self.pen_publisher = self.create_publisher(MotionCaptureState, '/pendulum_state_publisher', 10)
         # UDP Setup
         self.HOST = "192.168.1.105"
         self.PORT = 1511
@@ -43,6 +44,9 @@ class MotionCapturePublisher(Node):
         self.last_orientation = np.array([0, 0, 0, 1])
         self.last_time = time.time()
 
+        self.last_pen_pose = np.array([0, 0, 0])
+        self.last_pen_orientation = np.array([0, 0, 0, 1])
+        self.last_pen_time = time.time()
         # Rolling average buffers for position, orientation, velocity, and angular velocity
 
         self.velocity_buffers = {
@@ -56,7 +60,7 @@ class MotionCapturePublisher(Node):
             'z': deque(maxlen=8)
         }
 
-        # Rolling average buffers for velocity
+        # Rolling average buffers for velocitykpz, kiz, kdz = 15.0, 10.0, 10.0 
         self.rolling_velocity_buffers = {
             'x': deque(maxlen=8),
             'y': deque(maxlen=8),
@@ -116,6 +120,8 @@ class MotionCapturePublisher(Node):
         self.filtered_velocity = np.array([0.0, 0.0, 0.0])
         self.filtered_angular_velocity = np.array([0.0, 0.0, 0.0])
 
+        self.pen_filtered_velocity = np.array([0.0, 0.0, 0.0])
+        self.pen_filtered_angular_velocity = np.array([0.0, 0.0, 0.0])
         '''
 
         self.motion_capture_csv_file = open('motion_capture_raw.csv', mode='w', newline='')
@@ -202,6 +208,176 @@ class MotionCapturePublisher(Node):
                 return None
 
             obj_id, pos_str, rot_str = parts
+
+            if re.search("8", obj_id):
+                # Parse position
+                pos_parts = [p.strip() for p in pos_str.split(',')]
+                if len(pos_parts) != 3:
+                    print("Invalid position format.")
+                    return None
+                r_x, r_y, r_z = map(float, pos_parts)
+                
+                # Apply rolling average filter to position
+                #x, y, z = self.apply_rolling_average(self.position_buffers, x, y, z)
+                
+                # Parse orientation
+                rot_parts = [p.strip() for p in rot_str.split(',')]
+                if len(rot_parts) != 4:
+                    print("Invalid rotation format.")
+                    return None
+                r_qx, r_qy, r_qz, r_qw = map(float, rot_parts)
+                
+                # Apply rolling average filter to orientation
+                #qx, qy, qz, qw = self.apply_rolling_average(self.orientation_buffers, qx, qy, qz, qw)
+
+                current_time = time.time()
+                dt = current_time - self.last_pen_time
+                self.last_pen_time = current_time
+                
+
+                print(f"Time difference (dt): {dt:.6f} seconds")
+
+                if dt <= 0:
+                    self.last_pen_pose = np.array([r_x, r_y, r_z])
+                    self.last_pen_orientation = np.array([r_qx, r_qy, r_qz, r_qw])
+                    self.last_pen_time = current_time
+                    return None
+
+                # Calculate linear velocity in the world frame
+                dx, dy, dz = r_x - self.last_pen_pose[0], r_y - self.last_pen_pose[1], r_z - self.last_pen_pose[2]
+                linear_velocity_world = np.array([dx / dt, dy / dt, dz / dt])
+
+
+                # Apply low-pass filter to velocity
+                low_pass_vx, low_pass_vy, low_pass_vz = self.apply_low_pass_filter(
+                    self.low_pass_velocity_buffers, *linear_velocity_world
+                )
+
+
+                # Calculate angular velocity
+                q1 = self.last_pen_orientation
+                q2 = np.array([r_qx, r_qy,r_qz, r_qw])
+                q_relative = quaternion_multiply(q2, quaternion_inverse(q1))  # Relative rotation
+                angular_velocity = 2 * np.array([q_relative[0], q_relative[1], q_relative[2]]) / dt  # Angular velocity
+                rotation_matrix = quaternion_matrix(q2)[:3, :3]  # Extract 3x3 rotation part
+
+                # Transform velocity from world frame to body frame
+                angular_velocity_body = np.dot(rotation_matrix.T, angular_velocity)
+
+            
+                low_pass_wx, low_pass_wy, low_pass_wz = self.apply_low_pass_filter(
+                    self.low_pass_angular_velocity_buffers, *angular_velocity_body
+                )
+    
+
+                # Update last pose, orientation, and time
+                self.last_pen_pose = np.array([r_x, r_y, r_z])
+                self.last_pen_orientation = np.array([r_qx, r_qy, r_qz, r_qw])
+            
+            else:
+                # Parse position
+                pos_parts = [p.strip() for p in pos_str.split(',')]
+                if len(pos_parts) != 3:
+                    print("Invalid position format.")
+                    return None
+                r_x, r_y, r_z = map(float, pos_parts)
+                
+                # Apply rolling average filter to position
+                #x, y, z = self.apply_rolling_average(self.position_buffers, x, y, z)
+                
+                # Parse orientation
+                rot_parts = [p.strip() for p in rot_str.split(',')]
+                if len(rot_parts) != 4:
+                    print("Invalid rotation format.")
+                    return None
+                r_qx, r_qy, r_qz, r_qw = map(float, rot_parts)
+                
+                # Apply rolling average filter to orientation
+                #qx, qy, qz, qw = self.apply_rolling_average(self.orientation_buffers, qx, qy, qz, qw)
+
+                current_time = time.time()
+                dt = current_time - self.last_time
+                self.last_time = current_time
+                
+
+                print(f"Time difference (dt): {dt:.6f} seconds")
+
+                if dt <= 0:
+                    self.last_pose = np.array([r_x, r_y, r_z])
+                    self.last_orientation = np.array([r_qx, r_qy, r_qz, r_qw])
+                    self.last_time = current_time
+                    return None
+
+                # Calculate linear velocity in the world frame
+                dx, dy, dz = r_x - self.last_pose[0], r_y - self.last_pose[1], r_z - self.last_pose[2]
+                linear_velocity_world = np.array([dx / dt, dy / dt, dz / dt])
+
+
+                # Apply low-pass filter to velocity
+                low_pass_vx, low_pass_vy, low_pass_vz = self.apply_low_pass_filter(
+                    self.low_pass_velocity_buffers, *linear_velocity_world
+                )
+
+
+                # Calculate angular velocity
+                q1 = self.last_orientation
+                q2 = np.array([r_qx, r_qy,r_qz, r_qw])
+                q_relative = quaternion_multiply(q2, quaternion_inverse(q1))  # Relative rotation
+                angular_velocity = 2 * np.array([q_relative[0], q_relative[1], q_relative[2]]) / dt  # Angular velocity
+                rotation_matrix = quaternion_matrix(q2)[:3, :3]  # Extract 3x3 rotation part
+
+                # Transform velocity from world frame to body frame
+                angular_velocity_body = np.dot(rotation_matrix.T, angular_velocity)
+
+            
+                low_pass_wx, low_pass_wy, low_pass_wz = self.apply_low_pass_filter(
+                    self.low_pass_angular_velocity_buffers, *angular_velocity_body
+                )
+    
+
+                # Update last pose, orientation, and time
+                self.last_pose = np.array([r_x, r_y, r_z])
+                self.last_orientation = np.array([r_qx, r_qy, r_qz, r_qw])
+
+
+
+            '''
+            self.motion_capture_csv_writer.writerow([
+                r_x, r_y, r_z,
+                r_qw, r_qx, r_qy, r_qz,
+                r_vx, r_vy, r_vz,
+                r_avx, r_avy, r_avz,
+                rolling_vx, rolling_vy, rolling_vz,
+                low_pass_vx, low_pass_vy, low_pass_vz,
+                butter_vx, butter_vy, butter_vz,
+                rolling_wx, rolling_wy, rolling_wz,
+                low_pass_wx, low_pass_wy, low_pass_wz,
+                butter_wx, butter_wy, butter_wz,
+            ])'''
+
+            
+            return ObjectData(
+                id=obj_id,
+                position=(r_x, r_y, r_z),
+                rotation=(r_qw, r_qx, r_qy, r_qz),
+                velocity=(low_pass_vx, low_pass_vy, low_pass_vz),  # Use Butterworth-filtered velocity
+                angular_velocity=(low_pass_wx, low_pass_wy, low_pass_wz)  # Use Butterworth-filtered angular velocity
+            )
+        except Exception:
+            return None
+
+    def parse_pen_packet(self, data: str) -> Optional[ObjectData]:
+        try:
+            if not data or '|' not in data:
+                print("Invalid data format, skipping packet.")
+                return None
+
+            parts = [p.strip() for p in data.split('|') if p.strip()]
+            if len(parts) != 3:
+                print("Invalid parts length.")
+                return None
+
+            obj_id, pos_str, rot_str = parts
             
             # Parse position
             pos_parts = [p.strip() for p in pos_str.split(',')]
@@ -224,19 +400,20 @@ class MotionCapturePublisher(Node):
             #qx, qy, qz, qw = self.apply_rolling_average(self.orientation_buffers, qx, qy, qz, qw)
 
             current_time = time.time()
-            dt = current_time - self.last_time
-            self.last_time = current_time
+            dt = current_time - self.last_pen_time
+            self.last_pen_time = current_time
+            
 
             print(f"Time difference (dt): {dt:.6f} seconds")
 
             if dt <= 0:
-                self.last_pose = np.array([r_x, r_y, r_z])
-                self.last_orientation = np.array([r_qx, r_qy, r_qz, r_qw])
-                self.last_time = current_time
+                self.last_pen_pose = np.array([r_x, r_y, r_z])
+                self.last_pen_orientation = np.array([r_qx, r_qy, r_qz, r_qw])
+                self.last_pen_time = current_time
                 return None
 
             # Calculate linear velocity in the world frame
-            dx, dy, dz = r_x - self.last_pose[0], r_y - self.last_pose[1], r_z - self.last_pose[2]
+            dx, dy, dz = r_x - self.last_Pen_pose[0], r_y - self.last_pen_pose[1], r_z - self.last_pen_pose[2]
             linear_velocity_world = np.array([dx / dt, dy / dt, dz / dt])
 
 
@@ -247,7 +424,7 @@ class MotionCapturePublisher(Node):
 
 
             # Calculate angular velocity
-            q1 = self.last_orientation
+            q1 = self.last_pen_orientation
             q2 = np.array([r_qx, r_qy,r_qz, r_qw])
             q_relative = quaternion_multiply(q2, quaternion_inverse(q1))  # Relative rotation
             angular_velocity = 2 * np.array([q_relative[0], q_relative[1], q_relative[2]]) / dt  # Angular velocity
@@ -263,8 +440,8 @@ class MotionCapturePublisher(Node):
   
 
             # Update last pose, orientation, and time
-            self.last_pose = np.array([r_x, r_y, r_z])
-            self.last_orientation = np.array([r_qx, r_qy, r_qz, r_qw])
+            self.last_pen_pose = np.array([r_x, r_y, r_z])
+            self.last_pen_orientation = np.array([r_qx, r_qy, r_qz, r_qw])
 
 
 
@@ -321,6 +498,8 @@ class MotionCapturePublisher(Node):
         msg.twist.angular.z = obj_data.angular_velocity[2]
         
         return msg
+    #def create_pendulum_msg(self, obj_data: ObjectData):
+
 
     def run(self):
         try:
@@ -330,11 +509,17 @@ class MotionCapturePublisher(Node):
                 
                 cleaned_message = self.clean_message(message)
                 obj_data = self.parse_packet(cleaned_message)
+                print(obj_data)
+                
+                if re.search( "8", obj_data.id):
+                    pendulum_msg = self.create_motion_capture_state_msg(obj_data)
+                    self.pen_publisher.publish(pendulum_msg)
 
-                if obj_data:
+                elif re.search( "7", obj_data.id): #obj_data:
                     
                     motion_capture_msg = self.create_motion_capture_state_msg(obj_data)
                     self.publisher.publish(motion_capture_msg)
+
 
         except KeyboardInterrupt:
             self.get_logger().info('Shutting down...')
