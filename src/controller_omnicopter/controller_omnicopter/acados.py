@@ -34,8 +34,8 @@ def generate_ocp_controller(dynamics=None):
 
     # Cost matrices (tune as needed)
     Q_mat = 2 * np.diag([
-        1.1, 1.1, 1.1,    # position
-        1.1, 1.1, 1.1, 1.1,  # quaternion
+        2.1, 2.1, 2.1,    # position
+        2.1, 2.1, 2.1, 2.1,  # quaternion
         0.1, 0.1, 0.1,      # velocity
         0.1, 0.1, 0.1      # angular rates
     ])
@@ -70,29 +70,29 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
     
     # Increase iterations for better convergence with nonlinear model
-    ocp.solver_options.nlp_solver_max_iter = 2000
-    ocp.solver_options.qp_solver_iter_max = 1000
+    ocp.solver_options.nlp_solver_max_iter = 3000
+    ocp.solver_options.qp_solver_iter_max = 1500
     
     # Relax tolerances for better convergence
-    ocp.solver_options.qp_solver_tol_stat = 1e-3
-    ocp.solver_options.qp_solver_tol_eq = 1e-3
-    ocp.solver_options.qp_solver_tol_ineq = 1e-3
-    ocp.solver_options.qp_solver_tol_comp = 1e-3
-    ocp.solver_options.nlp_solver_tol_stat = 1e-3
-    ocp.solver_options.nlp_solver_tol_eq = 1e-3
-    ocp.solver_options.nlp_solver_tol_ineq = 1e-3
-    ocp.solver_options.nlp_solver_tol_comp = 1e-3
+    ocp.solver_options.qp_solver_tol_stat = 1e-5
+    ocp.solver_options.qp_solver_tol_eq = 1e-5
+    ocp.solver_options.qp_solver_tol_ineq = 1e-5
+    ocp.solver_options.qp_solver_tol_comp = 1e-5
+    ocp.solver_options.nlp_solver_tol_stat = 1e-5
+    ocp.solver_options.nlp_solver_tol_eq = 1e-5
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-5
+    ocp.solver_options.nlp_solver_tol_comp = 1e-5
     
     # Increase regularization for numerical stability
-    # ocp.solver_options.levenberg_marquardt = 1e-1
+    #ocp.solver_options.levenberg_marquardt = 1e-4
     
     # Add regularization for ill-conditioned problems
-    # ocp.solver_options.regularize_method = 'CONVEXIFY'
+    #ocp.solver_options.regularize_method = 'CONVEXIFY'
 
 
     # Set input constraints for bidirectional control [-1, 1]
     # Omnicopter motors can run backwards for full 6-DOF control
-    max = 0.5
+    max = 0.6
     ocp.constraints.lbu = np.array([-max, -max, -max, -max, -max, -max, -max, -max])  # reverse thrust
     ocp.constraints.ubu = np.array([max, max, max, max, max, max, max, max])  # forward thrust
     ocp.constraints.idxbu = np.arange(nu)
@@ -133,3 +133,21 @@ def set_initial_guess(ocp_solver, N_horizon=20):
     # Set control initial guess to hover solution for all time steps
     for i in range(N_horizon):
         ocp_solver.set(i, "u", u_hover)
+
+
+def warm_start_from_previous_solution(ocp_solver, N_horizon=20):
+    """
+    Warm start the MPC solver using the previous solution shifted by one time step
+    
+    Args:
+        ocp_solver: Acados OCP solver
+        N_horizon: Prediction horizon length
+    """
+    # Shift the previous solution: u[0] becomes u[1], u[1] becomes u[2], etc.
+    for i in range(N_horizon - 1):
+        u_prev = ocp_solver.get(i + 1, "u")  # Get control from next time step
+        ocp_solver.set(i, "u", u_prev)       # Set it to current time step
+    
+    # For the last time step, use the control from the previous last time step
+    u_last = ocp_solver.get(N_horizon - 1, "u")
+    ocp_solver.set(N_horizon - 1, "u", u_last)

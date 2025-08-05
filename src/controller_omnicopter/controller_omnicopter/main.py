@@ -10,7 +10,7 @@ from rclpy.node import Node
 from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 import time
-from .acados import generate_ocp_controller, set_initial_guess
+from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution
 from .gui import GUI
 from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory, hover_and_rotate
 from interfaces.msg import MotionCaptureState, ELRSCommand
@@ -37,8 +37,9 @@ class Controller(Node):
 
         
 
-        self.traj = circle_trajectory(self.dt)
-        #self.traj = hover_trajectory(self.dt)   
+        #self.traj = circle_trajectory(self.dt)
+        self.traj = hover_trajectory(self.dt) 
+        #self.traj = hover_and_rotate(self.dt)  # Use hover_and_rotate trajectory for testing
 
 
         self.steps = self.traj.shape[1] - 1 
@@ -117,13 +118,17 @@ class Controller(Node):
             self.ocp.set(self.N, "yref", yref_N)
 
             # Set current state constraint
-            self.ocp.set(0, "lbx", self.current_pose )
-            self.ocp.set(0, "ubx", self.current_pose )
+            self.ocp.set(0, "lbx", self.current_pose - 0.0*self.current_pose)
+            self.ocp.set(0, "ubx", self.current_pose + 0.0*self.current_pose)
 
             # Set initial guess based on hover solution
             # Only set on first solve or after failure for better performance
-
-            set_initial_guess(self.ocp, 1)
+            if not self.initial_guess_set:
+                set_initial_guess(self.ocp, self.N)
+                self.initial_guess_set = True
+            else:
+                # Warm start from previous solution
+                warm_start_from_previous_solution(self.ocp, self.N)
 
             # Solve the MPC problem
             status = self.ocp.solve()
@@ -132,19 +137,22 @@ class Controller(Node):
 
             u = self.ocp.get(0, "u")
 
-
-            
-
-
-            #u_sqrt = np.sign(u) * np.sqrt(np.abs(u))
             print(u)
 
-            msg = ELRSCommand(armed=True, channel_0=u[0], channel_1=u[1], channel_2=u[2], channel_3=u[3], channel_4=u[4], channel_5=u[5], channel_6=u[6], channel_7=u[7])
+            msg = ELRSCommand(
+                armed=True,
+                channel_0=round(u[0], 3),
+                channel_1=round(u[1], 3),
+                channel_2=round(u[2], 3),
+                channel_3=round(u[3], 3),
+                channel_4=round(u[4], 3),
+                channel_5=round(u[5], 3),
+                channel_6=round(u[6], 3),
+                channel_7=round(u[7], 3)
+            )
 
-            #sd = 0.28 # -0.32890574
-            #sd = u[1]
-            #msg = ELRSCommand(armed=True, channel_0=-sd, channel_1=sd, channel_2=-sd, channel_3=sd, channel_4=sd, channel_5=-sd, channel_6=sd, channel_7=-sd)
             self.cmd_publisher_.publish(msg)
+            self.step_counter += 1
 
 
 

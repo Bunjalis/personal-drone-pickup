@@ -31,7 +31,7 @@ class QuadDynamics:
         
         self.u = cs.vertcat(u0, u1, u2, u3, u4, u5, u6, u7)
 
-        self.mass = 1.0
+        self.mass = 1.1
 
         self.J = np.array([0.015, 0.015, 0.015])
         self.thrust_constant = 1.42e-06
