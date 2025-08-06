@@ -23,8 +23,14 @@ class Controller(Node):
         super().__init__('controller')
         self.cmd_publisher_ = self.create_publisher(ELRSCommand, '/ELRSCommand', 10)
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
-        #self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
-        self.IP_state_subscription_ = self.create_subscription(MotionCaptureState, '/pendulum_state_publisher', self.IP_state_callback, 10)
+        self.usingSim = False
+
+   
+        if self.usingSim:
+            self.IP_state_subscription_ = self.create_subscription(InvertedPendulumStates, '/pendulum_state_publisher', self.IP_state_callback, 10)
+        else:
+            self.IP_state_subscription_ = self.create_subscription(MotionCaptureState, '/pendulum_state_publisher', self.IP_state_callback, 10)
+        
         self.current_pose = None
         self.setpoint = np.array([0.0,0.0, 1.0])
         self.currentPenPose = None
@@ -194,7 +200,7 @@ class Controller(Node):
         angular_velocity = np.array([msg.twist.angular.x, msg.twist.angular.y, msg.twist.angular.z])
         self.current_pose = np.concatenate((position, orientation, linear_velocity, angular_velocity))
         
-    
+    #UNCOMMENT IF USING SIM
     '''def IP_state_callback(self, msg:InvertedPendulumStates):
         position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
         orientation =  np.array([msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z])
@@ -204,6 +210,7 @@ class Controller(Node):
         penState = self.currentPenPose
         self.currentPenPose = np.concatenate((position, orientation, linear_velocity, angular_velocity))'''
 
+    #UNCOMMENT IF USING DRONE
     def IP_state_callback(self, msg:MotionCaptureState):
         position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
         orientation =  np.array([msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z])
@@ -280,9 +287,11 @@ class Controller(Node):
         
         penState = self.currentPenPose
         a, b, eta = penState[0:3]
-        a, b, eta = a-x, b-y, eta-z
+        if not self.usingSim:
+            a, b, eta = a-x, b-y, eta-z
         a_dot, b_dot, eta_dot = penState[7:10]
-        a_dot, b_dot, eta_dot = a_dot-vx, b_dot-vy, eta_dot-vz
+        if not self.usingSim:
+            a_dot, b_dot, eta_dot = a_dot-vx, b_dot-vy, eta_dot-vz
         
        
         #print(f"a:{a}, b:{b}, eta:{eta}, a_dot:{a_dot}, b_dot:{b_dot}, eta_dot:{eta_dot}")
@@ -345,6 +354,92 @@ class Controller(Node):
         wx = -790.0*(r-(Ub+Uy)) #-628.4*(p-(Ua+Ux))
         wx = wx/100.0
 
+        # RE-TUNING
+        wy = -1000*np.array([-4.5921,   -0.0194,    0.8075,   -0.8108,   -0.0565])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        
+        wx = -1000*np.array([4.5921,   0.0194,    0.8075,   0.8108,   0.0565])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        wy = -1000*np.array([-4.7937,   -0.0242,    0.8078,   -0.8455,   -0.0665])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        
+        wx = -1000*np.array([4.7937,   0.0242,    0.8078,   0.8455,   0.0665])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        Ua = 5.060*a + 0.897*a_dot
+        Ux = 0.057*(x-xd) + 0.073*vx
+        wy = -790.0*(p-(Ua+Ux)) #-628.4*(p-(Ua+Ux))
+        wy = wy/100.0
+        
+        Ub = -5.060*b - 0.897*b_dot # (-67.26*a - 11.8*a_dot)/-9.81 # 5.060*a + 0.897*a_dot
+        Uy = -0.057*(y-yd) - 0.073*vy
+        wx = -790.0*(r-(Ub+Uy)) #-628.4*(p-(Ua+Ux))
+        wx = wx/100.0
+
+        Ua = 5.060*a + 0.89777*a_dot
+        Ux = 0.0272*(x-xd) + 0.0534*vx
+        wy = -709.2*(p-(Ua+Ux)) #-628.4*(p-(Ua+Ux))
+        wy = wy/100.0
+        
+        Ub = -5.060*b - 0.89777*b_dot # (-67.26*a - 11.8*a_dot)/-9.81 # 5.060*a + 0.897*a_dot
+        Uy = -0.0272*(y-yd) - 0.0534*vy
+        wx = -709.2*(r-(Ub+Uy)) #-628.4*(p-(Ua+Ux))
+        wx = wx/100.0
+
+
+        wy = -1000*np.array([-4.5075,   -0.0228,    0.7598,   -0.7950,   -0.0625])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        
+        wx = -1000*np.array([4.5075,   0.0228,    0.7598,   0.7950,   0.0625])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        wy = -1000*np.array([-4.4653,   -0.0303,    0.7102,   -0.7867,   -0.0737])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        
+        wx = -1000*np.array([4.4653,   0.0303,    0.7102,   0.7867,   0.0737])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        wy = -1000*np.array([-4.2787,   -0.0334,    0.7098,   -0.7548,   -0.0707])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        
+        wx = -1000*np.array([4.2787,   0.0334,    0.7098,   0.7548,   0.0707])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+        
+
+        # The following works with both motor constants but oscillates alot 
+        '''wy = -1000*np.array([-4.3663,   -0.0345,    0.7199,   -0.7739,   -0.0728])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        
+        wx = -1000*np.array([4.3663,   0.0345,    0.7199,   0.7739,   0.0728])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0'''
+
+        # The following works with both motor constants but oscillates alot 
+        '''wy = -1000*np.array([-4.4605,   -0.0349,    0.7398,   -0.7869,   -0.0737])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        
+        wx = -1000*np.array([4.4605,   0.0349,    0.7398,   0.7869,   0.0737])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0'''
+
+        # The following works with both 0.8e-6 and 0.35e-06 motor constants but has poles at -0.6 and -700
+        '''wy = -1000*np.array([-3.5903,   -0.0193,    0.7092,   -0.6367,   -0.0379])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        
+        wx = -1000*np.array([3.5903,   0.0193,    0.7092,   0.6367,   0.0379])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0'''
+
+
+
+
+        wy = -1000*np.array([-4.3907,   -0.0342,    0.7891,   -0.7765,   -0.0678])@np.array([[a],[x-xd],[p],[a_dot], [vx]]) 
+        wy = (( wy[0]))/100.0
+        
+        wx = -1000*np.array([4.3907,   0.0342,    0.7891,   0.7765,   0.0678])@np.array([[b],[y-yd],[r],[b_dot],[vy]]) 
+        wx = wx[0]/100.0
+
+   
+
         Cf = 0.8e-06 # 0.35e-6 #0.8e-06 #1.42e-6
         #Ct = 2.84e-7
         l_x = 0.0865
@@ -353,7 +448,7 @@ class Controller(Node):
         max_motor_speed = 4631.0
         maxForce = (Cf*max_motor_speed**2) 
       
-        kpz, kiz, kdz = 25.0, 10.0, 10.0  # 35.0, 10.0, 10.0  
+        #kpz, kiz, kdz = 25.0, 10.0, 10.0  # 35.0, 10.0, 10.0  
         kpz, kiz, kdz = 15.0, 10.0, 10.0 
         dt = self.dt
         force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M+0.04) 
@@ -365,6 +460,7 @@ class Controller(Node):
             throttle = 1.0
        
         wz =  -0.5*(yawd-yaw)
+        #wz =  -0.6*(yawd-yaw)
         print(f"force: {force}, r: {wx}, p: {wy}, yaw: {wz}")
         self.wxOutput.append(wx)
         
@@ -510,9 +606,12 @@ class Controller(Node):
 
             penState = self.currentPenPose
             a, b, eta = penState[0:3]
-            a, b_dot, eta= a-x, b-y, eta-z
+            if not self.usingSim:
+                a, b_dot, eta= a-x, b-y, eta-z
+
             a_dot, b_dot, eta_dot = penState[7:10]
-            a_dot, b_dot, eta_dot = a_dot-vx, b_dot-vy, eta_dot-vz
+            if not self.usingSim:
+                a_dot, b_dot, eta_dot = a_dot-vx, b_dot-vy, eta_dot-vz
             
             self.aError.append(a)
             self.bError.append(b)
