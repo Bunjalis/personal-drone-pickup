@@ -12,7 +12,7 @@ from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution
 from .gui import GUI
-from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory, hover_and_rotate
+from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory, hover_and_rotate, sine_wave_trajectory
 from interfaces.msg import MotionCaptureState, ELRSCommand
 from geometry_msgs.msg import Pose, PoseArray
 
@@ -38,7 +38,7 @@ class Controller(Node):
         
 
         #self.traj = circle_trajectory(self.dt)
-        self.traj = hover_trajectory(self.dt) 
+        self.traj = sine_wave_trajectory(self.dt) 
         #self.traj = hover_and_rotate(self.dt)  # Use hover_and_rotate trajectory for testing
 
 
@@ -120,6 +120,7 @@ class Controller(Node):
             # Set current state constraint
             self.ocp.set(0, "lbx", self.current_pose - 0.0*self.current_pose)
             self.ocp.set(0, "ubx", self.current_pose + 0.0*self.current_pose)
+
 
             # Set initial guess based on hover solution
             # Only set on first solve or after failure for better performance

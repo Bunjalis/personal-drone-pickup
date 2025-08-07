@@ -92,7 +92,7 @@ def generate_ocp_controller(dynamics=None):
 
     # Set input constraints for bidirectional control [-1, 1]
     # Omnicopter motors can run backwards for full 6-DOF control
-    max = 0.6
+    max = 0.45
     ocp.constraints.lbu = np.array([-max, -max, -max, -max, -max, -max, -max, -max])  # reverse thrust
     ocp.constraints.ubu = np.array([max, max, max, max, max, max, max, max])  # forward thrust
     ocp.constraints.idxbu = np.arange(nu)

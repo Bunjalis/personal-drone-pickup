@@ -99,12 +99,13 @@ def move_to_start_of_main_trajectory(dt, init_pose, final_pose):
 
 
 def hover_trajectory(dt):
+        take_off_traj = takeoff_trajectory(dt)
 
-        steps = 10 * 30  # 10 seconds of hover at 30 Hz
+        steps = 30 * 30  # 10 seconds of hover at 30 Hz
         time_space = np.linspace(0, steps * dt, steps)
         x_traj = np.zeros_like(time_space)
         y_traj = np.zeros_like(time_space)
-        z_traj = 2*np.ones_like(time_space)
+        z_traj = 1*np.ones_like(time_space)
 
         roll_traj = np.zeros_like(time_space)
         pitch_traj = np.zeros_like(time_space)
@@ -124,9 +125,10 @@ def hover_trajectory(dt):
         hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
                      vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
 
+        land_traj = land_trajectory(dt, hover_traj[:, -1])
+        zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
-
-        return hover_traj
+        return np.concatenate((take_off_traj, hover_traj, land_traj, zeros), axis=1)
 
 
 
@@ -328,3 +330,62 @@ def power_loop_trajectory(dt):
     zeros = np.zeros((take_off_traj.shape[0], 2 * 30))
 
     return np.concatenate((take_off_traj, move_to_start, power_loop_traj, land_traj, zeros), axis=1)
+
+
+def sine_wave_trajectory(dt):
+    take_off_traj = takeoff_trajectory(dt)
+    
+    # Define sine wave parameters
+    amplitude = 2.0  # 1 meter amplitude
+    wavelength = 1.0  # 4 meters per complete wave
+    height = 1.5  # Fixed altitude
+    x_start = -1.0  # Start position (to center the sine wave)
+    x_end = 1.0    # End position
+    duration = 15.0  # Duration to complete the sine wave motion
+    
+    # Move to start position of sine wave
+    move_to_start = move_to_start_of_main_trajectory(dt, take_off_traj[:, -1], np.array([x_start, 0.0, height]))
+    
+    # Create sine wave trajectory
+    steps = int(duration / dt)
+    time_space = np.linspace(0, duration, steps)
+    
+    # X trajectory: linear motion from start to end
+    x_traj = np.linspace(x_start, x_end, steps)
+    
+    # Y trajectory: sine wave based on x position
+    k = 0.1 * np.pi / wavelength  # Wave number
+    y_traj = amplitude * np.sin(k * x_traj)
+    
+    # Z trajectory: constant height
+    z_traj = np.full_like(x_traj, height)
+    
+    # Orientation: keep level
+    roll_traj = np.zeros_like(time_space)
+    pitch_traj = np.zeros_like(time_space)
+    yaw_traj = np.zeros_like(time_space)
+    
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()
+    qx_traj = quaternions[:, 0]
+    qy_traj = quaternions[:, 1]
+    qz_traj = quaternions[:, 2]
+    qw_traj = quaternions[:, 3]
+    
+    # Calculate velocities
+    vx_traj = np.gradient(x_traj, dt)
+    vy_traj = np.gradient(y_traj, dt)
+    vz_traj = np.gradient(z_traj, dt)
+    
+    # Angular velocities (desired rates)
+    ax_traj = np.zeros_like(time_space)
+    ay_traj = np.zeros_like(time_space)
+    az_traj = np.zeros_like(time_space)
+    
+    sine_wave_traj = np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                               vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+    
+    land_traj = land_trajectory(dt, sine_wave_traj[:, -1])
+    zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
+    
+    return np.concatenate((take_off_traj, move_to_start, sine_wave_traj, land_traj, zeros), axis=1)

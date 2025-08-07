@@ -47,7 +47,7 @@ class Controller(Node):
         #self.traj = backflip_trajectory(self.dt)  # Use the backflip trajectory
 
 
-        trial_name = "test"
+        trial_name = "CIRCLE_TEST_WITHOUT_FAN"
 
 
         self.est_params = np.array([38.0])  # Initialize thrust ratio parameter to a reasonable value
@@ -168,7 +168,7 @@ class Controller(Node):
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
-        self.motion_capture_pose = np.round(np.array([
+        self.current_pose= np.round(np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
         ]), 3) #motion_capture_pose
         #self.current_pose = np.round(np.array([
@@ -178,7 +178,7 @@ class Controller(Node):
 
     def orb_slam_state_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
-        self.current_pose = np.round(np.array([
+        self.motion_capture_pose = np.round(np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
         ]), 3) #orb_slam_pose
 
@@ -225,8 +225,8 @@ class Controller(Node):
         # Apply a low-pass filter to smooth the delay value
         alpha = 0.05  # Reduced low-pass filter coefficient for slower updates
         #self.delay_states_float = getattr(self, 'delay_states_float', float(self.delay_states))  # Initialize if not present
-        self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
-        self.delay_states = round(self.delay_states_float)
+        #self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
+        #self.delay_states = round(self.delay_states_float)
 
         #print(f"Updated delay_states to {self.delay_states} with minimum average position error {round(min_error, 3)}")
         #print("Error latencies:", error_latencies)
@@ -293,7 +293,7 @@ class Controller(Node):
             estimated_state_with_control = np.concatenate((estimated_state, np.array(self.control_history[-1][0:4])))  # Use the last control input for estimation
 
             
-            relaxation_factor = 0.25
+            relaxation_factor = 0.01 # 0.25 for orb slam 
             relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
             relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
             self.ocp.set(0, "lbx", relaxed_lbx)
