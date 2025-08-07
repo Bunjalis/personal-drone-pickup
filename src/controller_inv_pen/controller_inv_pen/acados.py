@@ -24,7 +24,7 @@ def generate_ocp_controller(dynamics=None):
     ocp = AcadosOcp()
     ocp.model = model
 
-    ocp.solver_options.N_horizon = 200 #60
+    ocp.solver_options.N_horizon = 60 #60
     ocp.solver_options.tf = 6.0
 
     nu = 2 # Number of control inputs
@@ -148,7 +148,7 @@ def generate_ocp_controller(dynamics=None):
     # Create simulation configuration
     sim = AcadosSim()
     sim.model = ocp.model
-    sim.solver_options.T = 1.0 / 60.0  # Set integrator to run at 30Hz
+    sim.solver_options.T = 1.0 / 120.0 #60.0  # Set integrator to run at 30Hz
     sim_solver = AcadosSimSolver(sim)
 
     return ocp_solver, sim_solver

@@ -11,11 +11,12 @@ from geometry_msgs.msg import Pose, PoseArray, PoseStamped, TwistStamped
 import matplotlib
 #matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
+import time 
 
 from scipy.spatial.transform import Rotation as R
 from tf_transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_matrix
 import time
-#from .acados import generate_ocp_controller
+from .acados import generate_ocp_controller
 
 
 class Controller(Node):
@@ -38,10 +39,10 @@ class Controller(Node):
         # Set up control loop
         self.testNav = False
         self.testInvPen = False
-        self.testMPC = False
+        self.testMPC = True
         self.usingBetaFlight = True
         if self.testMPC:
-            self.control_frequency = 60.0 
+            self.control_frequency = 120.0 #60.0 
         else:
             self.control_frequency = 120.0 #120.0 #240.0 # 120.0
 
@@ -139,7 +140,7 @@ class Controller(Node):
         self.traj = hover_trajectory(self.dt)  
         self.steps = self.traj.shape[1] - 1   
         # Get both the OCP solver and the integrator
-        self.ocp, self.sim_integrator = None, None #generate_ocp_controller()
+        self.ocp, self.sim_integrator = generate_ocp_controller()
 
         time_space = np.linspace(0, self.steps * self.dt, self.steps)
         # Original trajectories
@@ -188,7 +189,7 @@ class Controller(Node):
         self.pre_start_counter = 0  # Counter to track pre-start steps
         self.pre_start_steps = int(self.pre_start_duration / self.dt)  # Steps for pre-start state
 
-        self.N = 200 #60
+        self.N = 60 #60
         self.skip_steps = 3
         self.augmented_u = 0.0  # Initialize the augmented control input
 
@@ -497,12 +498,23 @@ class Controller(Node):
         #state = np.concatenate((self.current_pose[0:2], [r], [p], [self.currentPenPose[1]], self.current_pose[7:9], [vx], [vy], [self.currentPenPose[8]]))
         #state = np.concatenate((self.current_pose[0:2], [r, p], [self.currentPenPose[1]], [vx, vy],self.current_pose[10:12],  [self.currentPenPose[8]]))
         #state = np.concatenate((self.current_pose[0:2], [r, p], [self.currentPenPose[1]], [vx, vy],  [self.currentPenPose[8]]))
-        state = np.concatenate((self.current_pose[0:2],  self.currentPenPose[0:2], [r, p], [vx, vy],  self.currentPenPose[7:9]))
+        penState = self.currentPenPose
+        x,y,z = self.current_pose[0:3]
+        a, b, eta = penState[0:3]
+        if not self.usingSim:
+            a, b, eta = a-x, b-y, eta-z
+        a_dot, b_dot, eta_dot = penState[7:10]
+        if not self.usingSim:
+            a_dot, b_dot, eta_dot = a_dot-vx, b_dot-vy, eta_dot-vz
+        
+        #state = np.concatenate((self.current_pose[0:2],  self.currentPenPose[0:2], [r, p], [vx, vy],  self.currentPenPose[7:9]))
+        state = np.concatenate((self.current_pose[0:2],  [a,b], [r, p], [vx, vy],  [a_dot, b_dot]))
         #state = np.concatenate((self.current_pose[0:2],  [r, p], [vx, vy]))
         self.ocp.set(0, "lbx", state)
         self.ocp.set(0, "ubx", state)
     
-        print(f"current pos: {currentState[0:2]}, roll: {r},  pitch: {p}, v: {currentState[7:9]}, roll_dot: {self.current_pose[10]}, pitch_dot: {self.current_pose[11]}, b: {self.currentPenPose[1]}, b_dot: {self.currentPenPose[8]}")
+        #print(f"current pos: {currentState[0:2]}, roll: {r},  pitch: {p}, v: {currentState[7:9]}, roll_dot: {self.current_pose[10]}, pitch_dot: {self.current_pose[11]}, b: {self.currentPenPose[1]}, b_dot: {self.currentPenPose[8]}")
+        print(f"current pos: {currentState[0:2]}, a: {a}, b: {b}, roll: {r},  pitch: {p}, v: {currentState[7:9]}, a_dot: {a_dot}, b_dot: {b_dot}")
         status = self.ocp.solve()
         if status != 0:
             print(f"status: {self.ocp.get_status()}")
@@ -547,6 +559,7 @@ class Controller(Node):
         return u
          
     def control_loop(self):
+        
         msg = ELRSCommand()
         msg.armed = False
         if self.usingBetaFlight:
@@ -618,6 +631,7 @@ class Controller(Node):
             self.b_dotError.append(b_dot)
             self.a_dotError.append(a_dot)
             self.timePoints.append(self.t)
+            print(f"current posX: {x}, current posY: {y},  a: {a}, b: {b}, roll: {r},  pitch: {p}, a_dot: {a_dot}, b_dot: {b_dot}")
 
             # CONTROL CODE GOES HERE
             if self.useSwitch:
@@ -641,8 +655,11 @@ class Controller(Node):
             elif self.testNav:
                 u1,u2,u3,u4 = self.navController()
             elif self.testMPC:
+                start_time = time.time()
                 u1,u2,u3,u4 = self.MPC()
-            
+                end_time = time.time()
+                compute_time = end_time-start_time
+                print(f"MPC compute time: {compute_time:.4f} seconds")
             u = [u1,u2,u3,u4]
             #u = [0.0,0.0,0.0,0.0]
             
