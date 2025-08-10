@@ -332,6 +332,84 @@ def power_loop_trajectory(dt):
     return np.concatenate((take_off_traj, move_to_start, power_loop_traj, land_traj, zeros), axis=1)
 
 
+def hover_and_yaw(dt):
+    take_off_traj = takeoff_trajectory(dt)
+    
+    # Phase 1: Initial hover
+    hover_duration = 3.0  # 3 seconds of initial hover
+    hover_steps = int(hover_duration / dt)
+    hover_time_space = np.linspace(0, hover_duration, hover_steps)
+    
+    x_traj_hover = np.zeros_like(hover_time_space)
+    y_traj_hover = np.zeros_like(hover_time_space)
+    z_traj_hover = np.ones_like(hover_time_space)  # Hover at 1 meter altitude
+    
+    roll_traj_hover = np.zeros_like(hover_time_space)
+    pitch_traj_hover = np.zeros_like(hover_time_space)
+    yaw_traj_hover = np.zeros_like(hover_time_space)
+    
+    # Phase 2: Full yaw rotation in 8 seconds
+    yaw_duration = 8.0  # 8 seconds for full rotation
+    yaw_steps = int(yaw_duration / dt)
+    yaw_time_space = np.linspace(0, yaw_duration, yaw_steps)
+    
+    x_traj_yaw = np.zeros_like(yaw_time_space)
+    y_traj_yaw = np.zeros_like(yaw_time_space)
+    z_traj_yaw = np.ones_like(yaw_time_space)  # Maintain altitude
+    
+    yaw_traj_yaw = np.zeros_like(yaw_time_space)
+    pitch_traj_yaw = np.zeros_like(yaw_time_space)
+    # Full 360 degree rotation (2π radians) over 8 seconds
+    roll_traj_yaw = 2 * np.pi * (yaw_time_space / yaw_duration)
+    
+    # Phase 3: Final hover
+    final_hover_duration = 3.0  # 3 seconds of final hover
+    final_hover_steps = int(final_hover_duration / dt)
+    final_hover_time_space = np.linspace(0, final_hover_duration, final_hover_steps)
+    
+    x_traj_final = np.zeros_like(final_hover_time_space)
+    y_traj_final = np.zeros_like(final_hover_time_space)
+    z_traj_final = np.ones_like(final_hover_time_space)
+    
+    roll_traj_final = np.zeros_like(final_hover_time_space)
+    pitch_traj_final = np.zeros_like(final_hover_time_space)
+    yaw_traj_final = np.full_like(final_hover_time_space, 2 * np.pi)  # Hold final yaw position
+    
+    # Concatenate all phases
+    x_traj = np.concatenate((x_traj_hover, x_traj_yaw, x_traj_final))
+    y_traj = np.concatenate((y_traj_hover, y_traj_yaw, y_traj_final))
+    z_traj = np.concatenate((z_traj_hover, z_traj_yaw, z_traj_final))
+    roll_traj = np.concatenate((roll_traj_hover, roll_traj_yaw, roll_traj_final))
+    pitch_traj = np.concatenate((pitch_traj_hover, pitch_traj_yaw, pitch_traj_final))
+    yaw_traj = np.concatenate((yaw_traj_hover, yaw_traj_yaw, yaw_traj_final))
+    
+    # Convert Euler angles to quaternions
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()
+    qx_traj = quaternions[:, 0]
+    qy_traj = quaternions[:, 1]
+    qz_traj = quaternions[:, 2]
+    qw_traj = quaternions[:, 3]
+    
+    # Calculate velocities
+    vx_traj = np.gradient(x_traj, dt)
+    vy_traj = np.gradient(y_traj, dt)
+    vz_traj = np.gradient(z_traj, dt)
+    
+    # Angular velocities (desired rates)
+    ax_traj = np.zeros_like(x_traj)
+    ay_traj = np.zeros_like(y_traj)
+    az_traj = np.zeros_like(z_traj)
+    
+    hover_yaw_traj = np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                               vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+    
+    land_traj = land_trajectory(dt, hover_yaw_traj[:, -1])
+    zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
+    
+    return np.concatenate((take_off_traj, hover_yaw_traj, land_traj, zeros), axis=1)
+
+
 def sine_wave_trajectory(dt):
     take_off_traj = takeoff_trajectory(dt)
     

@@ -10,11 +10,22 @@ from rclpy.node import Node
 from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 import time
-from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution
+# NOTE: import the new helper we added to acados.py
+from .acados import (
+    generate_ocp_controller,
+    set_initial_guess,
+    warm_start_from_previous_solution,
+    set_trajectory_reference_aligned,   # <-- NEW
+)
 from .gui import GUI
-from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory, hover_and_rotate, sine_wave_trajectory
+from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory, hover_and_rotate, sine_wave_trajectory, hover_and_yaw
 from interfaces.msg import MotionCaptureState, ELRSCommand
 from geometry_msgs.msg import Pose, PoseArray
+
+
+def _norm_quat_np(q):
+    n = float(np.linalg.norm(q))
+    return q if n == 0.0 else (q / n)
 
 
 class Controller(Node):
@@ -32,24 +43,19 @@ class Controller(Node):
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
+        # self.timer_test_angular = self.create_timer(self.dt, self.angular_velocity_test)
 
-        #self.timer_test_angular = self.create_timer(self.dt, self.angular_velocity_test)  # Adjust the timer frequency as needed
+        # self.traj = circle_trajectory(self.dt)
+        self.traj = hover_and_yaw(self.dt)
+        # self.traj = hover_and_rotate(self.dt)
 
-        
-
-        #self.traj = circle_trajectory(self.dt)
-        self.traj = sine_wave_trajectory(self.dt) 
-        #self.traj = hover_and_rotate(self.dt)  # Use hover_and_rotate trajectory for testing
-
-
-        self.steps = self.traj.shape[1] - 1 
-
+        self.steps = self.traj.shape[1] - 1
 
         self.gui = GUI(self)
         self.armed = False
-        
+
         self.pre_start_duration = 2.0
-        self.pre_start_counter = 0 
+        self.pre_start_counter = 0
         self.pre_start_steps = int(self.pre_start_duration / self.dt)
 
         self.N = 20
@@ -59,35 +65,28 @@ class Controller(Node):
         self.last_control = None
 
         self.sent_command = False
-        self.initial_guess_set = False  # Flag to track if initial guess has been set
+        self.initial_guess_set = False
 
-
-        # Initialize CSV file at the start of the program
+        # CSV init
         if not hasattr(self, 'csv_initialized'):
             self.csv_initialized = True
             self.csv_file = open('control_results.csv', mode='w', newline='')
             self.csv_writer = csv.writer(self.csv_file)
-            # Write header row
             self.csv_writer.writerow([
-                'Step', 'u0', 'u1', 'create_timeru2', 'u3','u4', 'u5', 'u6', 'u7',
+                'Step', 'u0', 'u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7',   # <- fixed header label
                 'px', 'py', 'pz', 'rw', 'rx', 'ry', 'rz',
                 'vx', 'vy', 'vz', 'wx', 'wy', 'wz',
                 'sp_px', 'sp_py', 'sp_pz', 'sp_rw', 'sp_rx', 'sp_ry', 'sp_rz',
                 'sp_vx', 'sp_vy', 'sp_vz', 'sp_wx', 'sp_wy', 'sp_wz',
-
-        ])
+            ])
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
+        q = np.array([o.w, o.x, o.y, o.z], dtype=float)
+        q = _norm_quat_np(q)  # keep unit quaternion
         self.current_pose = np.array([
-            p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
+            p.x, p.y, p.z, q[0], q[1], q[2], q[3], lv.x, lv.y, lv.z, av.x, av.y, av.z
         ])
-
-
-
-
-
-
 
     def control_loop(self):
 
@@ -107,31 +106,28 @@ class Controller(Node):
                 self.cmd_publisher_.publish(msg)
                 self.on_close()
 
-            # Set reference trajectory for the horizon
+            # ---------- Build time-varying state references for the horizon ----------
+            # X_ref shape: (N+1, 13). Row j is the state ref at stage j. Row N is terminal.
+            X_ref = np.zeros((self.N + 1, 13), dtype=float)
             for j in range(self.N):
                 sc = self.step_counter + j * self.skip_steps
-                yref = self.traj[:, sc]
-                self.ocp.set(j, "yref", yref)
-
+                X_ref[j, :] = self.traj[:, sc]
             sn = self.step_counter + self.N * self.skip_steps
-            yref_N = self.traj[:, sn]
-            self.ocp.set(self.N, "yref", yref_N)
-
-            # Set current state constraint
-            self.ocp.set(0, "lbx", self.current_pose - 0.0*self.current_pose)
-            self.ocp.set(0, "ubx", self.current_pose + 0.0*self.current_pose)
+            X_ref[self.N, :] = self.traj[:, sn]
 
 
-            # Set initial guess based on hover solution
-            # Only set on first solve or after failure for better performance
+            set_trajectory_reference_aligned(self.ocp, X_ref)
+
+            x0 = self.current_pose.copy()
+            x0[3:7] = _norm_quat_np(x0[3:7])  # ensure unit quaternion
+            self.ocp.set(0, "lbx", x0)
+            self.ocp.set(0, "ubx", x0)
+
             if not self.initial_guess_set:
                 set_initial_guess(self.ocp, self.N)
                 self.initial_guess_set = True
             else:
-                # Warm start from previous solution
                 warm_start_from_previous_solution(self.ocp, self.N)
-
-            # Solve the MPC problem
             status = self.ocp.solve()
             if status != 0:
                 raise Exception(f'acados returned status {status} after retry.')
@@ -139,6 +135,8 @@ class Controller(Node):
             u = self.ocp.get(0, "u")
 
             print(u)
+
+
 
             msg = ELRSCommand(
                 armed=True,
@@ -151,13 +149,8 @@ class Controller(Node):
                 channel_6=round(u[6], 3),
                 channel_7=round(u[7], 3)
             )
-
             self.cmd_publisher_.publish(msg)
             self.step_counter += 1
-
-
-
-
 
         else:
             print("Controller is not armed or current pose is not available.")
@@ -165,23 +158,12 @@ class Controller(Node):
             self.cmd_publisher_.publish(msg)
             self.step_counter = 0
 
-
-
-
-
-
-
-
     def angular_velocity_test(self):
 
         if self.armed and self.sent_command == False:
             print("Sending initial command to arm the controller.")
             print(f"Current pose: {self.current_pose[10:13]}")
-            # Convert the list 'u' to a NumPy array before passing it to self.sim_integrator.set
             u = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-
-            
-            
 
             self.sim_integrator.set("x", self.current_pose)
             self.sim_integrator.set("u", u)
@@ -189,7 +171,6 @@ class Controller(Node):
             predicted_state = self.sim_integrator.get("x")
             print("Predicted state:", predicted_state[10:13])
 
-            
             msg = ELRSCommand(armed=True, channel_0=u[0], channel_1=u[1], channel_2=u[2], channel_3=u[3], channel_4=u[4], channel_5=u[5], channel_6=u[6], channel_7=u[7])
             self.cmd_publisher_.publish(msg)
             self.sent_command = True
@@ -201,8 +182,6 @@ class Controller(Node):
             msg = ELRSCommand(armed=True, channel_0=u[0], channel_1=u[1], channel_2=u[2], channel_3=u[3], channel_4=u[4], channel_5=u[5], channel_6=u[6], channel_7=u[7])
             self.cmd_publisher_.publish(msg)
 
-
-
     def signal_handler(self, sig, frame):
         self.on_close()
 
@@ -212,9 +191,7 @@ class Controller(Node):
         sys.exit(0)
 
 
-
-
-def main(args=None): 
+def main(args=None):
     rclpy.init(args=args)
     controller = Controller()
     signal.signal(signal.SIGINT, controller.signal_handler)
