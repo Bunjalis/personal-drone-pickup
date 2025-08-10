@@ -132,107 +132,105 @@ def hover_trajectory(dt):
 
 
 
-
-
-
 def hover_and_rotate(dt):
-    # Hover at (0, 0, 1), tilt to diamond orientation, then spin around world Z-axis
-    
-    # Phase 1: Initial hover
-    steps_hover = 3 * 30  # 3 seconds of hover at 30 Hz
-    time_space_hover = np.linspace(0, steps_hover * dt, steps_hover)
-    x_traj_hover = np.zeros_like(time_space_hover)
-    y_traj_hover = np.zeros_like(time_space_hover)
-    z_traj_hover = np.ones_like(time_space_hover)
-    roll_traj_hover = np.zeros_like(time_space_hover)
-    pitch_traj_hover = np.zeros_like(time_space_hover)
-    yaw_traj_hover = np.zeros_like(time_space_hover)
+            take_off_traj = takeoff_trajectory(dt)
+            
+            # Phase 1: Initial hover
+            steps_hover = 3 * 30  # 3 seconds of hover at 30 Hz
+            time_space_hover = np.linspace(0, steps_hover * dt, steps_hover)
+            x_traj_hover = np.zeros_like(time_space_hover)
+            y_traj_hover = np.zeros_like(time_space_hover)
+            z_traj_hover = np.ones_like(time_space_hover)
+            roll_traj_hover = np.zeros_like(time_space_hover)
+            pitch_traj_hover = np.zeros_like(time_space_hover)
+            yaw_traj_hover = np.zeros_like(time_space_hover)
 
-    # Phase 2: Tilt to diamond orientation (45 degrees around X and Y axes)
-    steps_tilt = 5 * 30  # 3 seconds to tilt
-    time_space_tilt = np.linspace(0, steps_tilt * dt, steps_tilt)
-    x_traj_tilt = np.zeros_like(time_space_tilt)
-    y_traj_tilt = np.zeros_like(time_space_tilt)
-    z_traj_tilt = np.ones_like(time_space_tilt)
-    
-    # Smooth transition to 45 degree tilt on both X and Y axes (diamond orientation)
-    target_tilt = np.pi / 4  # 45 degrees in radians
-    roll_traj_tilt = target_tilt * (time_space_tilt / time_space_tilt[-1])  # Smooth ramp to 45°
-    pitch_traj_tilt = target_tilt * (time_space_tilt / time_space_tilt[-1])  # Smooth ramp to 45°
-    yaw_traj_tilt = np.zeros_like(time_space_tilt)
+            # Phase 2: Tilt to diamond orientation (45 degrees around X and Y axes)
+            steps_tilt = 5 * 30  # 5 seconds to tilt
+            time_space_tilt = np.linspace(0, steps_tilt * dt, steps_tilt)
+            x_traj_tilt = np.zeros_like(time_space_tilt)
+            y_traj_tilt = np.zeros_like(time_space_tilt)
+            z_traj_tilt = np.ones_like(time_space_tilt)
+            
+            # Smooth transition to 45 degree tilt on both X and Y axes (diamond orientation)
+            target_tilt = np.pi / 4  # 45 degrees in radians
+            roll_traj_tilt = target_tilt * (time_space_tilt / time_space_tilt[-1])  # Smooth ramp to 45°
+            pitch_traj_tilt = target_tilt * (time_space_tilt / time_space_tilt[-1])  # Smooth ramp to 45°
+            yaw_traj_tilt = np.zeros_like(time_space_tilt)
 
-    # Phase 3: Spin around world Z-axis while maintaining diamond orientation
-    steps_spin = 10 * 30  # 8 seconds of spinning
-    time_space_spin = np.linspace(0, steps_spin * dt, steps_spin)
-    x_traj_spin = np.zeros_like(time_space_spin)
-    y_traj_spin = np.zeros_like(time_space_spin)
-    z_traj_spin = np.ones_like(time_space_spin)
-    
-    # Maintain diamond orientation while spinning around Z-axis
-    roll_traj_spin = np.full_like(time_space_spin, target_tilt)  # Keep 45° roll
-    pitch_traj_spin = np.full_like(time_space_spin, target_tilt)  # Keep 45° pitch
-    spin_rate = 0.40  # rad/s around Z-axis
-    yaw_traj_spin = spin_rate * time_space_spin  # Continuous rotation around Z
+            # Phase 3: Spin around world Z-axis while maintaining diamond orientation
+            steps_spin = 20 * 30  # 10 seconds of spinning
+            time_space_spin = np.linspace(0, steps_spin * dt, steps_spin)
+            x_traj_spin = np.zeros_like(time_space_spin)
+            y_traj_spin = np.zeros_like(time_space_spin)
+            z_traj_spin = np.ones_like(time_space_spin)
+            
+            # Maintain diamond orientation while spinning around Z-axis
+            roll_traj_spin = np.full_like(time_space_spin, target_tilt)  # Keep 45° roll
+            pitch_traj_spin = np.full_like(time_space_spin, target_tilt)  # Keep 45° pitch
+            spin_rate = 3.0  # rad/s around Z-axis
+            yaw_traj_spin = spin_rate * time_space_spin  # Continuous rotation around Z
 
-    # Phase 4: Continue spinning but return to level orientation
-    steps_level_spin = 5 * 30  # 3 seconds to level out while spinning
-    time_space_level = np.linspace(0, steps_level_spin * dt, steps_level_spin)
-    x_traj_level = np.zeros_like(time_space_level)
-    y_traj_level = np.zeros_like(time_space_level)
-    z_traj_level = np.ones_like(time_space_level)
-    
-    # Gradually return to level while continuing to spin
-    roll_traj_level = target_tilt * (1 - time_space_level / time_space_level[-1])  # Smooth return to 0°
-    pitch_traj_level = target_tilt * (1 - time_space_level / time_space_level[-1])  # Smooth return to 0°
-    yaw_start = yaw_traj_spin[-1]  # Continue from where spin phase ended
-    yaw_traj_level = yaw_start + spin_rate * time_space_level  # Keep spinning
+            # Phase 4: Return to level orientation
+            steps_level = 10 * 30  # 5 seconds to level out
+            time_space_level = np.linspace(0, steps_level * dt, steps_level)
+            x_traj_level = np.zeros_like(time_space_level)
+            y_traj_level = np.zeros_like(time_space_level)
+            z_traj_level = np.ones_like(time_space_level)
+            
+            # Smooth transition back to level
+            final_yaw = yaw_traj_spin[-1]
+            roll_traj_level = target_tilt * (1 - time_space_level / time_space_level[-1])  # Smooth ramp to 0°
+            pitch_traj_level = target_tilt * (1 - time_space_level / time_space_level[-1])  # Smooth ramp to 0°
+            yaw_traj_level = np.full_like(time_space_level, final_yaw)  # Hold final yaw
 
-    # Phase 5: Final hover (level, no spinning)
-    steps_final = 10 * 30  # 2 seconds
-    time_space_final = np.linspace(0, steps_final * dt, steps_final)
-    x_traj_final = np.zeros_like(time_space_final)
-    y_traj_final = np.zeros_like(time_space_final)
-    z_traj_final = np.ones_like(time_space_final)
-    roll_traj_final = np.zeros_like(time_space_final)
-    pitch_traj_final = np.zeros_like(time_space_final)
-    yaw_traj_final = np.full_like(time_space_final, yaw_traj_level[-1])  # Hold final yaw
+            # Phase 5: Final hover
+            steps_final = 3 * 30  # 3 seconds
+            time_space_final = np.linspace(0, steps_final * dt, steps_final)
+            x_traj_final = np.zeros_like(time_space_final)
+            y_traj_final = np.zeros_like(time_space_final)
+            z_traj_final = np.ones_like(time_space_final)
+            roll_traj_final = np.zeros_like(time_space_final)
+            pitch_traj_final = np.zeros_like(time_space_final)
+            yaw_traj_final = np.full_like(time_space_final, final_yaw)  # Hold final yaw
 
-    # Concatenate all phases
-    time_space = np.concatenate((time_space_hover, time_space_tilt, time_space_spin, 
-                                time_space_level, time_space_final))
-    x_traj = np.concatenate((x_traj_hover, x_traj_tilt, x_traj_spin, 
-                            x_traj_level, x_traj_final))
-    y_traj = np.concatenate((y_traj_hover, y_traj_tilt, y_traj_spin, 
-                            y_traj_level, y_traj_final))
-    z_traj = np.concatenate((z_traj_hover, z_traj_tilt, z_traj_spin, 
-                            z_traj_level, z_traj_final))
-    roll_traj = np.concatenate((roll_traj_hover, roll_traj_tilt, roll_traj_spin, 
-                               roll_traj_level, roll_traj_final))
-    pitch_traj = np.concatenate((pitch_traj_hover, pitch_traj_tilt, pitch_traj_spin, 
-                                pitch_traj_level, pitch_traj_final))
-    yaw_traj = np.concatenate((yaw_traj_hover, yaw_traj_tilt, yaw_traj_spin, 
-                              yaw_traj_level, yaw_traj_final))
+            # Concatenate all phases
+            x_traj = np.concatenate((x_traj_hover, x_traj_tilt, x_traj_spin, 
+                                     x_traj_level, x_traj_final))
+            y_traj = np.concatenate((y_traj_hover, y_traj_tilt, y_traj_spin, 
+                                     y_traj_level, y_traj_final))
+            z_traj = np.concatenate((z_traj_hover, z_traj_tilt, z_traj_spin, 
+                                     z_traj_level, z_traj_final))
+            roll_traj = np.concatenate((roll_traj_hover, roll_traj_tilt, roll_traj_spin, 
+                                        roll_traj_level, roll_traj_final))
+            pitch_traj = np.concatenate((pitch_traj_hover, pitch_traj_tilt, pitch_traj_spin, 
+                                         pitch_traj_level, pitch_traj_final))
+            yaw_traj = np.concatenate((yaw_traj_hover, yaw_traj_tilt, yaw_traj_spin, 
+                                       yaw_traj_level, yaw_traj_final))
 
-    # Convert Euler angles to quaternions
-    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
-    quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
-    qx_traj = quaternions[:, 0]
-    qy_traj = quaternions[:, 1]
-    qz_traj = quaternions[:, 2]
-    qw_traj = quaternions[:, 3]
+            # Convert Euler angles to quaternions
+            rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+            quaternions = R.from_euler('xyz', rpy_traj).as_quat()
+            qx_traj = quaternions[:, 0]
+            qy_traj = quaternions[:, 1]
+            qz_traj = quaternions[:, 2]
+            qw_traj = quaternions[:, 3]
 
-    # Calculate velocities and accelerations
-    vx_traj = np.gradient(x_traj, dt)
-    vy_traj = np.gradient(y_traj, dt)
-    vz_traj = np.gradient(z_traj, dt)
-    ax_traj = np.zeros_like(time_space)
-    ay_traj = np.zeros_like(time_space)
-    az_traj = np.zeros_like(time_space)
+            # Calculate velocities
+            vx_traj = np.gradient(x_traj, dt)
+            vy_traj = np.gradient(y_traj, dt)
+            vz_traj = np.gradient(z_traj, dt)
+            ax_traj = np.zeros_like(x_traj)
+            ay_traj = np.zeros_like(y_traj)
+            az_traj = np.zeros_like(z_traj)
 
-    hover_traj = np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
-                          vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+            hover_rotate_traj = np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                                          vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
 
-    return hover_traj
+            land_traj = land_trajectory(dt, hover_rotate_traj[:, -1])
+            zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
+
+            return np.concatenate((take_off_traj, hover_rotate_traj, land_traj, zeros), axis=1)
 
 
 def circle_trajectory(dt):

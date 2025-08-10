@@ -16,26 +16,29 @@ class QuadDynamics:
         self.r = cs.MX.sym('r', 3)  # angular velocity
         
         # Actuator states (actual motor control values)
-        self.actuators = cs.MX.sym('actuators', 8)  # 8 actuator states
-
-        # State vector: position, quaternion, velocity, angular velocity, actuator states
-        self.x = cs.vertcat(self.p, self.q, self.v, self.r, self.actuators)
-        self.state_dim = 21  # 13 + 8 actuator states
-
-        # Control input: desired actuator values (what we want the actuators to be)
-        u0 = cs.MX.sym('u0')
-        u1 = cs.MX.sym('u1')
-        u2 = cs.MX.sym('u2')
-        u3 = cs.MX.sym('u3')
-        u4 = cs.MX.sym('u4')
-        u5 = cs.MX.sym('u5')
-        u6 = cs.MX.sym('u6')
-        u7 = cs.MX.sym('u7')
+        self.actuators = cs.MX.sym('actuators', 8)  # 8 actual actuator states
         
-        self.u = cs.vertcat(u0, u1, u2, u3, u4, u5, u6, u7)
+        # Desired actuator states (what we want the actuators to be)
+        self.u_desired = cs.MX.sym('u_desired', 8)  # 8 desired actuator states
+
+        # State vector: position, quaternion, velocity, angular velocity, actual actuators, desired actuators
+        self.x = cs.vertcat(self.p, self.q, self.v, self.r, self.actuators, self.u_desired)
+        self.state_dim = 29  # 13 + 8 actual actuators + 8 desired actuators
+
+        # Control input: rate of change of desired actuator values (d(u_desired)/dt)
+        u_dot0 = cs.MX.sym('u_dot0')  # rate for desired actuator 0
+        u_dot1 = cs.MX.sym('u_dot1')  # rate for desired actuator 1
+        u_dot2 = cs.MX.sym('u_dot2')  # rate for desired actuator 2
+        u_dot3 = cs.MX.sym('u_dot3')  # rate for desired actuator 3
+        u_dot4 = cs.MX.sym('u_dot4')  # rate for desired actuator 4
+        u_dot5 = cs.MX.sym('u_dot5')  # rate for desired actuator 5
+        u_dot6 = cs.MX.sym('u_dot6')  # rate for desired actuator 6
+        u_dot7 = cs.MX.sym('u_dot7')  # rate for desired actuator 7
         
-        # Actuator time constant
-        self.actuator_time_constant = 0.07
+        self.u_dot = cs.vertcat(u_dot0, u_dot1, u_dot2, u_dot3, u_dot4, u_dot5, u_dot6, u_dot7)
+        
+        # Actuator time constant for first-order dynamics
+        self.actuator_time_constant = 0.1
 
         self.mass = 1.1
 
@@ -55,7 +58,7 @@ class QuadDynamics:
                                     '''
         
 
-        self.mot_pos_vec = 0.12 * np.array([[1, -1, 1],
+        self.mot_pos_vec = 0.10 * np.array([[1, -1, 1],
                                     [-1, -1, 1], 
                                     [1, -1, -1],
                                     [-1, -1, -1],
@@ -119,9 +122,10 @@ class QuadDynamics:
             self.q_dynamics(), 
             self.v_dynamics(), 
             self.w_dynamics(),
-            self.actuator_dynamics()
+            self.actuator_dynamics(),
+            self.u_dynamics()
         )
-        return cs.Function('x_dot', [self.x, self.u], [x_dot], ['x', 'u'], ['x_dot'])
+        return cs.Function('x_dot', [self.x, self.u_dot], [x_dot], ['x', 'u_dot'], ['x_dot'])
 
     def p_dynamics(self):
         return self.v
@@ -162,6 +166,13 @@ class QuadDynamics:
     def actuator_dynamics(self):
         """
         First-order actuator dynamics: d(actuator)/dt = (1/tau) * (u_desired - actuator_current)
-        where tau is the time constant (0.1s)
+        where tau is the time constant and u_desired is the desired actuator state
         """
-        return (1.0 / self.actuator_time_constant) * (self.u - self.actuators)
+        return (1.0 / self.actuator_time_constant) * (self.u_desired - self.actuators)
+    
+    def u_dynamics(self):
+        """
+        Desired actuator dynamics: d(u_desired)/dt = u_dot
+        where u_dot is the control input (rate of change of desired actuator states)
+        """
+        return self.u_dot

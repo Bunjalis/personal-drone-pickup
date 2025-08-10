@@ -27,32 +27,33 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 20, T_horizon: float
 
     model = AcadosModel()
     model.name = 'quad_dynamics'
-    model.x = quad_dynamics.x  # [p(3), q(4=wxyz), v(3), r(3), actuators(8)] -> 21 states
-    model.u = quad_dynamics.u  # your omnicopter has 8 inputs here
-    model.f_expl_expr = dynamics_expr(quad_dynamics.x, quad_dynamics.u)
+    model.x = quad_dynamics.x  # [p(3), q(4=wxyz), v(3), r(3), actuators(8), u_desired(8)] -> 29 states
+    model.u = quad_dynamics.u_dot  # control input is now u_dot (8 inputs)
+    model.f_expl_expr = dynamics_expr(quad_dynamics.x, quad_dynamics.u_dot)
 
     # Create OCP object
     ocp = AcadosOcp()
     ocp.model = model
 
     # --- Properly set horizon dims/options ---
-    ocp.dims.N = N_horizon
+    ocp.solver_options.N_horizon = N_horizon
     ocp.solver_options.tf = T_horizon
 
     # dims
-    nx = 21  # Updated from 13 to 21 (13 + 8 actuator states)
+    nx = 29  # Updated from 21 to 29 (13 + 8 actual actuators + 8 desired actuators)
     nu = int(model.u.size()[0])  # should be 8 for your setup
     ny = nx  # we will NOT penalize inputs in LINEAR_LS (no R term)
 
     # ---------- Cost (LINEAR_LS on states only) ----------
     # Base per-state weights (tune as you like)
-    # [px,py,pz, qw,qx,qy,qz, vx,vy,vz, rx,ry,rz, actuator0-7]
+    # [px,py,pz, qw,qx,qy,qz, vx,vy,vz, rx,ry,rz, actual_actuators(8), desired_actuators(8)]
     q_cost = np.array([
         2.1, 2.1, 2.1,      # position
         4.1, 4.1, 4.1, 4.1, # quaternion (we'll apply norm-weighting below)
         0.1, 0.1, 0.1,      # velocity
         0.1, 0.1, 0.1,      # body rates
-        0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01  # actuator states (small weight)
+        0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,  # actual actuator states (small weight)
+        0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1   # desired actuator states (medium weight)
     ])
 
     # ---- "Quaternion norm weighting" (reduce axis bias) ----
@@ -64,7 +65,8 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 20, T_horizon: float
         q_cost[:4], 
         np.array([qv_mean, qv_mean, qv_mean]), 
         q_cost[7:13],  # velocity and body rates
-        q_cost[13:]    # actuator states
+        q_cost[13:21], # actual actuator states
+        q_cost[21:]    # desired actuator states
     ])
 
     # Build W and W_e for LINEAR_LS with y = Vx x - yref (no inputs in y)
@@ -85,16 +87,37 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 20, T_horizon: float
     # ---------- Initial state constraint ----------
     x0 = np.zeros(nx)
     x0[3] = 1.0  # unit quaternion, w=1
-    # Initialize actuator states to hover values
+    # Initialize both actual and desired actuator states to hover values
     hover_values = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
-    x0[13:21] = hover_values  # actuator states start at hover
+    x0[13:21] = hover_values  # actual actuator states start at hover
+    x0[21:29] = hover_values  # desired actuator states start at hover
     ocp.constraints.x0 = x0
 
     # ---------- Input constraints ----------
-    max_u = 0.45
-    ocp.constraints.lbu = np.full((nu,), -max_u)
-    ocp.constraints.ubu = np.full((nu,),  max_u)
+    max_rate = 0.1  # Maximum rate of change for actuator values
+    ocp.constraints.lbu = np.full((nu,), -max_rate)
+    ocp.constraints.ubu = np.full((nu,),  max_rate)
     ocp.constraints.idxbu = np.arange(nu, dtype=int)
+
+    # ---------- State constraints (for actuator values) ----------
+    # Constrain both actual and desired actuator states to be within reasonable bounds
+    actuator_min = -0.45
+    actuator_max = 0.45
+    
+    # State bounds for all shooting nodes (not initial)
+    # Use large finite values instead of inf to avoid JSON serialization issues
+    large_val = 1e8
+    lbx = np.full(nx, -large_val)
+    ubx = np.full(nx, large_val)
+    lbx[13:21] = actuator_min  # actual actuator states lower bounds
+    ubx[13:21] = actuator_max  # actual actuator states upper bounds
+    lbx[21:29] = actuator_min  # desired actuator states lower bounds
+    ubx[21:29] = actuator_max  # desired actuator states upper bounds
+    
+    # Apply state constraints to all shooting nodes except the first (which is constrained to current state)
+    ocp.constraints.lbx = lbx
+    ocp.constraints.ubx = ubx
+    ocp.constraints.idxbx = np.arange(nx, dtype=int)
 
     # ---------- Solver options ----------
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
@@ -128,12 +151,12 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 20, T_horizon: float
 
 def calculate_hover_initial_guess():
     """
-    Simple hover initial guess based on known working pattern
+    Initial guess for control inputs (actuator rates) - start with zero rates
     Returns:
-        u_hover: (nu,) Initial guess for control inputs to achieve hover
+        u_hover: (nu,) Initial guess for control inputs (all zero rates)
     """
-    # Your pattern as given (nu=8)
-    return np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+    # Since we're controlling rates now, start with zero rates (no change)
+    return np.zeros(8)
 
 
 def set_initial_guess(ocp_solver, N_horizon=20):
@@ -161,7 +184,7 @@ def set_state_reference_aligned(ocp_solver, x_ref: np.ndarray, N_horizon: int):
     """
     Set the same state reference at all stages, aligning quaternion sign per stage to the
     current solver state (hemisphere-invariant LINEAR_LS).
-    x_ref shape: (21,) with quaternion at indices 3:7 in (w,x,y,z).
+    x_ref shape: (29,) with quaternion at indices 3:7 in (w,x,y,z).
     """
     x_ref = np.array(x_ref, dtype=float).copy()
     x_ref[3:7] = _norm_quat(x_ref[3:7])
@@ -194,7 +217,7 @@ def set_state_reference_aligned(ocp_solver, x_ref: np.ndarray, N_horizon: int):
 def set_trajectory_reference_aligned(ocp_solver, X_ref: np.ndarray):
     """
     Set a *time-varying* state reference, aligning the quaternion sign per stage.
-    X_ref shape: (N_horizon+1, 21). Row j is the reference at stage j. Last row is terminal.
+    X_ref shape: (N_horizon+1, 29). Row j is the reference at stage j. Last row is terminal.
     """
     N_horizon = X_ref.shape[0] - 1
     X_ref = np.array(X_ref, dtype=float).copy()

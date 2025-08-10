@@ -48,7 +48,8 @@ class Controller(Node):
         # self.traj = circle_trajectory(self.dt)
         #self.traj = hover_and_yaw(self.dt)
         #self.traj = hover_and_rotate(self.dt)
-        self.traj = hover_trajectory(self.dt)
+        #self.traj = hover_trajectory(self.dt)
+        self.traj = sine_wave_trajectory(self.dt)
 
         self.steps = self.traj.shape[1] - 1
 
@@ -67,7 +68,8 @@ class Controller(Node):
 
         self.sent_command = False
         self.initial_guess_set = False
-        self.last_actuator_states = None  # Track last actuator states
+        self.last_actual_actuators = None  # Track last actual actuator states
+        self.last_desired_actuators = None  # Track last desired actuator states
 
         # CSV init
         if not hasattr(self, 'csv_initialized'):
@@ -90,18 +92,45 @@ class Controller(Node):
             p.x, p.y, p.z, q[0], q[1], q[2], q[3], lv.x, lv.y, lv.z, av.x, av.y, av.z
         ])
 
-    def expand_state_to_21d(self, state_13d, actuator_values=None):
-        if actuator_values is None:
-            actuator_values = np.array([-0.0, 0.0, -0.0, 0.0, 0.0, -0.0, 0.0, -0.0])
-        return np.concatenate([state_13d, actuator_values])
-
-    def get_current_state_21d(self):
-        if hasattr(self, 'last_actuator_states') and self.last_actuator_states is not None:
-            actuator_values = self.last_actuator_states
-        else:
-            actuator_values = np.array([-0.2, 0.2, -0.2, 0.2, 0.2, -0.2, 0.2, -0.2])
+    def expand_state_to_29d(self, state_13d, actual_actuators=None, desired_actuators=None):
+        """
+        Expand a 13-dimensional state to 29 dimensions by adding actual and desired actuator states.
         
-        return self.expand_state_to_21d(self.current_pose, actuator_values)
+        Args:
+            state_13d: (13,) array with [p, q, v, r]
+            actual_actuators: (8,) array with actual actuator states. If None, uses hover values.
+            desired_actuators: (8,) array with desired actuator states. If None, uses hover values.
+        
+        Returns:
+            state_29d: (29,) array with [p, q, v, r, actual_actuators, desired_actuators]
+        """
+        if actual_actuators is None:
+            # Start with hover actuator values
+            actual_actuators = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+        if desired_actuators is None:
+            # Start with hover actuator values
+            desired_actuators = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+        return np.concatenate([state_13d, actual_actuators, desired_actuators])
+
+    def get_current_state_29d(self):
+        """
+        Get current state expanded to 29 dimensions. 
+        For the actuator states, we'll try to get them from the solver if available,
+        otherwise use the last known values or hover values.
+        """
+        if hasattr(self, 'last_actual_actuators') and self.last_actual_actuators is not None:
+            actual_actuators = self.last_actual_actuators
+        else:
+            # Start with hover actual actuator values
+            actual_actuators = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+            
+        if hasattr(self, 'last_desired_actuators') and self.last_desired_actuators is not None:
+            desired_actuators = self.last_desired_actuators
+        else:
+            # Start with hover desired actuator values
+            desired_actuators = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+        
+        return self.expand_state_to_29d(self.current_pose, actual_actuators, desired_actuators)
 
     def control_loop(self):
 
@@ -122,21 +151,21 @@ class Controller(Node):
                 self.on_close()
 
             # ---------- Build time-varying state references for the horizon ----------
-            # X_ref shape: (N+1, 21). Row j is the state ref at stage j. Row N is terminal.
-            X_ref = np.zeros((self.N + 1, 21), dtype=float)
+            # X_ref shape: (N+1, 29). Row j is the state ref at stage j. Row N is terminal.
+            X_ref = np.zeros((self.N + 1, 29), dtype=float)
             for j in range(self.N):
                 sc = self.step_counter + j * self.skip_steps
                 traj_13d = self.traj[:, sc]  # Get 13D trajectory point
-                # Expand to 21D with hover actuator values as reference
-                X_ref[j, :] = self.expand_state_to_21d(traj_13d)
+                # Expand to 29D with hover actuator values as reference
+                X_ref[j, :] = self.expand_state_to_29d(traj_13d)
             sn = self.step_counter + self.N * self.skip_steps
             traj_13d_terminal = self.traj[:, sn]
-            X_ref[self.N, :] = self.expand_state_to_21d(traj_13d_terminal)
+            X_ref[self.N, :] = self.expand_state_to_29d(traj_13d_terminal)
 
 
             set_trajectory_reference_aligned(self.ocp, X_ref)
 
-            x0 = self.get_current_state_21d()  # Get 21D current state
+            x0 = self.get_current_state_29d()  # Get 29D current state
             x0[3:7] = _norm_quat_np(x0[3:7])  # ensure unit quaternion
             
             # The key fix: Set both lower and upper bounds to the current state
@@ -154,26 +183,33 @@ class Controller(Node):
             if status != 0:
                 raise Exception(f'acados returned status {status} after retry.')
 
-            u = self.ocp.get(0, "u")
+            u_dot_rates = self.ocp.get(0, "u")  # These are now rates of desired actuators (d(u_desired)/dt)
             
-            x_current = self.ocp.get(1, "x")  # Current optimized state
-            self.last_actuator_states = x_current[13:21].copy()  # Extract actuator states
+            # Get the states from the optimized solution
+            x_current = self.ocp.get(1, "x")  # Next optimized state 
+            actual_actuators = x_current[13:21].copy()  # Extract actual actuator states
+            desired_actuators = x_current[21:29].copy()  # Extract desired actuator states
+            
+            # Store for next iteration
+            self.last_actual_actuators = actual_actuators
+            self.last_desired_actuators = desired_actuators
 
-            print(f"Control: {u}")
-            print(f"Actuator states: {self.last_actuator_states}")
+            print(f"Control rates (u_dot): {u_dot_rates}")
+            print(f"Desired actuators: {desired_actuators}")
+            print(f"Actual actuators: {actual_actuators}")
 
-
-
+            # Send the ACTUAL actuator values (not desired) to the motors
+            # The actual actuators will lag behind the desired ones due to first-order dynamics
             msg = ELRSCommand(
                 armed=True,
-                channel_0=round(u[0], 8),
-                channel_1=round(u[1], 8),
-                channel_2=round(u[2], 8),
-                channel_3=round(u[3], 8),
-                channel_4=round(u[4], 8),
-                channel_5=round(u[5], 8),
-                channel_6=round(u[6], 8),
-                channel_7=round(u[7], 8)
+                channel_0=round(actual_actuators[0], 8),
+                channel_1=round(actual_actuators[1], 8),
+                channel_2=round(actual_actuators[2], 8),
+                channel_3=round(actual_actuators[3], 8),
+                channel_4=round(actual_actuators[4], 8),
+                channel_5=round(actual_actuators[5], 8),
+                channel_6=round(actual_actuators[6], 8),
+                channel_7=round(actual_actuators[7], 8)
             )
             self.cmd_publisher_.publish(msg)
             self.step_counter += 1
@@ -191,9 +227,9 @@ class Controller(Node):
             print(f"Current pose: {self.current_pose[10:13]}")
             u = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
-            # Use 21D state for simulation
-            x_21d = self.get_current_state_21d()
-            self.sim_integrator.set("x", x_21d)
+            # Use 29D state for simulation
+            x_29d = self.get_current_state_29d()
+            self.sim_integrator.set("x", x_29d)
             self.sim_integrator.set("u", u)
             self.sim_integrator.solve()
             predicted_state = self.sim_integrator.get("x")
