@@ -357,10 +357,10 @@ def hover_and_yaw(dt):
     y_traj_yaw = np.zeros_like(yaw_time_space)
     z_traj_yaw = np.ones_like(yaw_time_space)  # Maintain altitude
     
-    yaw_traj_yaw = np.zeros_like(yaw_time_space)
+    roll_traj_yaw = np.zeros_like(yaw_time_space)
     pitch_traj_yaw = np.zeros_like(yaw_time_space)
     # Full 360 degree rotation (2π radians) over 8 seconds
-    roll_traj_yaw = 2 * np.pi * (yaw_time_space / yaw_duration)
+    yaw_traj_yaw = 2 * np.pi * (yaw_time_space / yaw_duration)
     
     # Phase 3: Final hover
     final_hover_duration = 3.0  # 3 seconds of final hover

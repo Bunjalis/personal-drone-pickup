@@ -46,8 +46,9 @@ class Controller(Node):
         # self.timer_test_angular = self.create_timer(self.dt, self.angular_velocity_test)
 
         # self.traj = circle_trajectory(self.dt)
-        self.traj = hover_and_yaw(self.dt)
-        # self.traj = hover_and_rotate(self.dt)
+        #self.traj = hover_and_yaw(self.dt)
+        #self.traj = hover_and_rotate(self.dt)
+        self.traj = hover_trajectory(self.dt)
 
         self.steps = self.traj.shape[1] - 1
 
@@ -66,6 +67,7 @@ class Controller(Node):
 
         self.sent_command = False
         self.initial_guess_set = False
+        self.last_actuator_states = None  # Track last actuator states
 
         # CSV init
         if not hasattr(self, 'csv_initialized'):
@@ -88,6 +90,19 @@ class Controller(Node):
             p.x, p.y, p.z, q[0], q[1], q[2], q[3], lv.x, lv.y, lv.z, av.x, av.y, av.z
         ])
 
+    def expand_state_to_21d(self, state_13d, actuator_values=None):
+        if actuator_values is None:
+            actuator_values = np.array([-0.0, 0.0, -0.0, 0.0, 0.0, -0.0, 0.0, -0.0])
+        return np.concatenate([state_13d, actuator_values])
+
+    def get_current_state_21d(self):
+        if hasattr(self, 'last_actuator_states') and self.last_actuator_states is not None:
+            actuator_values = self.last_actuator_states
+        else:
+            actuator_values = np.array([-0.2, 0.2, -0.2, 0.2, 0.2, -0.2, 0.2, -0.2])
+        
+        return self.expand_state_to_21d(self.current_pose, actuator_values)
+
     def control_loop(self):
 
         if self.armed and self.pre_start_counter < self.pre_start_steps:
@@ -107,19 +122,25 @@ class Controller(Node):
                 self.on_close()
 
             # ---------- Build time-varying state references for the horizon ----------
-            # X_ref shape: (N+1, 13). Row j is the state ref at stage j. Row N is terminal.
-            X_ref = np.zeros((self.N + 1, 13), dtype=float)
+            # X_ref shape: (N+1, 21). Row j is the state ref at stage j. Row N is terminal.
+            X_ref = np.zeros((self.N + 1, 21), dtype=float)
             for j in range(self.N):
                 sc = self.step_counter + j * self.skip_steps
-                X_ref[j, :] = self.traj[:, sc]
+                traj_13d = self.traj[:, sc]  # Get 13D trajectory point
+                # Expand to 21D with hover actuator values as reference
+                X_ref[j, :] = self.expand_state_to_21d(traj_13d)
             sn = self.step_counter + self.N * self.skip_steps
-            X_ref[self.N, :] = self.traj[:, sn]
+            traj_13d_terminal = self.traj[:, sn]
+            X_ref[self.N, :] = self.expand_state_to_21d(traj_13d_terminal)
 
 
             set_trajectory_reference_aligned(self.ocp, X_ref)
 
-            x0 = self.current_pose.copy()
+            x0 = self.get_current_state_21d()  # Get 21D current state
             x0[3:7] = _norm_quat_np(x0[3:7])  # ensure unit quaternion
+            
+            # The key fix: Set both lower and upper bounds to the current state
+            # This constrains the first shooting node to the current measured/estimated state
             self.ocp.set(0, "lbx", x0)
             self.ocp.set(0, "ubx", x0)
 
@@ -128,26 +149,31 @@ class Controller(Node):
                 self.initial_guess_set = True
             else:
                 warm_start_from_previous_solution(self.ocp, self.N)
+
             status = self.ocp.solve()
             if status != 0:
                 raise Exception(f'acados returned status {status} after retry.')
 
             u = self.ocp.get(0, "u")
+            
+            x_current = self.ocp.get(1, "x")  # Current optimized state
+            self.last_actuator_states = x_current[13:21].copy()  # Extract actuator states
 
-            print(u)
+            print(f"Control: {u}")
+            print(f"Actuator states: {self.last_actuator_states}")
 
 
 
             msg = ELRSCommand(
                 armed=True,
-                channel_0=round(u[0], 3),
-                channel_1=round(u[1], 3),
-                channel_2=round(u[2], 3),
-                channel_3=round(u[3], 3),
-                channel_4=round(u[4], 3),
-                channel_5=round(u[5], 3),
-                channel_6=round(u[6], 3),
-                channel_7=round(u[7], 3)
+                channel_0=round(u[0], 8),
+                channel_1=round(u[1], 8),
+                channel_2=round(u[2], 8),
+                channel_3=round(u[3], 8),
+                channel_4=round(u[4], 8),
+                channel_5=round(u[5], 8),
+                channel_6=round(u[6], 8),
+                channel_7=round(u[7], 8)
             )
             self.cmd_publisher_.publish(msg)
             self.step_counter += 1
@@ -165,7 +191,9 @@ class Controller(Node):
             print(f"Current pose: {self.current_pose[10:13]}")
             u = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
-            self.sim_integrator.set("x", self.current_pose)
+            # Use 21D state for simulation
+            x_21d = self.get_current_state_21d()
+            self.sim_integrator.set("x", x_21d)
             self.sim_integrator.set("u", u)
             self.sim_integrator.solve()
             predicted_state = self.sim_integrator.get("x")

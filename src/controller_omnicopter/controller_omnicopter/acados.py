@@ -27,7 +27,7 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 20, T_horizon: float
 
     model = AcadosModel()
     model.name = 'quad_dynamics'
-    model.x = quad_dynamics.x  # [p(3), q(4=wxyz), v(3), r(3)] -> 13 states
+    model.x = quad_dynamics.x  # [p(3), q(4=wxyz), v(3), r(3), actuators(8)] -> 21 states
     model.u = quad_dynamics.u  # your omnicopter has 8 inputs here
     model.f_expl_expr = dynamics_expr(quad_dynamics.x, quad_dynamics.u)
 
@@ -40,26 +40,32 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 20, T_horizon: float
     ocp.solver_options.tf = T_horizon
 
     # dims
-    nx = 13
+    nx = 21  # Updated from 13 to 21 (13 + 8 actuator states)
     nu = int(model.u.size()[0])  # should be 8 for your setup
     ny = nx  # we will NOT penalize inputs in LINEAR_LS (no R term)
 
     # ---------- Cost (LINEAR_LS on states only) ----------
     # Base per-state weights (tune as you like)
-    # [px,py,pz, qw,qx,qy,qz, vx,vy,vz, rx,ry,rz]
+    # [px,py,pz, qw,qx,qy,qz, vx,vy,vz, rx,ry,rz, actuator0-7]
     q_cost = np.array([
         2.1, 2.1, 2.1,      # position
-        4.1, 4.1, 4.1, 4.1, # quaternion (we’ll apply norm-weighting below)
+        4.1, 4.1, 4.1, 4.1, # quaternion (we'll apply norm-weighting below)
         0.1, 0.1, 0.1,      # velocity
-        0.1, 0.1, 0.1       # body rates
+        0.1, 0.1, 0.1,      # body rates
+        0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01  # actuator states (small weight)
     ])
 
-    # ---- “Quaternion norm weighting” (reduce axis bias) ----
+    # ---- "Quaternion norm weighting" (reduce axis bias) ----
     # Use a single shared weight for the quaternion *vector* part (x,y,z).
-    # Keep qw’s own weight as is.
+    # Keep qw's own weight as is.
     qw_w = q_cost[3]
     qv_mean = float(np.mean(q_cost[4:7]))
-    q_weights = np.concatenate([q_cost[:4], np.array([qv_mean, qv_mean, qv_mean]), q_cost[7:]])
+    q_weights = np.concatenate([
+        q_cost[:4], 
+        np.array([qv_mean, qv_mean, qv_mean]), 
+        q_cost[7:13],  # velocity and body rates
+        q_cost[13:]    # actuator states
+    ])
 
     # Build W and W_e for LINEAR_LS with y = Vx x - yref (no inputs in y)
     ocp.cost.cost_type = 'LINEAR_LS'
@@ -79,6 +85,9 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 20, T_horizon: float
     # ---------- Initial state constraint ----------
     x0 = np.zeros(nx)
     x0[3] = 1.0  # unit quaternion, w=1
+    # Initialize actuator states to hover values
+    hover_values = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+    x0[13:21] = hover_values  # actuator states start at hover
     ocp.constraints.x0 = x0
 
     # ---------- Input constraints ----------
@@ -152,7 +161,7 @@ def set_state_reference_aligned(ocp_solver, x_ref: np.ndarray, N_horizon: int):
     """
     Set the same state reference at all stages, aligning quaternion sign per stage to the
     current solver state (hemisphere-invariant LINEAR_LS).
-    x_ref shape: (13,) with quaternion at indices 3:7 in (w,x,y,z).
+    x_ref shape: (21,) with quaternion at indices 3:7 in (w,x,y,z).
     """
     x_ref = np.array(x_ref, dtype=float).copy()
     x_ref[3:7] = _norm_quat(x_ref[3:7])
@@ -185,7 +194,7 @@ def set_state_reference_aligned(ocp_solver, x_ref: np.ndarray, N_horizon: int):
 def set_trajectory_reference_aligned(ocp_solver, X_ref: np.ndarray):
     """
     Set a *time-varying* state reference, aligning the quaternion sign per stage.
-    X_ref shape: (N_horizon+1, 13). Row j is the reference at stage j. Last row is terminal.
+    X_ref shape: (N_horizon+1, 21). Row j is the reference at stage j. Last row is terminal.
     """
     N_horizon = X_ref.shape[0] - 1
     X_ref = np.array(X_ref, dtype=float).copy()
