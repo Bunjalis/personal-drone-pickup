@@ -20,7 +20,7 @@ def _norm_quat(q: np.ndarray) -> np.ndarray:
     return q if n == 0.0 else (q / n)
 
 
-def generate_ocp_controller(dynamics=None, N_horizon: int = 20, T_horizon: float = 2.0):
+def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float = 3.0):
     # Define the dynamics model
     quad_dynamics = QuadDynamics() if dynamics is None else dynamics
     dynamics_expr = quad_dynamics.quad_dynamics()
@@ -94,15 +94,15 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 20, T_horizon: float
     ocp.constraints.x0 = x0
 
     # ---------- Input constraints ----------
-    max_rate = 0.1  # Maximum rate of change for actuator values
+    max_rate = 0.15  # Maximum rate of change for actuator values
     ocp.constraints.lbu = np.full((nu,), -max_rate)
     ocp.constraints.ubu = np.full((nu,),  max_rate)
     ocp.constraints.idxbu = np.arange(nu, dtype=int)
 
     # ---------- State constraints (for actuator values) ----------
     # Constrain both actual and desired actuator states to be within reasonable bounds
-    actuator_min = -0.45
-    actuator_max = 0.45
+    actuator_min = -0.8
+    actuator_max = 0.8
     
     # State bounds for all shooting nodes (not initial)
     # Use large finite values instead of inf to avoid JSON serialization issues
@@ -128,14 +128,14 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 20, T_horizon: float
     ocp.solver_options.nlp_solver_max_iter = 3000
     ocp.solver_options.qp_solver_iter_max = 1500
 
-    ocp.solver_options.qp_solver_tol_stat = 1e-5
-    ocp.solver_options.qp_solver_tol_eq = 1e-5
-    ocp.solver_options.qp_solver_tol_ineq = 1e-5
-    ocp.solver_options.qp_solver_tol_comp = 1e-5
-    ocp.solver_options.nlp_solver_tol_stat = 1e-5
-    ocp.solver_options.nlp_solver_tol_eq = 1e-5
-    ocp.solver_options.nlp_solver_tol_ineq = 1e-5
-    ocp.solver_options.nlp_solver_tol_comp = 1e-5
+    ocp.solver_options.qp_solver_tol_stat = 5e-5
+    ocp.solver_options.qp_solver_tol_eq = 5e-5
+    ocp.solver_options.qp_solver_tol_ineq = 5e-5
+    ocp.solver_options.qp_solver_tol_comp = 5e-5
+    ocp.solver_options.nlp_solver_tol_stat = 5e-5
+    ocp.solver_options.nlp_solver_tol_eq = 5e-5
+    ocp.solver_options.nlp_solver_tol_ineq = 5e-5
+    ocp.solver_options.nlp_solver_tol_comp = 5e-5
 
     # Create OCP solver
     ocp_solver = AcadosOcpSolver(ocp)

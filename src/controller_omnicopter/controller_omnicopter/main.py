@@ -18,7 +18,7 @@ from .acados import (
     set_trajectory_reference_aligned,   # <-- NEW
 )
 from .gui import GUI
-from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory, hover_and_rotate, sine_wave_trajectory, hover_and_yaw
+from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory, hover_and_rotate, sine_wave_trajectory, hover_and_yaw, four_roll_rotations_trajectory
 from interfaces.msg import MotionCaptureState, ELRSCommand
 from geometry_msgs.msg import Pose, PoseArray
 
@@ -45,11 +45,12 @@ class Controller(Node):
 
         # self.timer_test_angular = self.create_timer(self.dt, self.angular_velocity_test)
 
-        # self.traj = circle_trajectory(self.dt)
+        self.traj = circle_trajectory(self.dt)
         #self.traj = hover_and_yaw(self.dt)
         #self.traj = hover_and_rotate(self.dt)
         #self.traj = hover_trajectory(self.dt)
-        self.traj = sine_wave_trajectory(self.dt)
+        #self.traj = sine_wave_trajectory(self.dt)
+        #self.traj = four_roll_rotations_trajectory(self.dt)
 
         self.steps = self.traj.shape[1] - 1
 
@@ -60,7 +61,7 @@ class Controller(Node):
         self.pre_start_counter = 0
         self.pre_start_steps = int(self.pre_start_duration / self.dt)
 
-        self.N = 20
+        self.N = 30
         self.skip_steps = 3
         self.predicted_next_state = None
         self.last_pose = None

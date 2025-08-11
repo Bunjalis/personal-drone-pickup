@@ -146,7 +146,7 @@ def hover_and_rotate(dt):
             yaw_traj_hover = np.zeros_like(time_space_hover)
 
             # Phase 2: Tilt to diamond orientation (45 degrees around X and Y axes)
-            steps_tilt = 5 * 30  # 5 seconds to tilt
+            steps_tilt = 10 * 30  # 5 seconds to tilt
             time_space_tilt = np.linspace(0, steps_tilt * dt, steps_tilt)
             x_traj_tilt = np.zeros_like(time_space_tilt)
             y_traj_tilt = np.zeros_like(time_space_tilt)
@@ -168,7 +168,7 @@ def hover_and_rotate(dt):
             # Maintain diamond orientation while spinning around Z-axis
             roll_traj_spin = np.full_like(time_space_spin, target_tilt)  # Keep 45° roll
             pitch_traj_spin = np.full_like(time_space_spin, target_tilt)  # Keep 45° pitch
-            spin_rate = 3.0  # rad/s around Z-axis
+            spin_rate = 1.0  # rad/s around Z-axis
             yaw_traj_spin = spin_rate * time_space_spin  # Continuous rotation around Z
 
             # Phase 4: Return to level orientation
@@ -355,10 +355,10 @@ def hover_and_yaw(dt):
     y_traj_yaw = np.zeros_like(yaw_time_space)
     z_traj_yaw = np.ones_like(yaw_time_space)  # Maintain altitude
     
-    roll_traj_yaw = np.zeros_like(yaw_time_space)
+    yaw_traj_yaw = np.zeros_like(yaw_time_space)
     pitch_traj_yaw = np.zeros_like(yaw_time_space)
     # Full 360 degree rotation (2π radians) over 8 seconds
-    yaw_traj_yaw = 2 * np.pi * (yaw_time_space / yaw_duration)
+    roll_traj_yaw = 2 * np.pi * (yaw_time_space / yaw_duration)
     
     # Phase 3: Final hover
     final_hover_duration = 3.0  # 3 seconds of final hover
@@ -465,3 +465,105 @@ def sine_wave_trajectory(dt):
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
     
     return np.concatenate((take_off_traj, move_to_start, sine_wave_traj, land_traj, zeros), axis=1)
+
+
+def four_roll_rotations_trajectory(dt):
+    """
+    Trajectory that hovers, then performs 4 separate 90-degree roll rotations 
+    with 3-second hover periods in between each rotation.
+    """
+    take_off_traj = takeoff_trajectory(dt)
+    
+    # Parameters
+    hover_duration = 3.0  # 3 seconds hover between rotations
+    roll_duration = 3.0   # 2 seconds per 90-degree roll rotation
+    height = 1.5          # Fixed altitude throughout
+    
+    hover_steps = int(hover_duration / dt)
+    roll_steps = int(roll_duration / dt)
+    
+    # Initialize lists to store trajectory segments
+    x_segments = []
+    y_segments = []
+    z_segments = []
+    roll_segments = []
+    pitch_segments = []
+    yaw_segments = []
+    
+    # Initial hover
+    hover_time = np.linspace(0, hover_duration, hover_steps)
+    x_segments.append(np.zeros_like(hover_time))
+    y_segments.append(np.zeros_like(hover_time))
+    z_segments.append(np.full_like(hover_time, height))
+    roll_segments.append(np.zeros_like(hover_time))
+    pitch_segments.append(np.zeros_like(hover_time))
+    yaw_segments.append(np.zeros_like(hover_time))
+    
+    # Perform 4 roll rotations with hovers in between
+    current_roll = 0.0
+    for i in range(4):
+        # Roll rotation (90 degrees = π/2 radians)
+        roll_time = np.linspace(0, roll_duration, roll_steps)
+        target_roll = current_roll + np.pi/2
+        
+        x_segments.append(np.zeros_like(roll_time))
+        y_segments.append(np.zeros_like(roll_time))
+        z_segments.append(np.full_like(roll_time, height))
+        roll_segments.append(np.linspace(current_roll, target_roll, roll_steps))
+        pitch_segments.append(np.zeros_like(roll_time))
+        yaw_segments.append(np.zeros_like(roll_time))
+        
+        current_roll = target_roll
+        
+        # Hover after rotation (except after the last rotation)
+        if i < 3:  # Only add hover between rotations, not after the last one
+            hover_time = np.linspace(0, hover_duration, hover_steps)
+            x_segments.append(np.zeros_like(hover_time))
+            y_segments.append(np.zeros_like(hover_time))
+            z_segments.append(np.full_like(hover_time, height))
+            roll_segments.append(np.full_like(hover_time, current_roll))
+            pitch_segments.append(np.zeros_like(hover_time))
+            yaw_segments.append(np.zeros_like(hover_time))
+    
+    # Final hover to stabilize
+    final_hover_time = np.linspace(0, hover_duration, hover_steps)
+    x_segments.append(np.zeros_like(final_hover_time))
+    y_segments.append(np.zeros_like(final_hover_time))
+    z_segments.append(np.full_like(final_hover_time, height))
+    roll_segments.append(np.full_like(final_hover_time, current_roll))
+    pitch_segments.append(np.zeros_like(final_hover_time))
+    yaw_segments.append(np.zeros_like(final_hover_time))
+    
+    # Concatenate all segments
+    x_traj = np.concatenate(x_segments)
+    y_traj = np.concatenate(y_segments)
+    z_traj = np.concatenate(z_segments)
+    roll_traj = np.concatenate(roll_segments)
+    pitch_traj = np.concatenate(pitch_segments)
+    yaw_traj = np.concatenate(yaw_segments)
+    
+    # Convert Euler angles to quaternions
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()
+    qx_traj = quaternions[:, 0]
+    qy_traj = quaternions[:, 1]
+    qz_traj = quaternions[:, 2]
+    qw_traj = quaternions[:, 3]
+    
+    # Calculate velocities
+    vx_traj = np.gradient(x_traj, dt)
+    vy_traj = np.gradient(y_traj, dt)
+    vz_traj = np.gradient(z_traj, dt)
+    
+    # Angular velocities (desired rates) - set to zero for now
+    ax_traj = np.zeros_like(x_traj)
+    ay_traj = np.zeros_like(y_traj)
+    az_traj = np.zeros_like(z_traj)
+    
+    four_roll_traj = np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                               vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+    
+    land_traj = land_trajectory(dt, four_roll_traj[:, -1])
+    zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
+    
+    return np.concatenate((take_off_traj, four_roll_traj, land_traj, zeros), axis=1)
