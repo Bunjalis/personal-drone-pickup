@@ -78,14 +78,40 @@ class Controller(Node):
             self.csv_initialized = True
             self.csv_file = open('control_results.csv', mode='w', newline='')
             self.csv_writer = csv.writer(self.csv_file)
+            
+            # Create descriptive headers for x0 (29D current state)
+            x0_headers = [
+                'x0_px', 'x0_py', 'x0_pz',  # position (0-2)
+                'x0_qw', 'x0_qx', 'x0_qy', 'x0_qz',  # quaternion (3-6)
+                'x0_vx', 'x0_vy', 'x0_vz',  # linear velocity (7-9)
+                'x0_wx', 'x0_wy', 'x0_wz',  # angular velocity (10-12)
+                'x0_u0_act', 'x0_u1_act', 'x0_u2_act', 'x0_u3_act',  # actual actuators (13-16)
+                'x0_u4_act', 'x0_u5_act', 'x0_u6_act', 'x0_u7_act',  # actual actuators (17-20)
+                'x0_u0_des', 'x0_u1_des', 'x0_u2_des', 'x0_u3_des',  # desired actuators (21-24)
+                'x0_u4_des', 'x0_u5_des', 'x0_u6_des', 'x0_u7_des'   # desired actuators (25-28)
+            ]
+            
+            # Create descriptive headers for x_next (29D next state)  
+            x_next_headers = [
+                'x_next_px', 'x_next_py', 'x_next_pz',  # position (0-2)
+                'x_next_qw', 'x_next_qx', 'x_next_qy', 'x_next_qz',  # quaternion (3-6)
+                'x_next_vx', 'x_next_vy', 'x_next_vz',  # linear velocity (7-9)
+                'x_next_wx', 'x_next_wy', 'x_next_wz',  # angular velocity (10-12)
+                'x_next_u0_act', 'x_next_u1_act', 'x_next_u2_act', 'x_next_u3_act',  # actual actuators (13-16)
+                'x_next_u4_act', 'x_next_u5_act', 'x_next_u6_act', 'x_next_u7_act',  # actual actuators (17-20)
+                'x_next_u0_des', 'x_next_u1_des', 'x_next_u2_des', 'x_next_u3_des',  # desired actuators (21-24)
+                'x_next_u4_des', 'x_next_u5_des', 'x_next_u6_des', 'x_next_u7_des'   # desired actuators (25-28)
+            ]
+            
+            # Create headers for u_dot_rates (control rates)
+            u_dot_headers = [
+                'u_dot_0', 'u_dot_1', 'u_dot_2', 'u_dot_3',
+                'u_dot_4', 'u_dot_5', 'u_dot_6', 'u_dot_7'
+            ]
+            
             self.csv_writer.writerow([
-                'Step',
-                'px', 'py', 'pz', 'rw', 'rx', 'ry', 'rz',
-                'vx', 'vy', 'vz', 'wx', 'wy', 'wz',
-                'u0_act', 'u1_act', 'u2_act', 'u3_act', 'u4_act', 'u5_act', 'u6_act', 'u7_act', 
-                'u0_des', 'u1_des', 'u2_des', 'u3_des', 'u4_des', 'u5_des', 'u6_des', 'u7_des', 
-                'u0_dot', 'u1_dot', 'u2_dot', 'u3_dot', 'u4_dot', 'u5_dot', 'u6_dot', 'u7_dot', 
-            ])
+                'Step'
+            ] + x0_headers + u_dot_headers + x_next_headers)
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
@@ -189,9 +215,9 @@ class Controller(Node):
             u_dot_rates = self.ocp.get(0, "u")  # These are now rates of desired actuators (d(u_desired)/dt)
             
             # Get the states from the optimized solution
-            x_current = self.ocp.get(1, "x")  # Next optimized state 
-            actual_actuators = x_current[13:21].copy()  # Extract actual actuator states
-            desired_actuators = x_current[21:29].copy()  # Extract desired actuator states
+            x_next = self.ocp.get(1, "x")  # Next optimized state 
+            actual_actuators = x_next[13:21].copy()  # Extract actual actuator states
+            desired_actuators = x_next[21:29].copy()  # Extract desired actuator states
             
             # Store for next iteration
             self.last_actual_actuators = actual_actuators
@@ -217,18 +243,9 @@ class Controller(Node):
             self.cmd_publisher_.publish(msg)
             self.step_counter += 1
 
-
-            self.csv_writer.writerow([
-                self.step_counter,
-                x_current[0], x_current[1], x_current[2], x_current[3], x_current[4], x_current[5], x_current[6],
-                x_current[7], x_current[8], x_current[9], x_current[10], x_current[11], x_current[12],
-                actual_actuators[0], actual_actuators[1], actual_actuators[2], actual_actuators[3],
-                actual_actuators[4], actual_actuators[5], actual_actuators[6], actual_actuators[7],
-                desired_actuators[0], desired_actuators[1], desired_actuators[2], desired_actuators[3],
-                desired_actuators[4], desired_actuators[5], desired_actuators[6], desired_actuators[7],
-                u_dot_rates[0], u_dot_rates[1], u_dot_rates[2], u_dot_rates[3],
-                u_dot_rates[4], u_dot_rates[5], u_dot_rates[6], u_dot_rates[7]
-            ])
+            # Save data: step_counter, x0 (29D), u_dot_rates (8D), x_next (29D) as separate columns
+            row_data = [self.step_counter] + list(x0) + list(u_dot_rates) + list(x_next)
+            self.csv_writer.writerow(row_data)
 
 
 
