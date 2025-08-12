@@ -38,14 +38,14 @@ class QuadDynamics:
         self.u_dot = cs.vertcat(u_dot0, u_dot1, u_dot2, u_dot3, u_dot4, u_dot5, u_dot6, u_dot7)
         
         # Actuator time constant for first-order dynamics
-        self.actuator_time_constant = 0.083
+        self.actuator_time_constant = 0.01
 
-        self.mass = 1.25
+        self.mass = 1.15
 
         self.J = np.array([0.015, 0.015, 0.015])
         self.max_rpm = 4631.0
-        self.thrust_constant = 0.8e-06
-        self.moment_constant = 0.2
+        self.thrust_constant = 1.42e-06
+        self.moment_constant = 0.1
 
         self.motor_moment_directions = np.array([-1, 1, 1, -1, -1, 1, 1, -1])  # Direction of each motor's moment
 
@@ -166,7 +166,7 @@ class QuadDynamics:
 
 
         # Total torque = thrust-induced torques + motor reaction torques
-        total_torque = thrust_torque + motor_moments
+        total_torque = thrust_torque #+ motor_moments
 
         # Compute angular acceleration in the world frame
         J_inv = cs.diag(1 / self.J)  # Inverse of inertia matrix

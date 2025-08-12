@@ -49,7 +49,7 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     # [px,py,pz, qw,qx,qy,qz, vx,vy,vz, rx,ry,rz, actual_actuators(8), desired_actuators(8)]
     q_cost = np.array([
         2.1, 2.1, 2.1,      # position
-        1.1, 1.1, 1.1, 1.1, # quaternion (we'll apply norm-weighting below)
+        8.1, 8.1, 8.1, 8.1, # quaternion (we'll apply norm-weighting below)
         0.1, 0.1, 0.1,      # velocity
         0.1, 0.1, 0.1,      # body rates
         0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,  # actual actuator states (small weight)
@@ -94,15 +94,15 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     ocp.constraints.x0 = x0
 
     # ---------- Input constraints ----------
-    max_rate = 0.15  # Maximum rate of change for actuator values
+    max_rate = 1.2  # Maximum rate of change for actuator values
     ocp.constraints.lbu = np.full((nu,), -max_rate)
     ocp.constraints.ubu = np.full((nu,),  max_rate)
     ocp.constraints.idxbu = np.arange(nu, dtype=int)
 
     # ---------- State constraints (for actuator values) ----------
     # Constrain both actual and desired actuator states to be within reasonable bounds
-    actuator_min = -0.45
-    actuator_max = 0.45
+    actuator_min = -0.7
+    actuator_max = 0.7
     
     # State bounds for all shooting nodes (not initial)
     # Use large finite values instead of inf to avoid JSON serialization issues

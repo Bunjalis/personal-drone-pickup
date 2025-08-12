@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.linalg
 from acados_template import AcadosOcp, AcadosOcpSolver, AcadosModel
-from .dynamics import QuadDynamics
+from dynamics import QuadDynamics
 import casadi as ca
 from acados_template import AcadosSim, AcadosSimSolver
 

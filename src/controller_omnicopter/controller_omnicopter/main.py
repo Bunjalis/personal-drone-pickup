@@ -173,8 +173,8 @@ class Controller(Node):
             
             # The key fix: Set both lower and upper bounds to the current state
             # This constrains the first shooting node to the current measured/estimated state
-            self.ocp.set(0, "lbx", x0)
-            self.ocp.set(0, "ubx", x0)
+            self.ocp.set(0, "lbx", x0 - 0.05*x0)
+            self.ocp.set(0, "ubx", x0 + 0.05*x0)
 
             if not self.initial_guess_set:
                 set_initial_guess(self.ocp, self.N)
@@ -205,14 +205,14 @@ class Controller(Node):
             # The actual actuators will lag behind the desired ones due to first-order dynamics
             msg = ELRSCommand(
                 armed=True,
-                channel_0=round(desired_actuators[0], 8),
-                channel_1=round(desired_actuators[1], 8),
-                channel_2=round(desired_actuators[2], 8),
-                channel_3=round(desired_actuators[3], 8),
-                channel_4=round(desired_actuators[4], 8),
-                channel_5=round(desired_actuators[5], 8),
-                channel_6=round(desired_actuators[6], 8),
-                channel_7=round(desired_actuators[7], 8)
+                channel_0=round(actual_actuators[0], 3),
+                channel_1=round(actual_actuators[1], 3),
+                channel_2=round(actual_actuators[2], 3),
+                channel_3=round(actual_actuators[3], 3),
+                channel_4=round(actual_actuators[4], 3),
+                channel_5=round(actual_actuators[5], 3),
+                channel_6=round(actual_actuators[6], 3),
+                channel_7=round(actual_actuators[7], 3)
             )
             self.cmd_publisher_.publish(msg)
             self.step_counter += 1

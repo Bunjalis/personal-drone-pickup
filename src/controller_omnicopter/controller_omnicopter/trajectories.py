@@ -237,10 +237,10 @@ def circle_trajectory(dt):
     take_off_traj = takeoff_trajectory(dt)
     move_to_start = move_to_start_of_main_trajectory(dt, take_off_traj[:, -1], np.array([1.5, 0.0, 1.5]))
 
-    radius = 1.5
-    height = 1.5
-    angular_velocity_start = 1.0  # m/s
-    angular_velocity_end = 3.0  # rad/s
+    radius = 1.0
+    height = 1.0
+    angular_velocity_start = 0.2  # m/s
+    angular_velocity_end = 1.0  # rad/s
     duration = 15  
     steps = int(duration / dt)
 
