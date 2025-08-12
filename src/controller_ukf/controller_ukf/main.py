@@ -40,9 +40,9 @@ class Controller(Node):
         self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
 
         self.traj = hover_trajectory(self.dt)  
-        self.traj = z_sin_trajectory(self.dt)  
-        self.traj = xyz_sine_trajectory(self.dt)  
-        self.traj = circle_trajectory(self.dt)   
+        #self.traj = z_sin_trajectory(self.dt)  
+        #self.traj = xyz_sine_trajectory(self.dt)  
+        #self.traj = circle_trajectory(self.dt)   
         #self.traj = light_circle_trajectory(self.dt)
         #self.traj = backflip_trajectory(self.dt)  # Use the backflip trajectory
 

@@ -5,7 +5,7 @@ import numpy as np
 from scipy.optimize import minimize
 
 # Load the CSV file
-data = pd.read_csv('2306_thrust_stand_data.csv', header=None, names=['Throttle', 'Thrust'])
+data = pd.read_csv('thrust_data_step_18.csv', header=None, names=['Throttle', 'Thrust'])
 
 # Extract throttle input and measured thrust
 throttle = data['Throttle'].values
@@ -82,7 +82,7 @@ def simulate_casadi_ode_with_thrust(params, throttle, dt, a, b,c):
     for u_val in throttle:
         res = integrator(x0=omega_val, p=u_val)
         omega_val = res['xf'].full().flatten()[0]
-        thrust_val = a * (omega_val * c)**2 + b * (omega_val * c)
+        thrust_val = a * (omega_val * c)**2 #+ #b * (omega_val * c)
         thrust_history.append(thrust_val)
 
     return np.array(thrust_history)
@@ -93,7 +93,7 @@ def cost_function_tau_K(params):
     return np.sum((simulated_thrust - measured_thrust) ** 2)
 
 # Initial guesses for tau and K
-initial_guess_tau_K = [0.1, 1.0]
+initial_guess_tau_K = [0.083, 1.0]
 
 # Perform optimization to fit tau and K
 result_tau_K = minimize(cost_function_tau_K, initial_guess_tau_K, bounds=[(0.001, 10), (-10, 10)])
@@ -103,7 +103,7 @@ tau_opt, K_opt = result_tau_K.x
 simulated_thrust = simulate_casadi_ode_with_thrust([tau_opt, K_opt], throttle, dt, a_opt, b_opt,c_opt)
 
 # Scale the throttle for comparison
-scaled_throttle = a_opt * (throttle * c_opt)**2 + b_opt * (throttle * c_opt)
+scaled_throttle = a_opt * (throttle * c_opt)**2 #+ b_opt * (throttle * c_opt)
 
 # Plot the results
 plt.figure(figsize=(10, 6))

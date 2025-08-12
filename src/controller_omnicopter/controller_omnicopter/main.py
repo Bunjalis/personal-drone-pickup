@@ -45,10 +45,10 @@ class Controller(Node):
 
         # self.timer_test_angular = self.create_timer(self.dt, self.angular_velocity_test)
 
-        self.traj = circle_trajectory(self.dt)
+        #self.traj = circle_trajectory(self.dt)
         #self.traj = hover_and_yaw(self.dt)
         #self.traj = hover_and_rotate(self.dt)
-        #self.traj = hover_trajectory(self.dt)
+        self.traj = hover_trajectory(self.dt)
         #self.traj = sine_wave_trajectory(self.dt)
         #self.traj = four_roll_rotations_trajectory(self.dt)
 
@@ -71,6 +71,7 @@ class Controller(Node):
         self.initial_guess_set = False
         self.last_actual_actuators = None  # Track last actual actuator states
         self.last_desired_actuators = None  # Track last desired actuator states
+        self.sd = 0.25
 
         # CSV init
         if not hasattr(self, 'csv_initialized'):
@@ -78,11 +79,12 @@ class Controller(Node):
             self.csv_file = open('control_results.csv', mode='w', newline='')
             self.csv_writer = csv.writer(self.csv_file)
             self.csv_writer.writerow([
-                'Step', 'u0', 'u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7',   # <- fixed header label
+                'Step',
                 'px', 'py', 'pz', 'rw', 'rx', 'ry', 'rz',
                 'vx', 'vy', 'vz', 'wx', 'wy', 'wz',
-                'sp_px', 'sp_py', 'sp_pz', 'sp_rw', 'sp_rx', 'sp_ry', 'sp_rz',
-                'sp_vx', 'sp_vy', 'sp_vz', 'sp_wx', 'sp_wy', 'sp_wz',
+                'u0_act', 'u1_act', 'u2_act', 'u3_act', 'u4_act', 'u5_act', 'u6_act', 'u7_act', 
+                'u0_des', 'u1_des', 'u2_des', 'u3_des', 'u4_des', 'u5_des', 'u6_des', 'u7_des', 
+                'u0_dot', 'u1_dot', 'u2_dot', 'u3_dot', 'u4_dot', 'u5_dot', 'u6_dot', 'u7_dot', 
             ])
 
     def pose_callback(self, msg: MotionCaptureState):
@@ -107,10 +109,10 @@ class Controller(Node):
         """
         if actual_actuators is None:
             # Start with hover actuator values
-            actual_actuators = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+            actual_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
         if desired_actuators is None:
             # Start with hover actuator values
-            desired_actuators = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+            desired_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
         return np.concatenate([state_13d, actual_actuators, desired_actuators])
 
     def get_current_state_29d(self):
@@ -123,13 +125,13 @@ class Controller(Node):
             actual_actuators = self.last_actual_actuators
         else:
             # Start with hover actual actuator values
-            actual_actuators = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+            actual_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
             
         if hasattr(self, 'last_desired_actuators') and self.last_desired_actuators is not None:
             desired_actuators = self.last_desired_actuators
         else:
             # Start with hover desired actuator values
-            desired_actuators = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+            desired_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
         
         return self.expand_state_to_29d(self.current_pose, actual_actuators, desired_actuators)
 
@@ -137,8 +139,8 @@ class Controller(Node):
 
         if self.armed and self.pre_start_counter < self.pre_start_steps:
             print(f"Pre-start phase: {self.pre_start_counter + 1}/{self.pre_start_steps}")
-            sd = 0.2
-            msg = ELRSCommand(armed=True, channel_0=-sd, channel_1=sd, channel_2=-sd, channel_3=sd, channel_4=sd, channel_5=-sd, channel_6=sd, channel_7=-sd)
+
+            msg = ELRSCommand(armed=True, channel_0=-self.sd, channel_1=self.sd, channel_2=-self.sd, channel_3=self.sd, channel_4=self.sd, channel_5=-self.sd, channel_6=self.sd, channel_7=-self.sd)
             self.cmd_publisher_.publish(msg)
             self.pre_start_counter += 1
 
@@ -203,23 +205,50 @@ class Controller(Node):
             # The actual actuators will lag behind the desired ones due to first-order dynamics
             msg = ELRSCommand(
                 armed=True,
-                channel_0=round(actual_actuators[0], 8),
-                channel_1=round(actual_actuators[1], 8),
-                channel_2=round(actual_actuators[2], 8),
-                channel_3=round(actual_actuators[3], 8),
-                channel_4=round(actual_actuators[4], 8),
-                channel_5=round(actual_actuators[5], 8),
-                channel_6=round(actual_actuators[6], 8),
-                channel_7=round(actual_actuators[7], 8)
+                channel_0=round(desired_actuators[0], 8),
+                channel_1=round(desired_actuators[1], 8),
+                channel_2=round(desired_actuators[2], 8),
+                channel_3=round(desired_actuators[3], 8),
+                channel_4=round(desired_actuators[4], 8),
+                channel_5=round(desired_actuators[5], 8),
+                channel_6=round(desired_actuators[6], 8),
+                channel_7=round(desired_actuators[7], 8)
             )
             self.cmd_publisher_.publish(msg)
             self.step_counter += 1
+
+
+            self.csv_writer.writerow([
+                self.step_counter,
+                x_current[0], x_current[1], x_current[2], x_current[3], x_current[4], x_current[5], x_current[6],
+                x_current[7], x_current[8], x_current[9], x_current[10], x_current[11], x_current[12],
+                actual_actuators[0], actual_actuators[1], actual_actuators[2], actual_actuators[3],
+                actual_actuators[4], actual_actuators[5], actual_actuators[6], actual_actuators[7],
+                desired_actuators[0], desired_actuators[1], desired_actuators[2], desired_actuators[3],
+                desired_actuators[4], desired_actuators[5], desired_actuators[6], desired_actuators[7],
+                u_dot_rates[0], u_dot_rates[1], u_dot_rates[2], u_dot_rates[3],
+                u_dot_rates[4], u_dot_rates[5], u_dot_rates[6], u_dot_rates[7]
+            ])
+
+
+
+
 
         else:
             print("Controller is not armed or current pose is not available.")
             msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=0.0, channel_3=0.0, channel_4=0.0, channel_5=0.0, channel_6=0.0, channel_7=0.0)
             self.cmd_publisher_.publish(msg)
             self.step_counter = 0
+
+
+
+
+
+
+
+
+
+
 
     def angular_velocity_test(self):
 
