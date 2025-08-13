@@ -49,7 +49,7 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     # [px,py,pz, qw,qx,qy,qz, vx,vy,vz, rx,ry,rz, actual_actuators(8), desired_actuators(8)]
     q_cost = np.array([
         2.1, 2.1, 2.1,      # position
-        8.1, 8.1, 8.1, 8.1, # quaternion (we'll apply norm-weighting below)
+        6.1, 6.1, 6.1, 6.1, # quaternion (we'll apply norm-weighting below)
         0.1, 0.1, 0.1,      # velocity
         0.1, 0.1, 0.1,      # body rates
         0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,  # actual actuator states (small weight)
