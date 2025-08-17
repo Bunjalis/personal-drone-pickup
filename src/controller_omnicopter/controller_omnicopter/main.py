@@ -71,7 +71,7 @@ class Controller(Node):
         self.initial_guess_set = False
         self.last_actual_actuators = None  # Track last actual actuator states
         self.last_desired_actuators = None  # Track last desired actuator states
-        self.sd = 0.25
+        self.sd = 0.20
 
         # CSV init
         if not hasattr(self, 'csv_initialized'):

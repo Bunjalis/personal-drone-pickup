@@ -36,21 +36,30 @@ class QuadDynamics:
         u_dot7 = cs.MX.sym('u_dot7')  # rate for desired actuator 7
         
         self.u_dot = cs.vertcat(u_dot0, u_dot1, u_dot2, u_dot3, u_dot4, u_dot5, u_dot6, u_dot7)
+
+
+
+        self.thrust_constant = cs.MX.sym('kT',1)
+        self.actuator_time_constant = cs.MX.sym('tau',1)
+        self.motor_position = cs.MX.sym('motor_pos',1)
+
+        self.J = cs.MX.sym('J', 3)  # Inertia matrix (diagonal for simplicity)
+
+        self.p_param = cs.vertcat(self.thrust_constant, self.actuator_time_constant,self.J)
         
         # Actuator time constant for first-order dynamics
-        self.actuator_time_constant = 0.01
+        #self.actuator_time_constant = 0.01
 
-        self.mass = 1.15
-
-        self.J = np.array([0.015, 0.015, 0.015])
+        self.mass = 1.1
+        #self.J = np.array([0.015, 0.015, 0.015])
         self.max_rpm = 4631.0
-        self.thrust_constant = 1.42e-06
-        self.moment_constant = 0.1
+        #self.thrust_constant = 1.42e-06
+        #self.moment_constant = 0.1
 
         self.motor_moment_directions = np.array([-1, 1, 1, -1, -1, 1, 1, -1])  # Direction of each motor's moment
 
 
-        self.mot_pos_vec = 0.12 * np.array([[1, -1, 1],
+        self.mot_pos_vec = 0.12* np.array([[1, -1, 1],
                                     [-1, -1, 1], 
                                     [1, -1, -1],
                                     [-1, -1, -1],
@@ -117,7 +126,7 @@ class QuadDynamics:
             self.actuator_dynamics(),
             self.u_dynamics()
         )
-        return cs.Function('x_dot', [self.x, self.u_dot], [x_dot], ['x', 'u_dot'], ['x_dot'])
+        return cs.Function('x_dot', [self.x, self.u_dot, self.p_param], [x_dot], ['x', 'u_dot', 'p'], ['x_dot'])
 
     def p_dynamics(self):
         return self.v
@@ -147,22 +156,11 @@ class QuadDynamics:
         for i in range(8):
             thrust_torque += thrusts[i] * cs.cross(self.mot_pos_vec[i], self.mot_rot_vec[i])
 
-        # Compute motor reaction torques (drag/moment torques from spinning motors)
-        # Following Gazebo's implementation: dragTorque = (0, 0, -turningDirection * thrust * momentConstant)
-        # The drag torque acts in the local Z-axis of each motor, then gets transformed to body frame
-
-        motor_moments = cs.MX.zeros(3)
-        for i in range(8):
-            # Calculate thrust for this motor
-            thrust_i = cs.sign(self.actuators[i]) * self.thrust_constant * cs.power(self.max_rpm * cs.fabs(self.actuators[i]), 2)
-            
-            # Gazebo's drag torque in motor local frame: (0, 0, -turningDirection * thrust * momentConstant)
-            # The local Z-axis is along the thrust direction (mot_rot_vec[i])
-            drag_torque_magnitude = self.motor_moment_directions[i] * thrust_i * self.moment_constant
-            
-            # Apply the drag torque along the motor's thrust vector (rotation axis)
-            # This represents the reaction torque from propeller drag opposing rotation
-            motor_moments += drag_torque_magnitude * self.mot_rot_vec[i]
+        #motor_moments = cs.MX.zeros(3)
+        #for i in range(8):
+        #    thrust_i = cs.sign(self.actuators[i]) * self.thrust_constant * cs.power(self.max_rpm * cs.fabs(self.actuators[i]), 2)
+        #    drag_torque_magnitude = self.motor_moment_directions[i] * thrust_i * self.moment_constant
+        #    motor_moments += drag_torque_magnitude * self.mot_rot_vec[i]
 
 
         # Total torque = thrust-induced torques + motor reaction torques

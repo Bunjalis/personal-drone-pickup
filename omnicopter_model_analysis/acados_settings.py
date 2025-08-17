@@ -29,7 +29,9 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     model.name = 'quad_dynamics'
     model.x = quad_dynamics.x  # [p(3), q(4=wxyz), v(3), r(3), actuators(8), u_desired(8)] -> 29 states
     model.u = quad_dynamics.u_dot  # control input is now u_dot (8 inputs)
-    model.f_expl_expr = dynamics_expr(quad_dynamics.x, quad_dynamics.u_dot)
+    model.p = quad_dynamics.p_param  # [ kT] parameters
+
+    model.f_expl_expr = dynamics_expr(quad_dynamics.x, quad_dynamics.u_dot, quad_dynamics.p_param)
 
     # Create OCP object
     ocp = AcadosOcp()
@@ -49,7 +51,7 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     # [px,py,pz, qw,qx,qy,qz, vx,vy,vz, rx,ry,rz, actual_actuators(8), desired_actuators(8)]
     q_cost = np.array([
         2.1, 2.1, 2.1,      # position
-        1.1, 1.1, 1.1, 1.1, # quaternion (we'll apply norm-weighting below)
+        6.1, 6.1, 6.1, 6.1, # quaternion (we'll apply norm-weighting below)
         0.1, 0.1, 0.1,      # velocity
         0.1, 0.1, 0.1,      # body rates
         0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,  # actual actuator states (small weight)
