@@ -46,13 +46,13 @@ def generate_ocp_controller(dynamics=None):
 
     # Cost matrices (tune as needed)
     Q_mat = 2 * np.diag([
-        10.0, 10.0, 10.0,    # position
-        2.5, 2.5, 2.5, 2.5,  # quaternion
-        1.0, 1.0, 1.0,      # velocity
-        1.0, 1.0, 1.0,      # angular rates
-        0.001, 0.001, 0.001, 0.001,  # u
+        50.0, 50.0, 50.0,    # position
+        2.0, 2.0, 2.0, 2.0,  # quaternion
+        0.1, 0.1, 0.1,      # velocity
+        0.1, 0.1, 0.1,      # angular rates
+        0.0001, 0.0001, 0.0001, 0.0001,  # u
     ])
-    R_mat = 2 * np.diag([5.0, 5.0, 10.0, 5.0])
+    R_mat = 2 * np.diag([0.1, 0.1, 5.0, 0.1])
     ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
     ocp.cost.W_e = Q_mat  # Terminal cost only considers the state
 
@@ -60,7 +60,7 @@ def generate_ocp_controller(dynamics=None):
     ocp.model.cost_y_expr_e = model.x
 
     x0 = np.zeros(nx)
-    x0[3] = 1  # Initial quaternion w=1
+    # No initial quaternion constraint - let it be free
     ocp.constraints.x0 = x0
 
     ocp.cost.cost_type = 'LINEAR_LS'
@@ -77,7 +77,7 @@ def generate_ocp_controller(dynamics=None):
     ocp.cost.yref[3] = 1
     ocp.cost.yref_e[3] = 1
 
-    ocp.parameter_values = np.array([1.0])  # Default mass=1.0, kT=14.0
+    ocp.parameter_values = np.array([38.0, 0.07, 75.0])  # Default parameters: thrust ratio, second parameter, and third parameter
 
 
     # Set solver options (as before)
@@ -105,8 +105,8 @@ def generate_ocp_controller(dynamics=None):
 
 
     # Set input constraints (tune as needed)
-    ocp.constraints.lbu = np.array([-10, -10, -3.0, -10])  # throttle, roll_rate, pitch_rate, yaw_rate
-    ocp.constraints.ubu = np.array([10, 10, 3.0, 10])
+    ocp.constraints.lbu = np.array([-15, -15, -3.0, -15])  # throttle, roll_rate, pitch_rate, yaw_rate
+    ocp.constraints.ubu = np.array([15, 15, 3.0, 15])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver
@@ -116,7 +116,7 @@ def generate_ocp_controller(dynamics=None):
     sim = AcadosSim()
     sim.model = ocp.model
     sim.solver_options.T = 1.0 / 30.0  # Set integrator to run at 30Hz
-    sim.parameter_values = np.array([1.0])
+    sim.parameter_values = np.array([38.0, 0.07, 75.0])
     sim_solver = AcadosSimSolver(sim)
 
     return ocp_solver, sim_solver

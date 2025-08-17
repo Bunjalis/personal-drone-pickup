@@ -89,7 +89,7 @@
             <update_frequency>500</update_frequency>
           </plugin>
 
-      <pose>0.0 1.0 0.01 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
+      <pose>0.0 0.0 0.01 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
       <plugin
         filename="ignition-gazebo-multicopter-motor-model-system"
         name="gz::sim::systems::MulticopterMotorModel">

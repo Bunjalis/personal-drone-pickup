@@ -23,7 +23,9 @@ class QuadDynamics:
 
 
         self.thrust_ratio = cs.MX.sym('kT', 1)
-        self.p_param = cs.vertcat(self.thrust_ratio)  # Parameter vector
+        self.tau_rate = cs.MX.sym('tau', 1)
+        self.max_rate_deg = cs.MX.sym('max_rate_deg', 1)
+        self.p_param = cs.vertcat(self.thrust_ratio, self.tau_rate, self.max_rate_deg)  # Parameter vector
 
         self.g = 9.81
     
@@ -80,9 +82,8 @@ class QuadDynamics:
         return v_dynamics
 
     def w_dynamics(self):
-        self.tau_rate = 0.07
-        max_rate_deg = 100
-        max_rate_rad = max_rate_deg * np.pi / 180.0
+
+        max_rate_rad = self.max_rate_deg * np.pi / 180.0
 
 
         r_cmd = cs.vertcat(

@@ -42,15 +42,15 @@ class Controller(Node):
         self.traj = hover_trajectory(self.dt)  
         #self.traj = z_sin_trajectory(self.dt)  
         #self.traj = xyz_sine_trajectory(self.dt)  
-        #self.traj = circle_trajectory(self.dt)   
+        self.traj = circle_trajectory(self.dt)   
         #self.traj = light_circle_trajectory(self.dt)
         #self.traj = backflip_trajectory(self.dt)  # Use the backflip trajectory
 
 
-        trial_name = "CIRCLE_TEST_WITHOUT_FAN"
+        trial_name = "test"
 
 
-        self.est_params = np.array([38.0])  # Initialize thrust ratio parameter to a reasonable value
+        self.est_params = np.array([38.0, 0.07, 75.0])  # Initialize thrust ratio parameter, second parameter, and third parameter
 
 
 
@@ -107,17 +107,17 @@ class Controller(Node):
                                 1.0, 0.0, 0.0, 0.0,
                                 0.0, 0.0, 0.0, 
                                 0.0, 0.0, 0.0, 
-                                self.est_params[0]])
+                                self.est_params[0], self.est_params[1], self.est_params[2]])
         self.P = np.diag([0.1, 0.1, 0.1,  # Increase initial uncertainty for position
                           0.1, 0.1, 0.1, 0.1,  # Quaternion
                           0.1, 0.1, 0.1,  # Velocity
                           0.1, 0.1, 0.1,  # Angular rates
-                          0.5])  # Thrust ratio parameter uncertainty
+                          0.5, 0.1, 10.0])  # Thrust ratio parameter uncertainty, second parameter uncertainty, and third parameter uncertainty
         self.Q = np.diag([1e-4, 1e-4, 1e-4,  # Position process noise
                           1e-5, 1e-5, 1e-5, 1e-5,  # Quaternion process noise
                           1e-3, 1e-3, 1e-3,  # Velocity process noise
                           1e-3, 1e-3, 1e-3,  # Angular rates process noise
-                          1e-6])  # Thrust ratio process noise
+                          1e-6, 1e-6, 1e-3])  # Thrust ratio process noise, second parameter process noise, and increased third parameter process noise
         self.R = np.diag([0.05]*13)  # Measurement noise for all 13 state elements
 
 
@@ -336,6 +336,13 @@ class Controller(Node):
             K = P_xz @ np.linalg.inv(P_zz)
             self.x_est = x_pred + K @ ((self.current_pose[:13]) - z_pred)
             self.P = P_pred - K @ P_zz @ K.T
+            
+            # Ensure P remains positive definite
+            self.P = 0.5 * (self.P + self.P.T)  # Make symmetric
+            eigenvals = np.linalg.eigvals(self.P)
+            if np.min(eigenvals) < 1e-9:
+                print("Warning: Covariance matrix becoming singular, adding regularization")
+                self.P += np.eye(self.P.shape[0]) * 1e-6
 
             ### Normalize quaternion to ensure it remains a valid unit quaternion
             quat_norm = np.linalg.norm(self.x_est[3:7])
@@ -346,7 +353,7 @@ class Controller(Node):
 
 
             ### Update estimated parameters
-            self.est_params = np.array([self.x_est[13]])
+            self.est_params = np.array([self.x_est[13], self.x_est[14], self.x_est[15]])
 
 
 
@@ -359,11 +366,13 @@ class Controller(Node):
             self.parameter_estimation_history.append(self.est_params.tolist())
             self.estimated_state_history.append(estimated_state.tolist())
             self.delay_state_estimation_history.append(self.delay_states)
-            self.UKF_state_estimation_history.append(self.x_est[:13].tolist())
+            self.UKF_state_estimation_history.append(self.x_est[:16].tolist())
 
 
-            print(f"Height {round(self.current_pose[2],3)} throttle {round(u[2],3)} estimated thrust ratio {round(self.est_params[0],3)} estimated delay states {self.delay_states}")
-            print(f"u: {[round(val, 3) for val in u]} u_rate: {[round(val, 3) for val in u_rate]}")
+            #print(f"Height {round(self.current_pose[2],3)} throttle {round(u[2],3)} estimated thrust ratio {round(self.est_params[0],3)} estimated param2 {round(self.est_params[1],3)} estimated delay states {self.delay_states}")
+            #print(f"u: {[round(val, 3) for val in u]} u_rate: {[round(val, 3) for val in u_rate]}")
+
+            print(f"est_params: {[round(val, 3) for val in self.est_params]} u: {[round(val, 3) for val in u]}")
             ### SEND COMMANDS
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
             self.cmd_publisher_.publish(msg)
@@ -378,9 +387,9 @@ class Controller(Node):
     # --- UKF Functions ---
     def fx(self, x, u, u_rate):
         # Extract state variables from pt
-        pos, quat, vel, ang_vel, ratio = x[:3], x[3:7], x[7:10], x[10:13], x[13] 
+        pos, quat, vel, ang_vel, ratio, param2, param3 = x[:3], x[3:7], x[7:10], x[10:13], x[13], x[14], x[15]
         state = np.concatenate((pos, quat, vel, ang_vel, u))
-        param = np.array([ratio])
+        param = np.array([ratio, param2, param3])
 
         # Set the state, input, and parameters in the CasADi integrator
         self.sim_integrator.set("x", state)
@@ -392,7 +401,7 @@ class Controller(Node):
 
         # Retrieve the next state from the integrator
         x_next = self.sim_integrator.get("x")
-        return np.concatenate((x_next[:13], param))  # Keep the thrust ratio constant during prediction
+        return np.concatenate((x_next[:13], param))  # Keep all parameters constant during prediction
 
     def hx(self, x):
         return x[0:13]
@@ -401,7 +410,20 @@ class Controller(Node):
         n = len(x)
         lambda_ = alpha**2 * (n + kappa) - n
         sigma_points = [x]
-        sqrt_P = cholesky((n + lambda_) * P, lower=True)
+        
+        # Add numerical stability to the covariance matrix
+        P_stable = P + np.eye(n) * 1e-9  # Add small regularization
+        
+        # Check if matrix is positive definite
+        try:
+            sqrt_P = cholesky((n + lambda_) * P_stable, lower=True)
+        except np.linalg.LinAlgError:
+            print("Warning: Covariance matrix not positive definite, using eigenvalue decomposition")
+            # Use eigenvalue decomposition as fallback
+            eigenvals, eigenvecs = np.linalg.eigh((n + lambda_) * P_stable)
+            eigenvals = np.maximum(eigenvals, 1e-9)  # Ensure positive eigenvalues
+            sqrt_P = eigenvecs @ np.diag(np.sqrt(eigenvals))
+        
         for i in range(n):
             sigma_points.append(x + sqrt_P[:, i])
             sigma_points.append(x - sqrt_P[:, i])
@@ -420,98 +442,11 @@ class Controller(Node):
         return mean, cov
 
 
-    def plotSystemResponse(self):
-        # Convert control history to a numpy array and remove the first 10 commands
-        control_history = np.array(self.control_history[10:])
-
-        # Create a figure with six subplots
-        figure, (ax1, ax2, ax3, ax4, ax5, ax6) = plt.subplots(6, 1, figsize=(10, 24))
-
-        # Plot all control actions on the first subplot
-        ax1.plot(control_history[:, 0], label='Roll', color='blue')
-        ax1.plot(control_history[:, 1], label='Pitch', color='orange')
-        ax1.plot(control_history[:, 2], label='Throttle', color='green')
-        ax1.plot(control_history[:, 3], label='Yaw', color='red')
-        ax1.set_title('Control Actions over Time')
-        ax1.set_ylabel('Control Values')
-        ax1.set_xlabel('Time Steps')
-        ax1.legend()
-
-        # Extract state_history height, desired trajectory height, motion capture height, estimated state height, and UKF state height
-        state_history = np.array(self.observed_state_history)
-        trajectory_height = self.traj[2, :len(state_history)]  # Assuming z-axis is the height
-        estimated_state_height = np.array(self.estimated_state_history)[:, 2]  # Extract z-axis from estimated state
-        UKF_state_height = np.array(self.UKF_state_estimation_history)[:, 2]  # Extract z-axis from UKF state
-
-        # Plot state_history height, desired trajectory height, motion capture height, estimated state height, and UKF state height on the second subplot
-        ax2.plot(state_history[:, 2], label='Observed State Height', color='purple')
-        ax2.plot(trajectory_height, label='Desired Trajectory Height', color='cyan', linestyle='dashed')
-        if self.motion_capture_pose is not None:
-            motion_capture_height = np.array(self.motion_capture_history)[:, 2]  # Extract z-axis from motion capture data
-            ax2.plot(motion_capture_height, label='Motion Capture Height', color='magenta', linestyle='dotted')
-        ax2.plot(estimated_state_height, label='Estimated State Height', color='green', linestyle='dashdot')
-        ax2.plot(UKF_state_height, label='UKF State Height', color='orange', linestyle='solid')
-        ax2.set_title('Height Comparison over Time')
-        ax2.set_ylabel('Height (m)')
-        ax2.set_xlabel('Time Steps')
-        ax2.legend()
-
-        # Plot the estimated parameter over time on the third subplot
-        parameter_estimation = np.array(self.parameter_estimation_history).flatten()
-        ax3.plot(parameter_estimation, label='Estimated Parameter', color='brown')
-        ax3.set_title('Estimated Parameter over Time')
-        ax3.set_ylabel('Parameter Value')
-        ax3.set_xlabel('Time Steps')
-        ax3.legend()
-
-        # Plot the delay state estimation history on the fourth subplot
-        delay_state_estimation = np.array(self.delay_state_estimation_history)
-        ax4.plot(delay_state_estimation, label='Delay State Estimation', color='blue')
-        ax4.set_title('Delay State Estimation over Time')
-        ax4.set_ylabel('Delay States')
-        ax4.set_xlabel('Time Steps')
-        ax4.legend()
-
-        # Plot the y-axis values on the fifth subplot
-        trajectory_y = self.traj[1, :len(state_history)]  # Assuming y-axis is the second row
-        estimated_state_y = np.array(self.estimated_state_history)[:, 1]  # Extract y-axis from estimated state
-        UKF_state_y = np.array(self.UKF_state_estimation_history)[:, 1]  # Extract y-axis from UKF state
-
-        ax5.plot(state_history[:, 1], label='Observed State Y', color='purple')
-        ax5.plot(trajectory_y, label='Desired Trajectory Y', color='cyan', linestyle='dashed')
-        if self.motion_capture_pose is not None:
-            motion_capture_y = np.array(self.motion_capture_history)[:, 1]  # Extract y-axis from motion capture data
-            ax5.plot(motion_capture_y, label='Motion Capture Y', color='magenta', linestyle='dotted')
-        ax5.plot(estimated_state_y, label='Estimated State Y', color='green', linestyle='dashdot')
-        ax5.plot(UKF_state_y, label='UKF State Y', color='orange', linestyle='solid')
-        ax5.set_title('Y-Axis Comparison over Time')
-        ax5.set_ylabel('Y-Axis (m)')
-        ax5.set_xlabel('Time Steps')
-        ax5.legend()
-
-        # Plot the x-axis values on the sixth subplot
-        trajectory_x = self.traj[0, :len(state_history)]  # Assuming x-axis is the first row
-        estimated_state_x = np.array(self.estimated_state_history)[:, 0]  # Extract x-axis from estimated state
-        UKF_state_x = np.array(self.UKF_state_estimation_history)[:, 0]  # Extract x-axis from UKF state
-
-        ax6.plot(state_history[:, 0], label='Observed State X', color='purple')
-        ax6.plot(trajectory_x, label='Desired Trajectory X', color='cyan', linestyle='dashed')
-        if self.motion_capture_pose is not None:
-            motion_capture_x = np.array(self.motion_capture_history)[:, 0]  # Extract x-axis from motion capture data
-            ax6.plot(motion_capture_x, label='Motion Capture X', color='magenta', linestyle='dotted')
-        ax6.plot(estimated_state_x, label='Estimated State X', color='green', linestyle='dashdot')
-        ax6.plot(UKF_state_x, label='UKF State X', color='orange', linestyle='solid')
-        ax6.set_title('X-Axis Comparison over Time')
-        ax6.set_ylabel('X-Axis (m)')
-        ax6.set_xlabel('Time Steps')
-        ax6.legend()
-
-        plt.tight_layout()
-        plt.show()
-
 
     def signal_handler(self, sig, frame):
+        print("Interrupt received, shutting down...")
         self.on_close()
+        sys.exit(0)
 
     def on_close(self):
         # Check if on_close has already been called
@@ -519,6 +454,12 @@ class Controller(Node):
             return
 
         self.on_close_called = True  # Set the flag to True
+
+        print("Saving data and shutting down...")
+        
+        # Disarm the drone first
+        msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
+        self.cmd_publisher_.publish(msg)
 
         # Save data to files at the end
         self.control_history_writer.writerows(self.control_history)
@@ -541,12 +482,19 @@ class Controller(Node):
 
         # Plot system response and shutdown
         #self.plotSystemResponse()
-        #self.gui.quit()
-        #rclpy.shutdown()
-        #sys.exit(0)
-        self.gui.quit()
-        rclpy.shutdown()
-        sys.exit(0)
+        
+        # Close GUI properly
+        try:
+            self.gui.quit()
+        except:
+            pass
+            
+        # Shutdown ROS properly
+        try:
+            self.destroy_node()
+            rclpy.shutdown()
+        except:
+            pass
 
 
 
@@ -555,11 +503,17 @@ def main(args=None):
     rclpy.init(args=args)
     controller = Controller()
     signal.signal(signal.SIGINT, controller.signal_handler)
-    while rclpy.ok():
-        rclpy.spin_once(controller, timeout_sec=0.1)
-        controller.gui.handle_events()
-    controller.destroy_node()
-    rclpy.shutdown()
+    
+    try:
+        while rclpy.ok():
+            rclpy.spin_once(controller, timeout_sec=0.1)
+            controller.gui.handle_events()
+    except KeyboardInterrupt:
+        print("Keyboard interrupt received")
+    except Exception as e:
+        print(f"Exception occurred: {e}")
+    finally:
+        controller.on_close()
 
 if __name__ == '__main__':
     main()
