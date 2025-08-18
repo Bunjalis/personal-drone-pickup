@@ -36,6 +36,39 @@ class BetaflightInterfaceNode(Node):
 
         self.databuffer = []
         
+        # Betaflight rates parameters
+        self.rates_d_val = 200  # Centre Rates
+        self.rates_f_val = 600  # Max Rates
+        self.rates_g_val = 0.5  # EXPO
+        
+    def betaflight_rates(self, x):
+        """
+        Betaflight rates formula:
+        h = x * (x^5 * g + x * (1-g))
+        j = (d * x) + ((f-d) * h) for x in [-1, 1]
+        The mapping from -1 to 0 is the inverted version of 0 to 1
+        """
+        import math
+        
+        # Ensure x is clamped between -1 and 1
+        x = max(-1.0, min(1.0, x))
+        
+        ax = math.sqrt(x*x + 1e-6)
+        
+        # Work with absolute value for the curve calculation
+        sgn = x / ax if ax > 0 else 0
+        
+        # Calculate h = x * (x^5 * g + x * (1-g)) using absolute value
+        h_abs = ax * (pow(ax, 5) * self.rates_g_val + ax * (1.0 - self.rates_g_val))
+        
+        # Calculate j = (d * |x|) + ((f-d) * h) for the positive curve
+        j_abs = self.rates_d_val * ax + (self.rates_f_val - self.rates_d_val) * h_abs
+        
+        # Apply the sign to get symmetric behavior around zero
+        j = sgn * j_abs
+        
+        return j
+        
     def normalize_quaternion_positive_w(self, x, y, z, w):
         """Normalize quaternion and ensure w is positive."""
         # If w is negative, negate the quaternion
@@ -162,7 +195,15 @@ class BetaflightInterfaceNode(Node):
 
 
     def controller_commands_callback(self, msg):
-        self.set_point = [msg.channel_0 * 100, msg.channel_1 * 100, (msg.channel_2 + 1)/2 * 4631, -msg.channel_3 * 100]
+        # Apply betaflight rates mapping to roll, pitch, and yaw channels
+        roll_rate = self.betaflight_rates(msg.channel_0)
+        pitch_rate = self.betaflight_rates(msg.channel_1)
+        yaw_rate = self.betaflight_rates(-msg.channel_3)  # Note: negative for yaw
+        
+        # Throttle remains linear mapping
+        throttle = (msg.channel_2 + 1) / 2 * 4631
+        
+        self.set_point = [roll_rate, pitch_rate, throttle, yaw_rate]
 
 
 
