@@ -53,7 +53,7 @@ class Controller(Node):
         trial_name = "test5"
 
 
-        self.est_params = np.array([38.0, 0.07, 100.0,500.0,0.5])  # Initialize thrust ratio parameter, second parameter, and third parameter
+        self.est_params = np.array([38.0, 0.07, 50.0, 150.0, 0.5])  # Initialize thrust ratio parameter, second parameter, and third parameter
 
 
 
@@ -430,6 +430,12 @@ class Controller(Node):
             #self.x_est[16] = np.clip(self.x_est[16], 200.0, 800.0)
             # Parameter 4: Rate expo - typically 0.0-1.0
             self.x_est[17] = np.clip(self.x_est[17], 0.0, 1.0)
+            
+            # Ensure max rate (param 16) is always greater than centre rate (param 15)
+            if self.x_est[16] <= self.x_est[15]:
+                self.x_est[16] = self.x_est[15] + 10.0  # Add minimum 10 deg/s difference
+
+
 
             ### Update estimated parameters
             self.est_params = np.array([self.x_est[13], self.x_est[14], self.x_est[15], self.x_est[16], self.x_est[17]])
