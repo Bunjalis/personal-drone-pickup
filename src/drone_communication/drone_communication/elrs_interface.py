@@ -207,6 +207,8 @@ class ELRSInterface(Node):
             mah = data[7] << 16 | data[8] << 7 | data[9]
             pct = data[10]
             print(f"Battery: {vbat:0.2f}V {curr:0.1f}A {mah}mAh {pct}%")
+            self.battery_voltage = vbat  # Update battery voltage
+            self.battery_mah_used = mah  # Update battery mAh used
         elif ptype == PacketsTypes.BARO_ALT:
             print(f"BaroAlt: ")
         elif ptype == PacketsTypes.DEVICE_INFO:

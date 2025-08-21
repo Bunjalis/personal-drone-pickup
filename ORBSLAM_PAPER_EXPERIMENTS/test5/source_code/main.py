@@ -127,16 +127,16 @@ class Controller(Node):
                           0.1, 0.1, 0.1, 0.1,  # Quaternion
                           0.1, 0.1, 0.1,  # Velocity
                           0.1, 0.1, 0.1,  # Angular rates
-                          0.5, 0.1, 10.0, 10.0, 1.0])  # Thrust ratio parameter uncertainty, second parameter uncertainty, and third parameter uncertainty
+                          0.5, 0.1, 1.0, 1.0, 1.0])  # Thrust ratio parameter uncertainty, second parameter uncertainty, and third parameter uncertainty
         self.Q = np.diag([1e-4, 1e-4, 1e-4,  # Position process noise
                           1e-5, 1e-5, 1e-5, 1e-5,  # Quaternion process noise
                           1e-3, 1e-3, 1e-3,  # Velocity process noise
                           1e-3, 1e-3, 1e-3,  # Angular rates process noise
-                          1e-6, 1e-9, 10, 10, 1e-5])  # Thrust ratio process noise, second parameter process noise, and increased third parameter process noise
+                          1e-6, 1e-9, 0.1, 0.1, 1e-6])  # Thrust ratio process noise, second parameter process noise, and increased third parameter process noise
         self.R = np.diag([0.05]*13)  # Measurement noise for all 13 state elements
 
 
-        self.delay_states = 6
+        self.delay_states = 1
         self.delay_states_float = float(self.delay_states)
 
         
@@ -185,7 +185,7 @@ class Controller(Node):
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
-        self.motion_capture_pose= np.round(np.array([
+        self.current_pose= np.round(np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
         ]), 3) #motion_capture_pose
         #self.current_pose = np.round(np.array([
@@ -195,7 +195,7 @@ class Controller(Node):
 
     def orb_slam_state_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
-        self.current_pose = np.round(np.array([
+        self.motion_capture_pose = np.round(np.array([
             p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
         ]), 3) #current_pose
 
@@ -288,8 +288,8 @@ class Controller(Node):
 
         # Apply a low-pass filter to smooth the delay value
         alpha = 0.05  # Reduced low-pass filter coefficient for slower updates
-        self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
-        self.delay_states = round(self.delay_states_float)
+        #self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
+        #self.delay_states = round(self.delay_states_float)
 
         #print(f"Updated delay_states to {self.delay_states} with minimum average position error {round(min_error, 3)}")
         #print("Error latencies:", error_latencies)
@@ -355,7 +355,7 @@ class Controller(Node):
             estimated_state_with_control = np.concatenate((estimated_state, np.array(self.control_history[-1][0:4]))) 
 
             
-            relaxation_factor = 0.25 # 0.25 for orb slam 
+            relaxation_factor = 0.05 # 0.25 for orb slam 
             relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
             relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
             self.ocp.set(0, "lbx", relaxed_lbx)
@@ -410,9 +410,9 @@ class Controller(Node):
             # Ensure P remains positive definite
             self.P = 0.5 * (self.P + self.P.T)  # Make symmetric
             eigenvals = np.linalg.eigvals(self.P)
-            if np.min(eigenvals) < 1e-9:
+            if np.min(eigenvals) < 1e-8:
                 print("Warning: Covariance matrix becoming singular, adding regularization")
-                self.P += np.eye(self.P.shape[0]) * 1e-6
+                self.P += np.eye(self.P.shape[0]) * 1e-5
 
             ### Normalize quaternion to ensure it remains a valid unit quaternion
             quat_norm = np.linalg.norm(self.x_est[3:7])
