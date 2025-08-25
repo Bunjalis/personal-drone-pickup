@@ -53,8 +53,7 @@ class Controller(Node):
         trial_name = "ZSINE_4"
 
 
-        self.est_params = np.array([42.0, 0.07, 70.0, 670.0, 0.0])  # Initialize thrust ratio parameter, second parameter, and third parameter
-
+        self.est_params = np.array([42.0, 0.5, 0.07, 70.0, 250.0, 0.5])  # Initialize thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo
 
 
         self.steps = self.traj.shape[1] - 1  # Number of steps in the trajectory
@@ -122,17 +121,17 @@ class Controller(Node):
                                 1.0, 0.0, 0.0, 0.0,
                                 0.0, 0.0, 0.0, 
                                 0.0, 0.0, 0.0, 
-                                self.est_params[0], self.est_params[1], self.est_params[2], self.est_params[3], self.est_params[4]])
+                                self.est_params[0], self.est_params[1], self.est_params[2], self.est_params[3], self.est_params[4], self.est_params[5]])
         self.P = np.diag([0.1, 0.1, 0.1,  # Increase initial uncertainty for position
                           0.1, 0.1, 0.1, 0.1,  # Quaternion
                           0.1, 0.1, 0.1,  # Velocity
                           0.1, 0.1, 0.1,  # Angular rates
-                          0.5, 0.1, 0.2, 0.2, 0.2])  # Thrust ratio parameter uncertainty, second parameter uncertainty, and third parameter uncertainty
+                          0.5, 0.05, 0.2, 0.2, 0.2, 0.2])  # thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo uncertainties
         self.Q = np.diag([1e-4, 1e-4, 1e-4,  # Position process noise
                           1e-5, 1e-5, 1e-5, 1e-5,  # Quaternion process noise
                           1e-3, 1e-3, 1e-3,  # Velocity process noise
                           1e-3, 1e-3, 1e-3,  # Angular rates process noise
-                          1e-6, 1e-9, 1e-2, 1e-2, 1e-6])  # Thrust ratio process noise, second parameter process noise, and increased third parameter process noise
+                          1e-6, 1e-6, 1e-6, 1e-2, 1e-2, 1e-6])  # thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo process noise
         self.R = np.diag([0.05]*13)  # Measurement noise for all 13 state elements
 
 
@@ -382,10 +381,7 @@ class Controller(Node):
 
 
 
-
-
             ### UKF predict
-
             old_u = np.array(self.control_history[-self.delay_states][0:4])
             old_u_rate = np.array(self.control_history[-self.delay_states][4:8])
             sigma_pts, wm, wc = self.generate_sigma_points(self.x_est, self.P, self.alpha, self.beta, self.kappa)
@@ -420,29 +416,25 @@ class Controller(Node):
                 self.x_est[3:7] = self.x_est[3:7] / quat_norm
 
             ### Constrain parameters to physically reasonable bounds
-            # Parameter 0: Thrust ratio (kT) - typically 20-60
-            #self.x_est[13] = np.clip(self.x_est[13], 20.0, 60.0)
-            # Parameter 1: Tau rate - typically 0.01-0.2
-            self.x_est[14] = np.clip(self.x_est[14], 0.035, 0.2)
-            # Parameter 2: Centre rate (deg/s) - typically 50-200
-            #self.x_est[15] = np.clip(self.x_est[15], 50.0, 200.0)
-            # Parameter 3: Max rate (deg/s) - typically 200-800
-            #self.x_est[16] = np.clip(self.x_est[16], 200.0, 800.0)
-            # Parameter 4: Rate expo - typically 0.0-1.0
-            self.x_est[17] = np.clip(self.x_est[17], 0.0, 1.0)
-            
-            # Ensure max rate (param 16) is always greater than centre rate (param 15)
-            if self.x_est[16] <= self.x_est[15]:
-                self.x_est[16] = self.x_est[15] + 10.0  # Add minimum 10 deg/s difference
+            self.x_est[13] = np.clip(self.x_est[13], 20.0, 60.0)
+            self.x_est[14] = np.clip(self.x_est[14], 0.01, 1.0)
+            self.x_est[15] = np.clip(self.x_est[15], 0.035, 0.3)
+            self.x_est[16] = np.clip(self.x_est[16], 0.0, 1000.0)
+            self.x_est[17] = np.clip(self.x_est[17], 0.0, 1000.0)
+            self.x_est[18] = np.clip(self.x_est[18], 0.0, 1.0)
+
+            if self.x_est[17] <= self.x_est[16]:
+                self.x_est[17] = self.x_est[16]
 
 
 
             ### Update estimated parameters
-            self.est_params = np.array([self.x_est[13], self.x_est[14], self.x_est[15], self.x_est[16], self.x_est[17]])
-
-
+            self.est_params = np.array([self.x_est[13], self.x_est[14], self.x_est[15], self.x_est[16], self.x_est[17], self.x_est[18]])
 
             ### Append control inputs and rates to control history as separate elements
+            # Start timing data append operations
+            append_start_time = time.time()
+            
             self.control_history.append(u.tolist() + u_rate.tolist())
             self.observed_state_history.append(self.current_pose.tolist())
 
@@ -451,13 +443,15 @@ class Controller(Node):
             self.parameter_estimation_history.append(self.est_params.tolist())
             self.estimated_state_history.append(estimated_state.tolist())
             self.delay_state_estimation_history.append(self.delay_states)
-            self.UKF_state_estimation_history.append(self.x_est[:18].tolist())
+            self.UKF_state_estimation_history.append(self.x_est[:19].tolist())
             self.battery_voltage_history.append(self.battery_voltage)
-
+            
+            # Calculate and print data append time
+            append_end_time = time.time()
+            append_duration = (append_end_time - append_start_time) * 1000  # Convert to milliseconds
+            print(f"Data append time: {append_duration:.3f} ms")
 
             print(f"Voltage {round(self.battery_voltage,3)} Height {round(self.current_pose[2],3)} estimated delay states {self.delay_states}")
-            #print(f"u: {[round(val, 3) for val in u]} u_rate: {[round(val, 3) for val in u_rate]}")
-
             print(f"est_params: {[round(val, 3) for val in self.est_params]} u: {[round(val, 3) for val in u]} u_rate: {[round(val, 3) for val in u_rate]}")
             ### SEND COMMANDS
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
@@ -484,9 +478,9 @@ class Controller(Node):
     def fx(self, x, u, u_rate):
         # Extract state variables from pt
         pos, quat, vel, ang_vel = x[:3], x[3:7], x[7:10], x[10:13]
-        ratio, param2, param3, param4, param5 = x[13], x[14], x[15], x[16], x[17]
+        thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo = x[13], x[14], x[15], x[16], x[17], x[18]
         state = np.concatenate((pos, quat, vel, ang_vel, u))
-        param = np.array([ratio, param2, param3, param4, param5])
+        param = np.array([thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo])
 
         # Set the state, input, and parameters in the CasADi integrator
         self.sim_integrator.set("x", state)

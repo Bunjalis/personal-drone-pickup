@@ -7,7 +7,7 @@
         "/usr/include/python3.10"
     ],
     "dims": {
-        "np": 5,
+        "np": 6,
         "np_global": 0,
         "nu": 4,
         "nx": 17,
@@ -58,13 +58,13 @@
         "dyn_impl_dae_fun": null,
         "dyn_impl_dae_fun_jac": null,
         "dyn_impl_dae_jac": null,
-        "f_expl_expr": "@1=a[2], @2=a[3], @3=a[1], @4=a[0], @5=u[0], @6=sqrt((1e-06+sq(@5))), @7=u[1], @8=sqrt((1e-06+sq(@7))), @9=u[3], @10=sqrt((1e-06+sq(@9))), vertcat(v, (0.5*mac(horzcat(horzcat(0, (-r[0]), (-r[1]), (-r[2]))', horzcat(r[0], 0, r[2], (-r[1]))', horzcat(r[1], (-r[2]), 0, r[0])', horzcat(r[2], r[1], (-r[0]), 0)')',a,zeros(4x1))), (mac(horzcat(horzcat((1-(2.*(sq(@1)+sq(@2)))), (2.*((@3*@1)-(@4*@2))), (2.*((@3*@2)+(@4*@1))))', horzcat((2.*((@3*@1)+(@4*@2))), (1-(2.*(sq(@3)+sq(@2)))), (2.*((@1*@2)-(@4*@3))))', horzcat((2.*((@3*@2)-(@4*@1))), (2.*((@1*@2)+(@4*@3))), (1-(2.*(sq(@3)+sq(@1)))))')',vertcat(0, 0, (kT*u[2])),zeros(3x1))-[0, 0, 9.81]), ((vertcat(((3.14159*((@5/@6)*((centre_rate_deg*@6)+((max_rate_deg-centre_rate_deg)*(@6*((pow(@6,5)*rate_expo)+(@6*(1-rate_expo))))))))/180), ((3.14159*((@7/@8)*((centre_rate_deg*@8)+((max_rate_deg-centre_rate_deg)*(@8*((pow(@8,5)*rate_expo)+(@8*(1-rate_expo))))))))/180), (-((3.14159*((@9/@10)*((centre_rate_deg*@10)+((max_rate_deg-centre_rate_deg)*(@10*((pow(@10,5)*rate_expo)+(@10*(1-rate_expo))))))))/180)))-r)/tau), u_dot)",
-        "f_impl_expr": "@1=a[2], @2=a[3], @3=a[1], @4=a[0], @5=u[0], @6=sqrt((1e-06+sq(@5))), @7=u[1], @8=sqrt((1e-06+sq(@7))), @9=u[3], @10=sqrt((1e-06+sq(@9))), (vertcat(v, (0.5*mac(horzcat(horzcat(0, (-r[0]), (-r[1]), (-r[2]))', horzcat(r[0], 0, r[2], (-r[1]))', horzcat(r[1], (-r[2]), 0, r[0])', horzcat(r[2], r[1], (-r[0]), 0)')',a,zeros(4x1))), (mac(horzcat(horzcat((1-(2.*(sq(@1)+sq(@2)))), (2.*((@3*@1)-(@4*@2))), (2.*((@3*@2)+(@4*@1))))', horzcat((2.*((@3*@1)+(@4*@2))), (1-(2.*(sq(@3)+sq(@2)))), (2.*((@1*@2)-(@4*@3))))', horzcat((2.*((@3*@2)-(@4*@1))), (2.*((@1*@2)+(@4*@3))), (1-(2.*(sq(@3)+sq(@1)))))')',vertcat(0, 0, (kT*u[2])),zeros(3x1))-[0, 0, 9.81]), ((vertcat(((3.14159*((@5/@6)*((centre_rate_deg*@6)+((max_rate_deg-centre_rate_deg)*(@6*((pow(@6,5)*rate_expo)+(@6*(1-rate_expo))))))))/180), ((3.14159*((@7/@8)*((centre_rate_deg*@8)+((max_rate_deg-centre_rate_deg)*(@8*((pow(@8,5)*rate_expo)+(@8*(1-rate_expo))))))))/180), (-((3.14159*((@9/@10)*((centre_rate_deg*@10)+((max_rate_deg-centre_rate_deg)*(@10*((pow(@10,5)*rate_expo)+(@10*(1-rate_expo))))))))/180)))-r)/tau), u_dot)-xdot)",
+        "f_expl_expr": "@1=a[2], @2=a[3], @3=a[1], @4=a[0], @5=u[0], @6=sqrt((1e-06+sq(@5))), @7=u[1], @8=sqrt((1e-06+sq(@7))), @9=u[3], @10=sqrt((1e-06+sq(@9))), vertcat(v, (0.5*mac(horzcat(horzcat(0, (-r[0]), (-r[1]), (-r[2]))', horzcat(r[0], 0, r[2], (-r[1]))', horzcat(r[1], (-r[2]), 0, r[0])', horzcat(r[2], r[1], (-r[0]), 0)')',a,zeros(4x1))), ((mac(horzcat(horzcat((1-(2.*(sq(@1)+sq(@2)))), (2.*((@3*@1)-(@4*@2))), (2.*((@3*@2)+(@4*@1))))', horzcat((2.*((@3*@1)+(@4*@2))), (1-(2.*(sq(@3)+sq(@2)))), (2.*((@1*@2)-(@4*@3))))', horzcat((2.*((@3*@2)-(@4*@1))), (2.*((@1*@2)+(@4*@3))), (1-(2.*(sq(@3)+sq(@1)))))')',vertcat(0, 0, (kT*u[2])),zeros(3x1))-[0, 0, 9.81])+vertcat(0, 0, (-(drag_coeff_z*v[2])))), ((vertcat(((3.14159*((@5/@6)*((centre_rate_deg*@6)+((max_rate_deg-centre_rate_deg)*(@6*((pow(@6,5)*rate_expo)+(@6*(1-rate_expo))))))))/180), ((3.14159*((@7/@8)*((centre_rate_deg*@8)+((max_rate_deg-centre_rate_deg)*(@8*((pow(@8,5)*rate_expo)+(@8*(1-rate_expo))))))))/180), (-((3.14159*((@9/@10)*((centre_rate_deg*@10)+((max_rate_deg-centre_rate_deg)*(@10*((pow(@10,5)*rate_expo)+(@10*(1-rate_expo))))))))/180)))-r)/tau), u_dot)",
+        "f_impl_expr": "@1=a[2], @2=a[3], @3=a[1], @4=a[0], @5=u[0], @6=sqrt((1e-06+sq(@5))), @7=u[1], @8=sqrt((1e-06+sq(@7))), @9=u[3], @10=sqrt((1e-06+sq(@9))), (vertcat(v, (0.5*mac(horzcat(horzcat(0, (-r[0]), (-r[1]), (-r[2]))', horzcat(r[0], 0, r[2], (-r[1]))', horzcat(r[1], (-r[2]), 0, r[0])', horzcat(r[2], r[1], (-r[0]), 0)')',a,zeros(4x1))), ((mac(horzcat(horzcat((1-(2.*(sq(@1)+sq(@2)))), (2.*((@3*@1)-(@4*@2))), (2.*((@3*@2)+(@4*@1))))', horzcat((2.*((@3*@1)+(@4*@2))), (1-(2.*(sq(@3)+sq(@2)))), (2.*((@1*@2)-(@4*@3))))', horzcat((2.*((@3*@2)-(@4*@1))), (2.*((@1*@2)+(@4*@3))), (1-(2.*(sq(@3)+sq(@1)))))')',vertcat(0, 0, (kT*u[2])),zeros(3x1))-[0, 0, 9.81])+vertcat(0, 0, (-(drag_coeff_z*v[2])))), ((vertcat(((3.14159*((@5/@6)*((centre_rate_deg*@6)+((max_rate_deg-centre_rate_deg)*(@6*((pow(@6,5)*rate_expo)+(@6*(1-rate_expo))))))))/180), ((3.14159*((@7/@8)*((centre_rate_deg*@8)+((max_rate_deg-centre_rate_deg)*(@8*((pow(@8,5)*rate_expo)+(@8*(1-rate_expo))))))))/180), (-((3.14159*((@9/@10)*((centre_rate_deg*@10)+((max_rate_deg-centre_rate_deg)*(@10*((pow(@10,5)*rate_expo)+(@10*(1-rate_expo))))))))/180)))-r)/tau), u_dot)-xdot)",
         "gnsf_nontrivial_f_LO": 1,
         "gnsf_purely_linear": 0,
         "name": "quad_dynamics",
         "nu_original": null,
-        "p": "vertcat(kT, tau, centre_rate_deg, max_rate_deg, rate_expo)",
+        "p": "vertcat(kT, drag_coeff_z, tau, centre_rate_deg, max_rate_deg, rate_expo)",
         "p_global": "0x1",
         "t": [],
         "t0": null,
@@ -78,10 +78,11 @@
     },
     "parameter_values": [
         38.0,
+        0.5,
         0.07,
         80.0,
         250.0,
-        0.5
+        670.0
     ],
     "problem_class": "SIM",
     "shared_lib_ext": ".so",

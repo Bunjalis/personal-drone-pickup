@@ -77,7 +77,7 @@ def generate_ocp_controller(dynamics=None):
     ocp.cost.yref[3] = 1
     ocp.cost.yref_e[3] = 1
 
-    ocp.parameter_values = np.array([38.0, 0.07, 80.0,250.0,0.5])  # Default parameters: thrust ratio, second parameter, and third parameter
+    ocp.parameter_values = np.array([38.0, 0.5, 0.07, 80.0, 250.0, 0.5])  # Default parameters: thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo
 
 
     # Set solver options (as before)
@@ -118,7 +118,7 @@ def generate_ocp_controller(dynamics=None):
     sim = AcadosSim()
     sim.model = ocp.model
     sim.solver_options.T = 1.0 / 30.0  # Set integrator to run at 30Hz
-    sim.parameter_values = np.array([38.0, 0.07, 80.0,250.0,0.5])
+    sim.parameter_values = np.array([38.0, 0.5, 0.07, 80.0, 250.0, 670.0])  # Default parameters: thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo
     sim_solver = AcadosSimSolver(sim)
 
     return ocp_solver, sim_solver

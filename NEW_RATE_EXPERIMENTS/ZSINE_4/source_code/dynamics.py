@@ -24,13 +24,14 @@ class QuadDynamics:
 
         self.thrust_ratio = cs.MX.sym('kT', 1)
         self.tau_rate = cs.MX.sym('tau', 1)
+        self.drag_coeff_z = cs.MX.sym('drag_coeff_z', 1)
         self.centre_rate_deg = cs.MX.sym('centre_rate_deg', 1)
         self.max_rate_deg = cs.MX.sym('max_rate_deg', 1)
         self.rate_expo = cs.MX.sym('rate_expo', 1)
         # Betaflight rates parameters
         
         # Parameter values for evaluation
-        self.p_param = cs.vertcat(self.thrust_ratio, self.tau_rate,self.centre_rate_deg, self.max_rate_deg ,self.rate_expo)  # Parameter vector
+        self.p_param = cs.vertcat(self.thrust_ratio,self.drag_coeff_z, self.tau_rate,self.centre_rate_deg, self.max_rate_deg ,self.rate_expo)  # Parameter vector
 
         self.g = 9.81
     
@@ -83,7 +84,20 @@ class QuadDynamics:
     def v_dynamics(self):
         a_thrust = cs.vertcat(0.0, 0.0, self.thrust_ratio * self.u[2]) 
         g = cs.vertcat(0.0, 0.0, 9.81)
-        v_dynamics = self.v_dot_q(a_thrust, self.q) - g
+
+                # Linear drag force - proportional to velocity
+        # Only vertical drag for now since Z-axis is the focus
+        drag_force = cs.vertcat(
+            0.0,  # No X drag
+            0.0,  # No Y drag  
+            -self.drag_coeff_z * self.v[2]  # Vertical drag proportional to Z velocity
+        )
+        
+        # Gravity vector
+        g = cs.vertcat(0.0, 0.0, 9.81)
+        
+        v_dynamics = self.v_dot_q(a_thrust, self.q) - g + drag_force
+
         return v_dynamics
 
     def betaflight_rates(self, x):
