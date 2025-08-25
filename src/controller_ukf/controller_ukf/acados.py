@@ -59,9 +59,9 @@ def generate_ocp_controller(dynamics=None):
     ocp.model.cost_y_expr = ca.vertcat(model.x, model.u)
     ocp.model.cost_y_expr_e = model.x
 
-    x0 = np.zeros(nx)
+    #x0 = np.zeros(nx)
     # No initial quaternion constraint - let it be free
-    ocp.constraints.x0 = x0
+    #ocp.constraints.x0 = x0
 
     ocp.cost.cost_type = 'LINEAR_LS'
     ocp.cost.cost_type_e = 'LINEAR_LS'
