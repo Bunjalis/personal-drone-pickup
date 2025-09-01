@@ -1,246 +1,261 @@
-import rclpy
-import signal
-import sys
+#!/usr/bin/env python3
+# controller_skrl_node.py
 import os
+import sys
+import signal
+import json
 import numpy as np
-from math import sqrt 
-from rclpy.node import Node
-from .gui import GUI
-from interfaces.msg import MotionCaptureState, ELRSCommand
-from geometry_msgs.msg import Pose, PoseArray
-# from tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_matrix
 
-import torch
-from skrl.models.torch import Model
+import rclpy
+from rclpy.node import Node
 from ament_index_python.packages import get_package_share_directory
-import torch.nn as nn
+
+# Messages
+from interfaces.msg import MotionCaptureState, ELRSCommand
 from scipy.spatial.transform import Rotation as R
 
+import torch
 
-class Controller(Node):
+# --- use CLASSIC gym for tiny env so skrl works with its "gym" wrapper ---
+import gym as ogym
+import yaml
+
+# ---------------- Tiny finite-bounds classic-gym env ----------------
+class _TinyGymEnv(ogym.Env):
+    metadata = {}
+    def __init__(self, obs_dim: int, act_dim: int):
+        super().__init__()
+        big = np.float32(1e6)
+        self.observation_space = ogym.spaces.Box(
+            low=-big * np.ones((obs_dim,), dtype=np.float32),
+            high= big * np.ones((obs_dim,), dtype=np.float32),
+            dtype=np.float32,
+        )
+        self.action_space = ogym.spaces.Box(
+            low=-1.0 * np.ones((act_dim,), dtype=np.float32),
+            high= 1.0 * np.ones((act_dim,), dtype=np.float32),
+            dtype=np.float32,
+        )
+        self._obs = np.zeros((obs_dim,), dtype=np.float32)
+
+    def reset(self, *, seed=None, options=None):
+        return self._obs.copy(), {}
+
+    def step(self, action):
+        return self._obs.copy(), 0.0, False, False, {}
+
+
+class SKRLController(Node):
     def __init__(self):
-        super().__init__('controller')
-        self.cmd_publisher_ = self.create_publisher(ELRSCommand, '/ELRSCommand', 10)
-        self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
+        super().__init__("skrl_controller")
 
-        self.current_pose = None
-        self.setpoint = np.array([0.0, 0.0, 1.0])
+        # ---------------- Parameters ----------------
+        pkg = get_package_share_directory("controller_rl")
 
-        # Set up control loop
-        self.control_frequency = 100.0
-        self.dt = 1.0 / self.control_frequency
-        self.timer = self.create_timer(self.dt, self.control_loop)
+        # Paths (defaults expect you to drop files into your run folder under share/)
+        self.declare_parameter("run_dir", os.path.join(pkg))  # you can point this to a specific run directory
+        self.declare_parameter("checkpoint_rel", "best_agent.pt")
+        self.declare_parameter("agent_yaml_rel", "agent.yaml")
+        self.declare_parameter("round_decimals", 3)
 
-        self.pre_start_counter = 0
-        self.pre_start_steps = self.control_frequency
-        self.armed = False
+        # Optional action scaling (unit [-1,1] -> actuator space). Leave None to publish unit actions.
+        self.declare_parameter("action_low", None)   # e.g. [0.0, -1.0, -1.0, -1.0]
+        self.declare_parameter("action_high", None)  # e.g. [1.0,  1.0,  1.0,  1.0]
 
-        self.gui = GUI(self)
+        # Control loop / setpoint / arming
+        self.declare_parameter("rate_hz", 100.0)
+        self.declare_parameter("setpoint", [0.0, 0.0, 0.515])
+        self.declare_parameter("arm_on_start", True)
+        self.declare_parameter("pre_start_seconds", 1.0)
 
-        # === Load RL environment and agent for inference ===
-        package_dir = get_package_share_directory("controller_rl")
-        checkpoint_path = os.path.join(package_dir, "best_model_bundle.pt")
+        run_dir = self.get_parameter("run_dir").get_parameter_value().string_value
+        ckpt_rel = self.get_parameter("checkpoint_rel").get_parameter_value().string_value
+        agent_yaml_rel = self.get_parameter("agent_yaml_rel").get_parameter_value().string_value
+        self.round_decimals = int(self.get_parameter("round_decimals").value)
 
-        checkpoint = torch.load(checkpoint_path, map_location="cuda" if torch.cuda.is_available() else "cpu", weights_only=False)
-        policy_model = InferencePolicy(
-            observation_space=checkpoint["observation_space"],
-            action_space=checkpoint["action_space"],
-            device="cuda" if torch.cuda.is_available() else "cpu",
-            cfg=checkpoint["model_cfg"]
+        self.rate_hz = float(self.get_parameter("rate_hz").value)
+        self.dt = 1.0 / self.rate_hz
+        self.setpoint = np.asarray(self.get_parameter("setpoint").value, dtype=np.float32).reshape(3)
+        self.armed = bool(self.get_parameter("arm_on_start").value)
+        self.pre_start_steps = int(float(self.get_parameter("pre_start_seconds").value) * self.rate_hz)
+
+        low_param = self.get_parameter("action_low").value
+        high_param = self.get_parameter("action_high").value
+        self.action_low = np.asarray(low_param, dtype=np.float32) if low_param is not None else None
+        self.action_high = np.asarray(high_param, dtype=np.float32) if high_param is not None else None
+        if (self.action_low is not None) and (self.action_high is not None):
+            self.get_logger().info(f"[actions] scaling enabled: low={self.action_low}, high={self.action_high}")
+        else:
+            self.get_logger().info("[actions] scaling disabled (publishing unit actions)")
+
+        ckpt_path = os.path.join(run_dir, ckpt_rel)
+        agent_yaml_path = os.path.join(run_dir, agent_yaml_rel)
+
+        if not os.path.exists(ckpt_path):
+            raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+        if not os.path.exists(agent_yaml_path):
+            raise FileNotFoundError(f"Agent YAML not found: {agent_yaml_path}")
+
+        self.get_logger().info(f"Loading skrl agent from:\n- ckpt: {ckpt_path}\n- cfg : {agent_yaml_path}")
+
+        # ---------------- Build skrl Runner exactly like your compare script ----------------
+        # 1) infer dims from checkpoint
+        ckpt = torch.load(ckpt_path, map_location="cpu")
+        pol = ckpt.get("policy", {}) or ckpt.get("agent", {}).get("policy", {})
+        if not pol:
+            raise RuntimeError("Couldn't find 'policy' state_dict in checkpoint")
+        obs_dim = int(pol["net_container.0.weight"].shape[1])
+        act_dim = int(pol["policy_layer.bias"].shape[0])
+
+        # 2) tiny env -> wrap with skrl "gym" wrapper
+        from skrl.envs.wrappers.torch import wrap_env as wrap_env_torch
+        env = _TinyGymEnv(obs_dim, act_dim)
+        venv = wrap_env_torch(env, wrapper="gym")
+
+        # 3) load exact agent config saved at training time
+        with open(agent_yaml_path, "r") as f:
+            agent_cfg = yaml.safe_load(f)
+
+        # speed/quiet tweaks
+        agent_cfg.setdefault("agent", {}).setdefault("experiment", {})
+        agent_cfg["agent"]["experiment"]["write_interval"] = 0
+        agent_cfg["agent"]["experiment"]["checkpoint_interval"] = 0
+
+        # Optional: force device to avoid CUDA/CPU surprises (uncomment to pin to CPU)
+        # agent_cfg["agent"]["device"] = "cpu"
+
+        from skrl.utils.runner.torch import Runner
+        self._runner = Runner(venv, agent_cfg)
+        self._runner.agent.load(ckpt_path)
+        self._runner.agent.set_running_mode("eval")
+
+        # Agent device (policy + preprocessor live here)
+        self._agent_device = next(self._runner.agent.policy.parameters()).device
+        self.get_logger().info(f"Agent device: {self._agent_device}")
+
+        # ---------------- ROS I/O ----------------
+        self.pub_cmd = self.create_publisher(ELRSCommand, "/ELRSCommand", 10)
+        self.sub_mocap = self.create_subscription(
+            MotionCaptureState, "/motion_capture_state", self._pose_cb, 10
+        )
+        self.timer = self.create_timer(self.dt, self._control_loop)
+
+        # State
+        self._obs = None  # 19-D rounded observation
+        self._prev_actions = np.zeros(4, dtype=np.float32)  # keep in unit space unless you trained differently
+        self._counter = 0
+        self._pre_start_counter = 0
+
+        self.get_logger().info("SKRLController initialised.")
+
+    # ---------------- Build 19-D observation exactly like training ----------------
+    def _pose_cb(self, msg: MotionCaptureState):
+        # Position & orientation (wxyz)
+        p = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z], dtype=np.float32)
+        wxyz = np.array([
+            msg.pose.orientation.w,
+            msg.pose.orientation.x,
+            msg.pose.orientation.y,
+            msg.pose.orientation.z
+        ], dtype=np.float32)
+
+        # World-frame linear velocity; body-frame angular velocity (already body in your msg)
+        v_world = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z], dtype=np.float32)
+        w_body = np.array([msg.twist.angular.x, msg.twist.angular.y, msg.twist.angular.z], dtype=np.float32)
+
+        # Rotation (world->body)
+        quat_xyzw = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
+        Rwb = R.from_quat(quat_xyzw).as_matrix().astype(np.float32)
+        v_body = Rwb.T @ v_world
+
+        # Desired relative position in body frame
+        pos_err_world = self.setpoint - p
+        pos_err_body = Rwb.T @ pos_err_world
+
+        # Heading error (yaw)
+        x, y, z, w = quat_xyzw
+        curr_yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+        desired_yaw = 0.0
+        yaw_err = np.arctan2(np.sin(curr_yaw - desired_yaw), np.cos(curr_yaw - desired_yaw))
+        heading_error = np.array([np.sin(yaw_err), np.cos(yaw_err)], dtype=np.float32)
+
+        # Observation layout: [v_b(3), w_b(3), quat wxyz(4), pos_err_b(3), heading(2), prev_actions(4)] = 19
+        obs = np.concatenate(
+            [v_body, w_body, wxyz, pos_err_body, heading_error, self._prev_actions], dtype=np.float32
         )
 
-        policy_model.load_state_dict(checkpoint["state_dict"])
-        policy_model.eval()
-        self.agent = policy_model
+        # Round like play.py BEFORE agent.act
+        self._obs = np.round(obs, self.round_decimals).astype(np.float32)
 
-        self.counter = 0
-
-    # Recieve motion capture data
-    def pose_callback(self, msg: MotionCaptureState):
-        position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
-        orientation =  np.array([msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z])
-
-        
-        linear_velocity = np.array([msg.twist.linear.x, msg.twist.linear.y, msg.twist.linear.z])
-        angular_velocity = np.array([msg.twist.angular.x, msg.twist.angular.y, msg.twist.angular.z])
-
-
-        quat_xyzw = [orientation[1], orientation[2], orientation[3], orientation[0]]
-        rotation_matrix = R.from_quat(quat_xyzw).as_matrix()
-
-        linear_velocity_body = rotation_matrix.T @ linear_velocity
-        angular_velocity_body = angular_velocity
-
-        # Gravity in body frame (assuming global [0, 0, -1])
-        gravity_world = np.array([0.0, 0.0, -1.0])
-        gravity_body = rotation_matrix.T @ gravity_world
-
-        # Relative goal in body frame
-        desired_pos_rel_world = self.setpoint - position
-        desired_pos_b = rotation_matrix.T @ desired_pos_rel_world
-
-        # Match the 12D input from training
-        self.current_pose = np.concatenate((
-            linear_velocity_body,     # 3
-            angular_velocity_body,    # 3
-            gravity_body,             # 3
-            desired_pos_b             # 3
-        )).astype(np.float32)
-
-
-    def control_loop(self):
-
-        # For saftey generate a message with all channels set to 0.0
+    # ---------------- Timer: compute action via skrl mean_actions ----------------
+    def _control_loop(self):
         msg = ELRSCommand()
         msg.armed = False
         msg.channel_0 = 0.0
         msg.channel_1 = 0.0
-        msg.channel_2 = 0.0
+        msg.channel_2 = -1.0
         msg.channel_3 = 0.0
 
-        # Pre-start state: Send 0.05 on all channels for one second before starting control loop.
-        if self.armed and self.pre_start_counter < self.pre_start_steps:
+        # pre-start arming window
+        if self.armed and self._pre_start_counter < self.pre_start_steps:
             msg.armed = True
-            msg.channel_0 = 0.05
-            msg.channel_1 = 0.05
-            msg.channel_2 = 0.05
-            msg.channel_3 = 0.05
-            self.pre_start_counter += 1
+            msg.channel_2 = -1.0
+            self._pre_start_counter += 1
+            self.pub_cmd.publish(msg)
+            return
 
-        elif self.armed and self.current_pose is not None:
-            state = self.current_pose.astype(np.float32)
-            obs = torch.from_numpy(state).unsqueeze(0)
+        # inference when armed & we have an observation
+        if self.armed and self._obs is not None:
+            obs_t = torch.from_numpy(self._obs).to(self._agent_device, dtype=torch.float32).unsqueeze(0)
 
-            with torch.no_grad():
-                action = self.agent.act(obs, role="policy", deterministic=True)
-            action_np = action.cpu().numpy().flatten()
+            print(f"[obs] {self._obs.round(3)}")
 
-            force = action_np[0]  # Thrust
-            roll = action_np[1] if len(action_np) > 1 else 0.0   # Roll
-            pitch = action_np[2] if len(action_np) > 2 else 0.0  # Pitch
-            yaw = action_np[3] if len(action_np) > 3 else 0.0    # Yaw
-            
-            # Clamp and scale force from [-1,1] to [0,1] then to actual thrust
-            force = max(-1.0, min(force, 1.0))
-            force = (force + 1.0) / 2.0  # Scale to [0,1]
-            
-            # Clamp angular commands
-            roll = max(-1.0, min(roll, 1.0))
-            pitch = max(-1.0, min(pitch, 1.0))
-            yaw = max(-1.0, min(yaw, 1.0))
+            with torch.inference_mode():
+                outputs = self._runner.agent.act(obs_t, timestep=0, timesteps=0)
+                info = outputs[-1] if isinstance(outputs, (tuple, list)) else {}
+                unit_action = info.get("mean_actions", outputs[0]).squeeze(0).detach().cpu().numpy().astype(np.float32)
 
-            # Quadcopter parameters
-            Cf = 1.48e-6  # Force coefficient
-            Ct = 0.01 * Cf  # Torque coefficient for yaw
-            l_x = 0.0865  # Distance from center to motor in x direction (for pitch)
-            l_y = 0.073   # Distance from center to motor in y direction (for roll)
-            max_motor_speed = 4631.0
-            
-            # Moment magnitude constants (same as Isaac Sim)
-            roll_magnitude = 0.01   
-            pitch_magnitude = 0.01  
-            yaw_magnitude = 0.01
-            
-            # Calculate thrust-to-weight ratio scaling
-            training_tw_ratio = 3.8
-            mass_estimate = 0.65  # kg (adjust based on your actual drone mass)
-            g = 9.81
-            max_thrust_needed = training_tw_ratio * mass_estimate * g
+            # Store prev actions in the SAME space as training (usually unit space)
+            self._prev_actions = unit_action.copy()
 
-            desired_thrust = force * max_thrust_needed
-            base_motor_omega_squared = desired_thrust / (4 * Cf)
+            # Optional scaling to actuator space
+            if (self.action_low is not None) and (self.action_high is not None):
+                action = ((unit_action + 1.0) * 0.5) * (self.action_high - self.action_low) + self.action_low
+            else:
+                action = unit_action
             
-            desired_roll_moment = roll * roll_magnitude
-            desired_pitch_moment = pitch * pitch_magnitude
-            desired_yaw_moment = yaw * yaw_magnitude
-            
-            roll_differential = desired_roll_moment / (2 * Cf * l_y)
-            pitch_differential = desired_pitch_moment / (2 * Cf * l_x)
-            yaw_differential = desired_yaw_moment / (2 * Ct)
-            
-            omega1_squared = max(0, base_motor_omega_squared ) # - roll_differential + pitch_differential + yaw_differential 
-            omega2_squared = max(0, base_motor_omega_squared ) # - roll_differential - pitch_differential - yaw_differential
-            omega3_squared = max(0, base_motor_omega_squared ) # + roll_differential + pitch_differential + yaw_differential
-            omega4_squared = max(0, base_motor_omega_squared ) # + roll_differential - pitch_differential - yaw_differential
+            print(f"[action] {action.round(3)}")
 
-            # Take square root to get angular velocities
-            omega1 = sqrt(omega1_squared)
-            omega2 = sqrt(omega2_squared)
-            omega3 = sqrt(omega3_squared)
-            omega4 = sqrt(omega4_squared)
-            
-            # Normalize by max motor speed to get motor commands [0,1]
-            u1 = min(omega1 / max_motor_speed, 1.0)
-            u2 = min(omega2 / max_motor_speed, 1.0)
-            u3 = min(omega3 / max_motor_speed, 1.0)
-            u4 = min(omega4 / max_motor_speed, 1.0)
-
-            u = [u1, u2, u3, u4]
-            print(f"Observation: {np.round(state, 3)}")
-            print(f"Throttle: {action_np[0]:.3f} Roll: {roll:.3f}, Pitch: {pitch:.3f}, Yaw: {yaw:.3f}")
-
+            # Map to radio channels (adjust mapping if your mixer differs)
+            # roll, pitch, throttle/force, yaw
+            roll, pitch, force, yaw = (float(action[1]), float(action[2]), float(action[0]), float(action[3]))
 
             msg.armed = True
-            msg.channel_0 = u1
-            msg.channel_1 = u2
-            msg.channel_2 = u3
-            msg.channel_3 = u4
+            msg.channel_0 = roll
+            msg.channel_1 = pitch
+            msg.channel_2 = force
+            msg.channel_3 = yaw
 
-            self.counter += 1
+            self._counter += 1
 
-            if self.counter > 100:
-                self.on_close()
-        else:         
-            self.pre_start_counter = 0
+        self.pub_cmd.publish(msg)
 
-        self.cmd_publisher_.publish(msg)
-        print(f"control output {msg.channel_0}, {msg.channel_1}, {msg.channel_2}, {msg.channel_3}")
-
-    # GUI functions
-    def signal_handler(self, sig, frame):
-        self.on_close()
-
+    # ---------------- Shutdown ----------------
     def on_close(self):
-        self.gui.quit()
         rclpy.shutdown()
         sys.exit(0)
 
-class InferencePolicy(Model):
-    def __init__(self, observation_space, action_space, device, cfg):
-        super().__init__(observation_space, action_space, device)
-        input_dim = observation_space.shape[0]
-        output_dim = action_space.shape[0]
 
-        hidden_layers = cfg.get("hidden_layers", [64, 64])
-        activation = getattr(nn, cfg.get("activation", "ReLU"))
-
-        layers = []
-        last_dim = input_dim
-        for h in hidden_layers:
-            layers.append(nn.Linear(last_dim, h))
-            layers.append(activation())
-            last_dim = h
-        self.net_container = nn.Sequential(*layers) 
-
-        self.policy_layer = nn.Linear(last_dim, output_dim)
-        self.value_layer = nn.Linear(last_dim, 1)
-        self.log_std_parameter = nn.Parameter(torch.zeros(output_dim))
-
-    def act(self, inputs, role, deterministic=False):
-        x = self.net_container(inputs)
-        return self.policy_layer(x)
-
-
-
-def main(args=None): 
+def main(args=None):
     rclpy.init(args=args)
-    controller = Controller()
-    signal.signal(signal.SIGINT, controller.signal_handler)
-    while rclpy.ok():
-        rclpy.spin_once(controller, timeout_sec=0.1)
-        controller.gui.handle_events()
-    controller.destroy_node()
-    rclpy.shutdown()
+    node = SKRLController()
+    signal.signal(signal.SIGINT, lambda *_: node.on_close())
+    try:
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
