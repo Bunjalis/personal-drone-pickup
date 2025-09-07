@@ -64,7 +64,7 @@ class SKRLController(Node):
 
         # Control loop / setpoint / arming
         self.declare_parameter("rate_hz", 100.0)
-        self.declare_parameter("setpoint", [0.0, 0.0, 0.515])
+        self.declare_parameter("setpoint", [1.0, 1.0, 1.515])
         self.declare_parameter("arm_on_start", True)
         self.declare_parameter("pre_start_seconds", 1.0)
 
