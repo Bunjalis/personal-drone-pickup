@@ -334,7 +334,7 @@ def hover_and_yaw(dt):
     take_off_traj = takeoff_trajectory(dt)
     
     # Phase 1: Initial hover
-    hover_duration = 3.0  # 3 seconds of initial hover
+    hover_duration = 10.0  # 3 seconds of initial hover
     hover_steps = int(hover_duration / dt)
     hover_time_space = np.linspace(0, hover_duration, hover_steps)
     
@@ -347,7 +347,7 @@ def hover_and_yaw(dt):
     yaw_traj_hover = np.zeros_like(hover_time_space)
     
     # Phase 2: Full yaw rotation in 8 seconds
-    yaw_duration = 8.0  # 8 seconds for full rotation
+    yaw_duration = 20.0  # 8 seconds for full rotation
     yaw_steps = int(yaw_duration / dt)
     yaw_time_space = np.linspace(0, yaw_duration, yaw_steps)
     
@@ -355,13 +355,13 @@ def hover_and_yaw(dt):
     y_traj_yaw = np.zeros_like(yaw_time_space)
     z_traj_yaw = np.ones_like(yaw_time_space)  # Maintain altitude
     
-    yaw_traj_yaw = np.zeros_like(yaw_time_space)
+    roll_traj_yaw = np.zeros_like(yaw_time_space)
     pitch_traj_yaw = np.zeros_like(yaw_time_space)
     # Full 360 degree rotation (2π radians) over 8 seconds
-    roll_traj_yaw = 2 * np.pi * (yaw_time_space / yaw_duration)
+    yaw_traj_yaw= 2 * np.pi * (yaw_time_space / yaw_duration)
     
     # Phase 3: Final hover
-    final_hover_duration = 3.0  # 3 seconds of final hover
+    final_hover_duration = 10.0  # 3 seconds of final hover
     final_hover_steps = int(final_hover_duration / dt)
     final_hover_time_space = np.linspace(0, final_hover_duration, final_hover_steps)
     
@@ -465,6 +465,67 @@ def sine_wave_trajectory(dt):
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
     
     return np.concatenate((take_off_traj, move_to_start, sine_wave_traj, land_traj, zeros), axis=1)
+
+
+def zsine_trajectory(dt):
+    """
+    Trajectory that performs a slow vertical sine wave motion.
+    The drone hovers at a fixed horizontal position while moving up and down
+    in a sine wave pattern at a slow frequency.
+    """
+    take_off_traj = takeoff_trajectory(dt)
+    
+    # Define vertical sine wave parameters
+    base_height = 1.5      # Base altitude (center of sine wave)
+    amplitude = 0.8        # Vertical amplitude (±0.8 meters)
+    frequency = 0.05       # Slow frequency (Hz) - about 6.7 second period
+    duration = 40.0        # Duration of the sine wave motion
+    
+    # Move to start position
+    move_to_start = move_to_start_of_main_trajectory(dt, take_off_traj[:, -1], 
+                                                   np.array([0.0, 0.0, base_height]))
+    
+    # Create vertical sine wave trajectory
+    steps = int(duration / dt)
+    time_space = np.linspace(0, duration, steps)
+    
+    # Fixed horizontal position
+    x_traj = np.zeros_like(time_space)
+    y_traj = np.zeros_like(time_space)
+    
+    # Vertical sine wave motion
+    z_traj = base_height + amplitude * np.sin(2 * np.pi * frequency * time_space)
+    
+    # Keep orientation level throughout
+    roll_traj = np.zeros_like(time_space)
+    pitch_traj = np.zeros_like(time_space)
+    yaw_traj = np.zeros_like(time_space)
+    
+    # Convert Euler angles to quaternions
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()
+    qx_traj = quaternions[:, 0]
+    qy_traj = quaternions[:, 1]
+    qz_traj = quaternions[:, 2]
+    qw_traj = quaternions[:, 3]
+    
+    # Calculate velocities
+    vx_traj = np.gradient(x_traj, dt)
+    vy_traj = np.gradient(y_traj, dt)
+    vz_traj = np.gradient(z_traj, dt)
+    
+    # Angular velocities (set to zero for stable hovering)
+    ax_traj = np.zeros_like(time_space)
+    ay_traj = np.zeros_like(time_space)
+    az_traj = np.zeros_like(time_space)
+    
+    zsine_traj = np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                           vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj])
+    
+    land_traj = land_trajectory(dt, zsine_traj[:, -1])
+    zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
+    
+    return np.concatenate((take_off_traj, move_to_start, zsine_traj, land_traj, zeros), axis=1)
 
 
 def four_roll_rotations_trajectory(dt):

@@ -2,7 +2,6 @@ import rclpy
 import signal
 import sys
 import numpy as np
-import copy
 import math
 import csv
 import os
@@ -16,9 +15,11 @@ from .acados import (
     set_initial_guess,
     warm_start_from_previous_solution,
     set_trajectory_reference_aligned,   # <-- NEW
+    set_adaptive_parameters,            # <-- NEW for adaptive parameters
 )
+from .ukf_estimator import UKFEstimator  # <-- UKF for adaptive parameter estimation
 from .gui import GUI
-from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory, hover_and_rotate, sine_wave_trajectory, hover_and_yaw, four_roll_rotations_trajectory
+from .trajectories import hover_trajectory, circle_trajectory, power_loop_trajectory, hover_and_rotate, sine_wave_trajectory, hover_and_yaw, four_roll_rotations_trajectory, zsine_trajectory
 from interfaces.msg import MotionCaptureState, ELRSCommand
 from geometry_msgs.msg import Pose, PoseArray
 
@@ -45,12 +46,9 @@ class Controller(Node):
 
         # self.timer_test_angular = self.create_timer(self.dt, self.angular_velocity_test)
 
-        #self.traj = circle_trajectory(self.dt)
         #self.traj = hover_and_yaw(self.dt)
-        #self.traj = hover_and_rotate(self.dt)
         self.traj = hover_trajectory(self.dt)
-        #self.traj = sine_wave_trajectory(self.dt)
-        #self.traj = four_roll_rotations_trajectory(self.dt)
+        #self.traj = zsine_trajectory(self.dt)
 
         self.steps = self.traj.shape[1] - 1
 
@@ -63,6 +61,16 @@ class Controller(Node):
 
         self.N = 30
         self.skip_steps = 3
+        # Parameters: [theta_roll, theta_pitch, theta_yaw, thrust_base, motor_time_constant, ixx, iyy, izz]
+        # thrust_base = 7.42678162 (will be multiplied by 1e-7 in dynamics)
+        # mass and motor_distance are now known constants in the dynamics model
+        self.params = np.array([0.0, 0.0, 0.0, 7.42678162, 0.12])
+        
+        # Initialize UKF estimator for adaptive parameter estimation (always enabled)
+        self.ukf = UKFEstimator(self.sim_integrator, self.dt, initial_params=self.params)
+        
+        # Set initial adaptive parameters for both solvers (only once)
+        set_adaptive_parameters(self.ocp, self.sim_integrator, self.params, self.N)
         self.predicted_next_state = None
         self.last_pose = None
         self.last_control = None
@@ -109,9 +117,15 @@ class Controller(Node):
                 'u_dot_4', 'u_dot_5', 'u_dot_6', 'u_dot_7'
             ]
             
+            # Create headers for prediction errors
+            error_headers = [
+                'pos_error', 'quat_error', 'vel_error', 'angvel_error', 
+                'act_error', 'des_act_error'
+            ]
+            
             self.csv_writer.writerow([
                 'Step'
-            ] + x0_headers + u_dot_headers + x_next_headers)
+            ] + x0_headers + u_dot_headers + x_next_headers + error_headers)
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
@@ -122,41 +136,21 @@ class Controller(Node):
         ])
 
     def expand_state_to_29d(self, state_13d, actual_actuators=None, desired_actuators=None):
-        """
-        Expand a 13-dimensional state to 29 dimensions by adding actual and desired actuator states.
-        
-        Args:
-            state_13d: (13,) array with [p, q, v, r]
-            actual_actuators: (8,) array with actual actuator states. If None, uses hover values.
-            desired_actuators: (8,) array with desired actuator states. If None, uses hover values.
-        
-        Returns:
-            state_29d: (29,) array with [p, q, v, r, actual_actuators, desired_actuators]
-        """
         if actual_actuators is None:
-            # Start with hover actuator values
             actual_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
         if desired_actuators is None:
-            # Start with hover actuator values
             desired_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
         return np.concatenate([state_13d, actual_actuators, desired_actuators])
 
     def get_current_state_29d(self):
-        """
-        Get current state expanded to 29 dimensions. 
-        For the actuator states, we'll try to get them from the solver if available,
-        otherwise use the last known values or hover values.
-        """
         if hasattr(self, 'last_actual_actuators') and self.last_actual_actuators is not None:
             actual_actuators = self.last_actual_actuators
         else:
-            # Start with hover actual actuator values
             actual_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
             
         if hasattr(self, 'last_desired_actuators') and self.last_desired_actuators is not None:
             desired_actuators = self.last_desired_actuators
         else:
-            # Start with hover desired actuator values
             desired_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
         
         return self.expand_state_to_29d(self.current_pose, actual_actuators, desired_actuators)
@@ -197,10 +191,36 @@ class Controller(Node):
             x0 = self.get_current_state_29d()  # Get 29D current state
             x0[3:7] = _norm_quat_np(x0[3:7])  # ensure unit quaternion
             
+            # UKF Adaptive Parameter Estimation (always enabled)
+            if self.step_counter > 0:  # Skip first step for initialization
+                # Use the control from the previous step for UKF prediction
+                prev_u_dot = self.last_control if self.last_control is not None else np.zeros(8)
+                
+                # Update actuator states in UKF before prediction
+                if hasattr(self, 'last_actual_actuators') and self.last_actual_actuators is not None:
+                    self.ukf.update_actuator_states(self.last_actual_actuators, self.last_desired_actuators)
+                
+                # Update UKF with current measurement and previous control
+                estimated_params = self.ukf.predict_and_update(self.current_pose, prev_u_dot)
+                
+                # Update parameters used by MPC solver
+                self.params = estimated_params.copy()
+                set_adaptive_parameters(self.ocp, self.sim_integrator, self.params, self.N)
+                
+                print(f"UKF estimated params: {[round(val, 4) for val in estimated_params]}")
+            elif self.step_counter == 0:
+                # Initialize UKF with current state on first step
+                # Provide actuator states if available, otherwise use defaults
+                if hasattr(self, 'last_actual_actuators') and self.last_actual_actuators is not None:
+                    actuator_states = np.concatenate([self.last_actual_actuators, self.last_desired_actuators])
+                    self.ukf.set_initial_state(self.current_pose, actuator_states)
+                else:
+                    self.ukf.set_initial_state(self.current_pose)
+            
             # The key fix: Set both lower and upper bounds to the current state
             # This constrains the first shooting node to the current measured/estimated state
-            self.ocp.set(0, "lbx", x0 - 0.05*x0)
-            self.ocp.set(0, "ubx", x0 + 0.05*x0)
+            self.ocp.set(0, "lbx", x0 - 0.025*x0)
+            self.ocp.set(0, "ubx", x0 + 0.025*x0)
 
             if not self.initial_guess_set:
                 set_initial_guess(self.ocp, self.N)
@@ -214,6 +234,9 @@ class Controller(Node):
 
             u_dot_rates = self.ocp.get(0, "u")  # These are now rates of desired actuators (d(u_desired)/dt)
             
+            # Store control for next UKF iteration
+            self.last_control = u_dot_rates.copy()
+            
             # Get the states from the optimized solution
             x_next = self.ocp.get(1, "x")  # Next optimized state 
             actual_actuators = x_next[13:21].copy()  # Extract actual actuator states
@@ -222,10 +245,6 @@ class Controller(Node):
             # Store for next iteration
             self.last_actual_actuators = actual_actuators
             self.last_desired_actuators = desired_actuators
-
-            print(f"Control rates (u_dot): {u_dot_rates}")
-            print(f"Desired actuators: {desired_actuators}")
-            print(f"Actual actuators: {actual_actuators}")
 
             # Send the ACTUAL actuator values (not desired) to the motors
             # The actual actuators will lag behind the desired ones due to first-order dynamics
@@ -243,8 +262,32 @@ class Controller(Node):
             self.cmd_publisher_.publish(msg)
             self.step_counter += 1
 
-            # Save data: step_counter, x0 (29D), u_dot_rates (8D), x_next (29D) as separate columns
-            row_data = [self.step_counter] + list(x0) + list(u_dot_rates) + list(x_next)
+            # Run simulation integrator to predict next state using same inputs as MPC
+            self.sim_integrator.set("x", x0) 
+            self.sim_integrator.set("u", u_dot_rates) 
+            self.sim_integrator.set("p", self.params)
+            status_sim = self.sim_integrator.solve()
+            self.estimated_state = self.sim_integrator.get("x")
+
+            # Calculate prediction error between MPC's predicted next state and sim integrator's prediction
+            prediction_error = x_next - self.estimated_state
+            
+            # Calculate norms for different state components
+            position_error = np.linalg.norm(prediction_error[0:3])
+            quaternion_error = np.linalg.norm(prediction_error[3:7])
+            velocity_error = np.linalg.norm(prediction_error[7:10])
+            angular_vel_error = np.linalg.norm(prediction_error[10:13])
+            actuator_error = np.linalg.norm(prediction_error[13:21])
+            desired_actuator_error = np.linalg.norm(prediction_error[21:29])
+            
+            print(f"Prediction Errors - Pos: {position_error:.6f}, Quat: {quaternion_error:.6f}, " f"Vel: {velocity_error:.6f}, AngVel: {angular_vel_error:.6f}")
+
+
+
+            # Save data: step_counter, x0 (29D), u_dot_rates (8D), x_next (29D), errors (6) as separate columns
+            error_data = [position_error, quaternion_error, velocity_error, 
+                         angular_vel_error, actuator_error, desired_actuator_error]
+            row_data = [self.step_counter] + list(x0) + list(u_dot_rates) + list(x_next) + error_data
             self.csv_writer.writerow(row_data)
 
 

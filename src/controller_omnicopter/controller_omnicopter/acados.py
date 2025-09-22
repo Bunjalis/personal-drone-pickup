@@ -29,7 +29,8 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     model.name = 'quad_dynamics'
     model.x = quad_dynamics.x  # [p(3), q(4=wxyz), v(3), r(3), actuators(8), u_desired(8)] -> 29 states
     model.u = quad_dynamics.u_dot  # control input is now u_dot (8 inputs)
-    model.f_expl_expr = dynamics_expr(quad_dynamics.x, quad_dynamics.u_dot)
+    model.p = quad_dynamics.params  # adaptive parameters [theta_roll, theta_pitch, theta_yaw, thrust_base, motor_time_constant, ixx, iyy, izz] -> 8 parameters
+    model.f_expl_expr = dynamics_expr(quad_dynamics.x, quad_dynamics.u_dot, quad_dynamics.params)
 
     # Create OCP object
     ocp = AcadosOcp()
@@ -42,6 +43,7 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     # dims
     nx = 29  # Updated from 21 to 29 (13 + 8 actual actuators + 8 desired actuators)
     nu = int(model.u.size()[0])  # should be 8 for your setup
+    np_param = int(model.p.size()[0])  # should be 8 for adaptive parameters [theta_roll, theta_pitch, theta_yaw, thrust_base, motor_time_constant, ixx, iyy, izz]
     ny = nx  # we will NOT penalize inputs in LINEAR_LS (no R term)
 
     # ---------- Cost (LINEAR_LS on states only) ----------
@@ -93,6 +95,10 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     x0[21:29] = hover_values  # desired actuator states start at hover
     ocp.constraints.x0 = x0
 
+    # ---------- Initial parameter values (adaptive estimator parameters) ----------
+    p0 = np.array([0.0, 0.0, 0.0, 7.42678162, 0.12])  # [theta_roll, theta_pitch, theta_yaw, thrust_base, motor_time_constant]
+    ocp.parameter_values = p0
+
     # ---------- Input constraints ----------
     max_rate = 1.2  # Maximum rate of change for actuator values
     ocp.constraints.lbu = np.full((nu,), -max_rate)
@@ -143,7 +149,8 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     # Create simulation configuration (note: 0.01 s -> 100 Hz)
     sim = AcadosSim()
     sim.model = ocp.model
-    sim.solver_options.T = 1.0 / 100.0
+    sim.solver_options.T = 1.0 / 30.0
+    sim.parameter_values = p0  # Set initial parameter values for simulator
     sim_solver = AcadosSimSolver(sim)
 
     return ocp_solver, sim_solver
@@ -177,6 +184,26 @@ def warm_start_from_previous_solution(ocp_solver, N_horizon=20):
         ocp_solver.set(i, "u", u_prev)
     u_last = ocp_solver.get(N_horizon - 1, "u")
     ocp_solver.set(N_horizon - 1, "u", u_last)
+
+
+def set_adaptive_parameters(ocp_solver, sim_solver, theta_params: np.ndarray, N_horizon: int):
+    """
+    Set the adaptive estimator parameters for both OCP solver and simulator.
+    
+    Args:
+        ocp_solver: Acados OCP solver
+        sim_solver: Acados simulation solver  
+        theta_params: np.ndarray of shape (8,) containing [theta_roll, theta_pitch, theta_yaw, thrust_base, motor_time_constant, ixx, iyy, izz]
+        N_horizon: Number of shooting nodes in the horizon
+    """
+    theta_params = np.array(theta_params, dtype=float)
+    
+    # Set parameters for all shooting nodes in OCP solver
+    for i in range(N_horizon + 1):  # Include terminal node
+        ocp_solver.set(i, "p", theta_params)
+    
+    # Set parameters for the simulator
+    sim_solver.set("p", theta_params)
 
 
 # ---------- NEW: helpers to set yref with quaternion sign-alignment ----------
