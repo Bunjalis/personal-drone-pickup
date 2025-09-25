@@ -54,8 +54,8 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
         6.1, 6.1, 6.1, 6.1, # quaternion (we'll apply norm-weighting below)
         0.1, 0.1, 0.1,      # velocity
         0.1, 0.1, 0.1,      # body rates
-        0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01,  # actual actuator states (small weight)
-        0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1   # desired actuator states (medium weight)
+        0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001,  # actual actuator states (small weight)
+        0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001   # desired actuator states (medium weight)
     ])
 
     # ---- "Quaternion norm weighting" (reduce axis bias) ----
@@ -90,7 +90,7 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     x0 = np.zeros(nx)
     x0[3] = 1.0  # unit quaternion, w=1
     # Initialize both actual and desired actuator states to hover values
-    hover_values = np.array([-0.28, 0.28, -0.28, 0.28, 0.28, -0.28, 0.28, -0.28])
+    hover_values = np.array([-0.07, 0.07, -0.07, 0.07, 0.07, -0.07, 0.07, -0.07])
     x0[13:21] = hover_values  # actual actuator states start at hover
     x0[21:29] = hover_values  # desired actuator states start at hover
     ocp.constraints.x0 = x0
@@ -100,15 +100,15 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     ocp.parameter_values = p0
 
     # ---------- Input constraints ----------
-    max_rate = 1.2  # Maximum rate of change for actuator values
+    max_rate = 0.1 # Maximum rate of change for actuator values
     ocp.constraints.lbu = np.full((nu,), -max_rate)
     ocp.constraints.ubu = np.full((nu,),  max_rate)
     ocp.constraints.idxbu = np.arange(nu, dtype=int)
 
     # ---------- State constraints (for actuator values) ----------
     # Constrain both actual and desired actuator states to be within reasonable bounds
-    actuator_min = -0.7
-    actuator_max = 0.7
+    actuator_min = -1.0
+    actuator_max = 1.0
     
     # State bounds for all shooting nodes (not initial)
     # Use large finite values instead of inf to avoid JSON serialization issues

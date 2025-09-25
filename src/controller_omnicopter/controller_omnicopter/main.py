@@ -46,8 +46,8 @@ class Controller(Node):
 
         # self.timer_test_angular = self.create_timer(self.dt, self.angular_velocity_test)
 
-        #self.traj = hover_and_yaw(self.dt)
-        self.traj = hover_trajectory(self.dt)
+        self.traj = hover_and_yaw(self.dt)
+        #self.traj = hover_trajectory(self.dt)
         #self.traj = zsine_trajectory(self.dt)
 
         self.steps = self.traj.shape[1] - 1
@@ -68,18 +68,20 @@ class Controller(Node):
         
         # Initialize UKF estimator for adaptive parameter estimation (always enabled)
         self.ukf = UKFEstimator(self.sim_integrator, self.dt, initial_params=self.params)
-        
+    
         # Set initial adaptive parameters for both solvers (only once)
         set_adaptive_parameters(self.ocp, self.sim_integrator, self.params, self.N)
         self.predicted_next_state = None
         self.last_pose = None
         self.last_control = None
+        self.last_predicted_state = None  # Store predicted state for error calculation
 
         self.sent_command = False
         self.initial_guess_set = False
         self.last_actual_actuators = None  # Track last actual actuator states
         self.last_desired_actuators = None  # Track last desired actuator states
-        self.sd = 0.20
+        self.sd = 0.2
+        self.IG = 0.04
 
         # CSV init
         if not hasattr(self, 'csv_initialized'):
@@ -137,21 +139,21 @@ class Controller(Node):
 
     def expand_state_to_29d(self, state_13d, actual_actuators=None, desired_actuators=None):
         if actual_actuators is None:
-            actual_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
+            actual_actuators = np.array([-self.IG, self.IG, -self.IG, self.IG, self.IG, -self.IG, self.IG, -self.IG])
         if desired_actuators is None:
-            desired_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
+            desired_actuators = np.array([-self.IG, self.IG, -self.IG, self.IG, self.IG, -self.IG, self.IG, -self.IG])
         return np.concatenate([state_13d, actual_actuators, desired_actuators])
 
     def get_current_state_29d(self):
         if hasattr(self, 'last_actual_actuators') and self.last_actual_actuators is not None:
             actual_actuators = self.last_actual_actuators
         else:
-            actual_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
+            actual_actuators = np.array([-self.IG, self.IG, -self.IG, self.IG, self.IG, -self.IG, self.IG, -self.IG])
             
         if hasattr(self, 'last_desired_actuators') and self.last_desired_actuators is not None:
             desired_actuators = self.last_desired_actuators
         else:
-            desired_actuators = np.array([-self.sd, self.sd, -self.sd, self.sd, self.sd, -self.sd, self.sd, -self.sd])
+            desired_actuators = np.array([-self.IG, self.IG, -self.IG, self.IG, self.IG, -self.IG, self.IG, -self.IG])
         
         return self.expand_state_to_29d(self.current_pose, actual_actuators, desired_actuators)
 
@@ -197,17 +199,17 @@ class Controller(Node):
                 prev_u_dot = self.last_control if self.last_control is not None else np.zeros(8)
                 
                 # Update actuator states in UKF before prediction
-                if hasattr(self, 'last_actual_actuators') and self.last_actual_actuators is not None:
-                    self.ukf.update_actuator_states(self.last_actual_actuators, self.last_desired_actuators)
+                #if hasattr(self, 'last_actual_actuators') and self.last_actual_actuators is not None:
+                #    self.ukf.update_actuator_states(self.last_actual_actuators, self.last_desired_actuators)
                 
                 # Update UKF with current measurement and previous control
-                estimated_params = self.ukf.predict_and_update(self.current_pose, prev_u_dot)
+                #estimated_params = self.ukf.predict_and_update(self.current_pose, prev_u_dot)
                 
                 # Update parameters used by MPC solver
-                self.params = estimated_params.copy()
-                set_adaptive_parameters(self.ocp, self.sim_integrator, self.params, self.N)
+                #self.params = estimated_params.copy()
+                #set_adaptive_parameters(self.ocp, self.sim_integrator, self.params, self.N)
                 
-                print(f"UKF estimated params: {[round(val, 4) for val in estimated_params]}")
+                #print(f"UKF estimated params: {[round(val, 4) for val in estimated_params]}")
             elif self.step_counter == 0:
                 # Initialize UKF with current state on first step
                 # Provide actuator states if available, otherwise use defaults
@@ -239,50 +241,67 @@ class Controller(Node):
             
             # Get the states from the optimized solution
             x_next = self.ocp.get(1, "x")  # Next optimized state 
-            actual_actuators = x_next[13:21].copy()  # Extract actual actuator states
-            desired_actuators = x_next[21:29].copy()  # Extract desired actuator states
+            actual_actuators = x_next[13:21].copy()  # Extract actual actuator states (force values)
+            desired_actuators = x_next[21:29].copy()  # Extract desired actuator states (force values)
             
             # Store for next iteration
             self.last_actual_actuators = actual_actuators
             self.last_desired_actuators = desired_actuators
 
-            # Send the ACTUAL actuator values (not desired) to the motors
-            # The actual actuators will lag behind the desired ones due to first-order dynamics
+
+            motor_speeds = np.sqrt(np.abs(desired_actuators))
+            # Preserve sign of original actuator values
+            motor_speeds = np.sign(desired_actuators) * motor_speeds
+            
+            # Clamp motor speeds to [-1, 1] range for safety
+            motor_speeds = np.clip(motor_speeds, -1.0, 1.0)
+
+            # Send the converted motor speeds to the motors
             msg = ELRSCommand(
                 armed=True,
-                channel_0=round(actual_actuators[0], 3),
-                channel_1=round(actual_actuators[1], 3),
-                channel_2=round(actual_actuators[2], 3),
-                channel_3=round(actual_actuators[3], 3),
-                channel_4=round(actual_actuators[4], 3),
-                channel_5=round(actual_actuators[5], 3),
-                channel_6=round(actual_actuators[6], 3),
-                channel_7=round(actual_actuators[7], 3)
+                channel_0=round(motor_speeds[0], 3),
+                channel_1=round(motor_speeds[1], 3),
+                channel_2=round(motor_speeds[2], 3),
+                channel_3=round(motor_speeds[3], 3),
+                channel_4=round(motor_speeds[4], 3),
+                channel_5=round(motor_speeds[5], 3),
+                channel_6=round(motor_speeds[6], 3),
+                channel_7=round(motor_speeds[7], 3)
             )
             self.cmd_publisher_.publish(msg)
             self.step_counter += 1
 
-            # Run simulation integrator to predict next state using same inputs as MPC
+            print(f"Step {self.step_counter}, Control (des_act): {[round(val, 4) for val in desired_actuators]}")
+            print(f"Step {self.step_counter}, Control (mot_spd): {[round(val, 4) for val in motor_speeds]}")
+
+            # Calculate prediction error from previous timestep (if available)
+            prediction_error = np.zeros(29)  # Initialize with zeros
+            position_error = quaternion_error = velocity_error = 0.0
+            angular_vel_error = actuator_error = desired_actuator_error = 0.0
+            
+            if self.last_predicted_state is not None:
+                # Compare last predicted state with current actual observed state
+                prediction_error = x0 - self.last_predicted_state
+                
+                # Calculate norms for different state components
+                position_error = np.linalg.norm(prediction_error[0:3])
+                quaternion_error = np.linalg.norm(prediction_error[3:7])
+                velocity_error = np.linalg.norm(prediction_error[7:10])
+                angular_vel_error = np.linalg.norm(prediction_error[10:13])
+                actuator_error = np.linalg.norm(prediction_error[13:21])
+                desired_actuator_error = np.linalg.norm(prediction_error[21:29])
+
+
+                print(x0[7:10])
+                print(self.last_predicted_state[7:10])
+                print(prediction_error[7:10])
+
+            # Run simulation integrator to predict next state for comparison in next iteration
             self.sim_integrator.set("x", x0) 
             self.sim_integrator.set("u", u_dot_rates) 
             self.sim_integrator.set("p", self.params)
             status_sim = self.sim_integrator.solve()
-            self.estimated_state = self.sim_integrator.get("x")
-
-            # Calculate prediction error between MPC's predicted next state and sim integrator's prediction
-            prediction_error = x_next - self.estimated_state
-            
-            # Calculate norms for different state components
-            position_error = np.linalg.norm(prediction_error[0:3])
-            quaternion_error = np.linalg.norm(prediction_error[3:7])
-            velocity_error = np.linalg.norm(prediction_error[7:10])
-            angular_vel_error = np.linalg.norm(prediction_error[10:13])
-            actuator_error = np.linalg.norm(prediction_error[13:21])
-            desired_actuator_error = np.linalg.norm(prediction_error[21:29])
-            
-            print(f"Prediction Errors - Pos: {position_error:.6f}, Quat: {quaternion_error:.6f}, " f"Vel: {velocity_error:.6f}, AngVel: {angular_vel_error:.6f}")
-
-
+            self.last_predicted_state = self.sim_integrator.get("x")  # Store for next iteration comparison
 
             # Save data: step_counter, x0 (29D), u_dot_rates (8D), x_next (29D), errors (6) as separate columns
             error_data = [position_error, quaternion_error, velocity_error, 
