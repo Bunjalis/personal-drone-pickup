@@ -52,6 +52,7 @@
         </link>
 
 
+
         <link name="X3/rotor_0">
             <pose frame="X3/base_link">-0.0865 -0.073 0 0 0 0</pose>
             <inertial>

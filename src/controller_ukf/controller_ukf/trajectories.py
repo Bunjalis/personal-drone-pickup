@@ -3,7 +3,6 @@ from scipy.spatial.transform import Rotation as R
 
 
 
-
 def takeoff_trajectory(dt):
     steps_takeoff = 1 * 30  # 1 second of takeoff at 30 Hz
     steps_hover = 2 * 30    # 2 seconds of hover at 30 Hz
@@ -201,8 +200,8 @@ def xyz_sine_trajectory(dt):
 
     steps = 20 * 30  # 10 seconds of hover at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
-    x_traj = 0.0 + 1.0 * np.sin(9.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space)
-    y_traj = 0.0 + 1.0 * np.sin(9.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space) # 0.0 + 0.5 * np.sin(1.0 * np.pi * time_space / 5.0)
+    x_traj = 0.0 + 1.0 * np.sin(2.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space)
+    y_traj = 0.0 + 1.0 * np.sin(1.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space) # 0.0 + 0.5 * np.sin(1.0 * np.pi * time_space / 5.0)
     z_traj = 1.5 + 0.5 * np.sin(3.0 * np.pi * time_space / 5.0)#1.2 * np.ones_like(time_space) #1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)    #
 
     roll_traj = np.zeros_like(time_space)
@@ -231,8 +230,6 @@ def xyz_sine_trajectory(dt):
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
     return np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
-
-
 
 
 
@@ -393,20 +390,23 @@ def light_circle_trajectory(dt):
     return np.concatenate((take_off_traj, hover_traj, land_traj, zeros), axis=1)
 
 
-def backflip_trajectory(dt):
+def yaw_trajectory(dt):
+    """
+    Trajectory that performs takeoff, hover, yaw rotation, then land.
+    The drone yaws 90 degrees over 1 second while hovering.
+    """
     take_off_traj = takeoff_trajectory(dt)
     
-    # Backsault parameters
-    backsault_duration = 2.0  # seconds to complete backsault
-    steps_backsault = int(backsault_duration * 30)  # 30 Hz
-    time_space_backsault = np.linspace(0, backsault_duration, steps_backsault)
-    
-    # Hover before backsault (2 seconds)
-    steps_pre_hover = 2 * 30
+    # Pre-yaw hover (2 seconds)
+    steps_pre_hover = 0 * 30  # 2 seconds at 30 Hz
     time_space_pre_hover = np.linspace(0, steps_pre_hover * dt, steps_pre_hover)
     
-    # Hover after backsault (2 seconds)
-    steps_post_hover = 2 * 30
+    # Yaw phase (3 seconds for full 360-degree rotation)
+    steps_yaw = 1 * 30  # 3 seconds at 30 Hz
+    time_space_yaw = np.linspace(0, steps_yaw * dt, steps_yaw)
+    
+    # Post-yaw hover (2 seconds)
+    steps_post_hover = 5 * 30  # 2 seconds at 30 Hz  
     time_space_post_hover = np.linspace(0, steps_post_hover * dt, steps_post_hover)
     
     # Get takeoff end position
@@ -414,52 +414,47 @@ def backflip_trajectory(dt):
     takeoff_end_y = take_off_traj[1, -1]  # y position
     takeoff_end_z = take_off_traj[2, -1]  # z position
     
-    # Pre-hover phase - maintain position
+    # Position trajectories - maintain hover position throughout
+    hover_altitude = 1.0
     x_traj_pre_hover = np.full_like(time_space_pre_hover, takeoff_end_x)
     y_traj_pre_hover = np.full_like(time_space_pre_hover, takeoff_end_y)
-    z_traj_pre_hover = np.full_like(time_space_pre_hover, 1.5)  # Higher altitude for safety
+    z_traj_pre_hover = np.full_like(time_space_pre_hover, hover_altitude)
     
-    # Backsault phase - arc trajectory with 0.5m radius
-    radius = 0.5  # 0.5 meter radius for the backsault
-    center_x = takeoff_end_x - radius  # Center of the arc is 0.5m behind starting position
-    center_z = 1.5  # Same altitude as hover
+    x_traj_yaw = np.full_like(time_space_yaw, takeoff_end_x)
+    y_traj_yaw = np.full_like(time_space_yaw, takeoff_end_y)
+    z_traj_yaw = np.full_like(time_space_yaw, hover_altitude)
     
-    # Parametric arc from 0 to π (semicircle)
-    theta = np.linspace(0, np.pi, steps_backsault)  # From 0 to π for backward arc
-    x_traj_backsault = center_x + radius * np.cos(theta)  # Moves backward then forward
-    y_traj_backsault = np.full_like(time_space_backsault, takeoff_end_y)  # No y movement
-    z_traj_backsault = center_z + radius * np.sin(theta)  # Arc up and down
-    
-    # Post-hover phase - maintain final position
-    final_x = x_traj_backsault[-1]  # Should be back to starting x position
-    x_traj_post_hover = np.full_like(time_space_post_hover, final_x)
+    x_traj_post_hover = np.full_like(time_space_post_hover, takeoff_end_x)
     y_traj_post_hover = np.full_like(time_space_post_hover, takeoff_end_y)
-    z_traj_post_hover = np.full_like(time_space_post_hover, 1.5)
+    z_traj_post_hover = np.full_like(time_space_post_hover, hover_altitude)
     
     # Combine position trajectories
-    x_traj_combined = np.concatenate((x_traj_pre_hover, x_traj_backsault, x_traj_post_hover))
-    y_traj_combined = np.concatenate((y_traj_pre_hover, y_traj_backsault, y_traj_post_hover))
-    z_traj_combined = np.concatenate((z_traj_pre_hover, z_traj_backsault, z_traj_post_hover))
-    time_space_combined = np.concatenate((time_space_pre_hover, time_space_backsault, time_space_post_hover))
+    x_traj_combined = np.concatenate((x_traj_pre_hover, x_traj_yaw, x_traj_post_hover))
+    y_traj_combined = np.concatenate((y_traj_pre_hover, y_traj_yaw, y_traj_post_hover))
+    z_traj_combined = np.concatenate((z_traj_pre_hover, z_traj_yaw, z_traj_post_hover))
+    time_space_combined = np.concatenate((time_space_pre_hover, time_space_yaw, time_space_post_hover))
     
     # Orientation trajectories
+    # Pre-yaw: maintain zero orientation
     roll_traj_pre = np.zeros_like(time_space_pre_hover)
     pitch_traj_pre = np.zeros_like(time_space_pre_hover)
     yaw_traj_pre = np.zeros_like(time_space_pre_hover)
     
-    # Backsault: complete 360-degree rotation around pitch axis synchronized with arc
-    roll_traj_backsault = np.zeros_like(time_space_backsault)
-    pitch_traj_backsault = np.linspace(0, 2 * np.pi, steps_backsault)  # Full rotation
-    yaw_traj_backsault = np.zeros_like(time_space_backsault)
+    # Yaw phase: rotate 360 degrees (2π radians) over 3 seconds
+    roll_traj_yaw = np.zeros_like(time_space_yaw)
+    pitch_traj_yaw = np.zeros_like(time_space_yaw)
+    yaw_traj_yaw = np.zeros_like(time_space_yaw)
+    pitch_traj_yaw = np.linspace(0, 2 * np.pi, steps_yaw)  # 360 degree yaw rotation
     
+    # Post-yaw: maintain final yaw angle (back to 0 degrees after full rotation)
     roll_traj_post = np.zeros_like(time_space_post_hover)
     pitch_traj_post = np.zeros_like(time_space_post_hover)
-    yaw_traj_post = np.zeros_like(time_space_post_hover)
+    yaw_traj_post = np.full_like(time_space_post_hover, 2 * np.pi)  # Maintain 360 degrees (equivalent to 0)
     
     # Combine orientation trajectories
-    roll_traj = np.concatenate((roll_traj_pre, roll_traj_backsault, roll_traj_post))
-    pitch_traj = np.concatenate((pitch_traj_pre, pitch_traj_backsault, pitch_traj_post))
-    yaw_traj = np.concatenate((yaw_traj_pre, yaw_traj_backsault, yaw_traj_post))
+    roll_traj = np.concatenate((roll_traj_pre, roll_traj_yaw, roll_traj_post))
+    pitch_traj = np.concatenate((pitch_traj_pre, pitch_traj_yaw, pitch_traj_post))
+    yaw_traj = np.concatenate((yaw_traj_pre, yaw_traj_yaw, yaw_traj_post))
     
     # Convert to quaternions
     rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
@@ -489,10 +484,197 @@ def backflip_trajectory(dt):
     u3 = np.zeros_like(time_space_combined)
     u4 = np.zeros_like(time_space_combined)
     
-    backsault_traj = np.array([x_traj_combined, y_traj_combined, z_traj_combined, qw_traj, qx_traj, qy_traj, qz_traj,
+    yaw_hover_traj = np.array([x_traj_combined, y_traj_combined, z_traj_combined, qw_traj, qx_traj, qy_traj, qz_traj,
                               vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
     
-    land_traj = land_trajectory(dt, backsault_traj[:, -1])
+    land_traj = land_trajectory(dt, yaw_hover_traj[:, -1])
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
     
-    return np.concatenate((take_off_traj, backsault_traj, land_traj, zeros), axis=1)
+    return np.concatenate((take_off_traj, yaw_hover_traj, land_traj, zeros), axis=1)
+
+
+
+
+
+
+def power_loop_trajectory(dt):
+    take_off_traj = takeoff_trajectory(dt)
+
+    # Phase lengths (Hz assumed 30 via your code)
+    hz = 30
+    steps_runup        = 1 * hz   # 1 s run-up (comment said 3 s previously; leaving as code dictates)
+    steps_loop         = 3 * hz   # 3 s loop
+    steps_rundown      = 3 * hz   # 3 s run-down
+    steps_final_hover  = 2 * hz   # 2 s hover
+
+    time_space_runup        = np.linspace(0, steps_runup * dt, steps_runup, endpoint=False)
+    time_space_loop         = np.linspace(0, steps_loop * dt, steps_loop, endpoint=False)
+    time_space_rundown      = np.linspace(0, steps_rundown * dt, steps_rundown, endpoint=False)
+    time_space_final_hover  = np.linspace(0, steps_final_hover * dt, steps_final_hover, endpoint=False)
+
+    # Takeoff end position
+    takeoff_end_x = take_off_traj[0, -1]
+    takeoff_end_y = take_off_traj[1, -1]
+    takeoff_end_z = take_off_traj[2, -1]
+
+    # Loop geometry
+    loop_radius   = 1.1
+    loop_center_x = 1.0
+    loop_center_z = takeoff_end_z + loop_radius
+
+    # --- KEYFRAMES (θ in DEGREES from bottom) ---
+    # Feel free to tweak these. They aim to keep your original “feel”:
+    # bottom ~ level, right ~ +30° nose up, top ~ -90° (center-pointing),
+    # left ~ -30°, back to bottom ~ level.
+    keyframes = [
+        {'theta_deg':   0.0, 'pitch_deg':  30.0},
+        {'theta_deg':  90.0, 'pitch_deg':  0.0},
+        {'theta_deg': 180.0, 'pitch_deg': -100.0},
+        {'theta_deg': 270.0, 'pitch_deg': -300.0},
+        {'theta_deg': 360.0, 'pitch_deg':   -400.0},
+    ]
+
+    # --- Phase 1: Run-up to bottom entry point ---
+    x_runup_start = takeoff_end_x
+    x_runup_end   = loop_center_x
+    z_runup_start = takeoff_end_z
+    z_runup_end   = loop_center_z - loop_radius  # bottom of loop
+
+    x_traj_runup = np.linspace(x_runup_start, x_runup_end, steps_runup, endpoint=False)
+    y_traj_runup = np.full_like(time_space_runup, takeoff_end_y)
+    z_traj_runup = np.linspace(z_runup_start, z_runup_end, steps_runup, endpoint=False)
+
+    # --- Phase 2: Power loop (θ from 0° -> 360°) ---
+    theta_deg_loop = np.linspace(0.0, 360.0, steps_loop, endpoint=False)
+
+    # Convert bottom-based degrees (0° at bottom) to standard circle param φ (0° at +x/right).
+    # Bottom corresponds to φ=270°, so φ = θ + 270 (mod 360).
+    phi_deg = (theta_deg_loop + 270.0) % 360.0
+    phi_rad = np.deg2rad(phi_deg)
+
+    x_traj_loop = loop_center_x + loop_radius * np.cos(phi_rad)
+    y_traj_loop = np.full_like(time_space_loop, takeoff_end_y)
+    z_traj_loop = loop_center_z + loop_radius * np.sin(phi_rad)
+
+    # --- Phase 3: Run-down back to hover position ---
+    x_rundown_start = loop_center_x
+    x_rundown_end   = takeoff_end_x
+    z_rundown_start = loop_center_z - loop_radius
+    z_rundown_end   = takeoff_end_z
+
+    x_traj_rundown = np.linspace(x_rundown_start, x_rundown_end, steps_rundown, endpoint=False)
+    y_traj_rundown = np.full_like(time_space_rundown, takeoff_end_y)
+    z_traj_rundown = np.linspace(z_rundown_start, z_rundown_end, steps_rundown, endpoint=False)
+
+    # --- Phase 4: Final hover ---
+    x_traj_final_hover = np.full_like(time_space_final_hover, takeoff_end_x)
+    y_traj_final_hover = np.full_like(time_space_final_hover, takeoff_end_y)
+    z_traj_final_hover = np.full_like(time_space_final_hover, takeoff_end_z)
+
+    # Combine position trajectories
+    x_traj_combined = np.concatenate((x_traj_runup, x_traj_loop, x_traj_rundown, x_traj_final_hover))
+    y_traj_combined = np.concatenate((y_traj_runup, y_traj_loop, y_traj_rundown, y_traj_final_hover))
+    z_traj_combined = np.concatenate((z_traj_runup, z_traj_loop, z_traj_rundown, z_traj_final_hover))
+    time_space_combined = np.concatenate((time_space_runup, time_space_loop, time_space_rundown, time_space_final_hover))
+
+    # --- Orientation (roll=0, yaw=0; pitch from keyframes) ---
+    roll_traj = np.zeros_like(time_space_combined)
+    yaw_traj  = np.zeros_like(time_space_combined)
+    pitch_traj = np.zeros_like(time_space_combined)
+
+    # Phase 1: pitch up slightly for entry
+    pitch_start = 0.0
+    pitch_end   = np.deg2rad(20.0)
+    pitch_traj[:steps_runup] = np.linspace(pitch_start, pitch_end, steps_runup, endpoint=False)
+
+    # Phase 2: pitch from keyframes along θ
+    loop_start_idx = steps_runup
+    loop_end_idx   = steps_runup + steps_loop
+
+    # Sort and unwrap keyframes in degrees [0,360], allow wrap-around interpolation
+    kf_thetas = np.array([kf['theta_deg'] for kf in keyframes], dtype=float)
+    kf_pitchs = np.deg2rad(np.array([kf['pitch_deg'] for kf in keyframes], dtype=float))
+    sort_idx = np.argsort(kf_thetas)
+    kf_thetas = kf_thetas[sort_idx]
+    kf_pitchs = kf_pitchs[sort_idx]
+
+    # For fast lookup, pre-build arrays for piecewise-linear interpolation with wrap:
+    # Extend by one keyframe at +360° for continuous interpolation at the end.
+    kf_thetas_ext = np.concatenate((kf_thetas, [kf_thetas[0] + 360.0]))
+    kf_pitchs_ext = np.concatenate((kf_pitchs, [kf_pitchs[0]]))
+
+    def interp_pitch_deg_from_bottom(theta_deg):
+        """Linear interpolate pitch (radians) from keyframes at θ in degrees [0,360)."""
+        # Find segment
+        idx = np.searchsorted(kf_thetas_ext, theta_deg, side='right') - 1
+        idx = np.clip(idx, 0, len(kf_thetas_ext) - 2)
+        t1, p1 = kf_thetas_ext[idx], kf_pitchs_ext[idx]
+        t2, p2 = kf_thetas_ext[idx + 1], kf_pitchs_ext[idx + 1]
+        if t2 == t1:
+            return p1
+        w = (theta_deg - t1) / (t2 - t1)
+        return p1 + w * (p2 - p1)
+
+    for i, th in enumerate(theta_deg_loop):
+        pitch_traj[loop_start_idx + i] = interp_pitch_deg_from_bottom(th)
+
+    # Phase 3: pitch based on path slope (keeps a “natural” rundown)
+    vx_runup_rundown = np.concatenate((
+        np.gradient(x_traj_runup, dt),
+        np.gradient(x_traj_rundown, dt),
+        np.gradient(x_traj_final_hover, dt)
+    ))
+    vz_runup_rundown = np.concatenate((
+        np.gradient(z_traj_runup, dt),
+        np.gradient(z_traj_rundown, dt),
+        np.gradient(z_traj_final_hover, dt)
+    ))
+
+    rundown_start_idx = loop_end_idx
+    rundown_end_idx   = rundown_start_idx + steps_rundown
+    eps = 1e-2
+    pitch_traj[rundown_start_idx:rundown_end_idx] = np.arctan2(
+        vz_runup_rundown[steps_runup:steps_runup + steps_rundown],
+        np.clip(np.abs(vx_runup_rundown[steps_runup:steps_runup + steps_rundown]), eps, None)
+    )
+
+    # Phase 4: level
+    pitch_traj[rundown_end_idx:] = 0.0
+
+    # Convert RPY to quaternions
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quats = R.from_euler('xyz', rpy_traj).as_quat()
+    qx_traj, qy_traj, qz_traj, qw_traj = quats[:,0], quats[:,1], quats[:,2], quats[:,3]
+
+    # Velocities
+    vx_traj = np.gradient(x_traj_combined, dt)
+    vy_traj = np.gradient(y_traj_combined, dt)
+    vz_traj = np.gradient(z_traj_combined, dt)
+
+    # Angular rates (time-derivatives of RPY)
+    roll_rate  = np.gradient(roll_traj, dt)
+    pitch_rate = np.gradient(pitch_traj, dt)
+    yaw_rate   = np.gradient(yaw_traj, dt)
+
+    ax_traj = roll_rate
+    ay_traj = pitch_rate
+    az_traj = yaw_rate
+
+    # Placeholders for thrust/inputs
+    u1 = np.zeros_like(time_space_combined)
+    u2 = np.zeros_like(time_space_combined)
+    u3 = np.zeros_like(time_space_combined)
+    u4 = np.zeros_like(time_space_combined)
+
+    power_loop_traj = np.array([
+        x_traj_combined, y_traj_combined, z_traj_combined,
+        qw_traj, qx_traj, qy_traj, qz_traj,
+        vx_traj, vy_traj, vz_traj,
+        ax_traj, ay_traj, az_traj,
+        u1, u2, u3, u4
+    ])
+
+    land_traj = land_trajectory(dt, power_loop_traj[:, -1])
+    zeros = np.zeros((take_off_traj.shape[0], 1 * hz))
+
+    return np.concatenate((take_off_traj, power_loop_traj, land_traj, zeros), axis=1)

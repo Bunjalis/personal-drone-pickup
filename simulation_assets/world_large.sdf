@@ -89,7 +89,7 @@
             <update_frequency>500</update_frequency>
           </plugin>
 
-      <pose>0.0 0.0 0.01 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
+      <pose>0.0 0.0 1.0 0 0 0</pose> <!-- Drone positioned at (0,0,1) --> 
       <plugin
         filename="ignition-gazebo-multicopter-motor-model-system"
         name="gz::sim::systems::MulticopterMotorModel">
@@ -97,8 +97,8 @@
         <jointName>X3/rotor_0_joint</jointName>
         <linkName>X3/rotor_0</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0.0</timeConstantUp>
-        <timeConstantDown>0.0</timeConstantDown>
+        <timeConstantUp>0.01</timeConstantUp>
+        <timeConstantDown>0.01</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
         <momentConstant>0.2</momentConstant>
@@ -117,8 +117,8 @@
         <jointName>X3/rotor_1_joint</jointName>
         <linkName>X3/rotor_1</linkName>
         <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0.0</timeConstantUp>
-        <timeConstantDown>0.0</timeConstantDown>
+        <timeConstantUp>0.01</timeConstantUp>
+        <timeConstantDown>0.01</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
         <momentConstant>0.2</momentConstant>
@@ -137,8 +137,8 @@
         <jointName>X3/rotor_2_joint</jointName>
         <linkName>X3/rotor_2</linkName>
         <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0.0</timeConstantUp>
-        <timeConstantDown>0.0</timeConstantDown>
+        <timeConstantUp>0.01</timeConstantUp>
+        <timeConstantDown>0.01</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
         <momentConstant>0.2</momentConstant>
@@ -157,8 +157,8 @@
         <jointName>X3/rotor_3_joint</jointName>
         <linkName>X3/rotor_3</linkName>
         <turningDirection>cw</turningDirection>
-        <timeConstantUp>0.0</timeConstantUp>
-        <timeConstantDown>0.0</timeConstantDown>
+        <timeConstantUp>0.01</timeConstantUp>
+        <timeConstantDown>0.01</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
         <motorConstant>1.42e-06</motorConstant>
         <momentConstant>0.2</momentConstant>
@@ -175,9 +175,8 @@
         name="ignition::gazebo::systems::Imu">
       </plugin>
 
-
-
     </include>
+
 
     
   </world>

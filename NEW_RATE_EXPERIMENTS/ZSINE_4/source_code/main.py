@@ -11,9 +11,10 @@ from rclpy.node import Node
 from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 import time
-from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution
+from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution, set_trajectory_reference_aligned
 from .gui import GUI
-from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, light_circle_trajectory, backflip_trajectory
+from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, light_circle_trajectory, yaw_trajectory, power_loop_trajectory
+from .visualization import TrajectoryVisualizer
 from interfaces.msg import MotionCaptureState, ELRSCommand, Telemetry
 from geometry_msgs.msg import Pose, PoseArray
 from scipy.linalg import cholesky
@@ -32,28 +33,39 @@ class Controller(Node):
         self.motion_capture_pose = None
         self.battery_voltage = 0.0  # Initialize battery voltage to zero
 
+        # Initialize trajectory visualizer
+        self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
+
         self.ocp, self.sim_integrator = generate_ocp_controller()
 
         self.dt = 1.0 /30.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
-
+        # Timer for trajectory visualization (publish at 2 Hz to keep it visible in RViz2)
+        self.visualization_timer = self.create_timer(0.5, self.publish_trajectory_visualization)
 
         self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
 
-        self.traj = hover_trajectory(self.dt)  
-        self.traj = z_sin_trajectory(self.dt)  
+        #self.traj = hover_trajectory(self.dt)  
+        #self.traj = z_sin_trajectory(self.dt)  
         #self.traj = xyz_sine_trajectory(self.dt)  
-        #self.traj = circle_trajectory(self.dt)   
-        #self.traj = light_circle_trajectory(self.dt)
-        #self.traj = backflip_trajectory(self.dt)  # Use the backflip trajectory
+        #self.traj = yaw_trajectory(self.dt)   
+        self.traj = power_loop_trajectory(self.dt)
 
+        # Publish trajectory visualization to RViz2
+        self.trajectory_visualizer.publish_all_visualizations(
+            self.traj, 
+            pose_subsample=10,  # Show every 10th pose to avoid clutter
+            show_velocity=True,  # Show velocity vectors
+            velocity_scale=0.5,  # Scale velocity vectors
+            color_by_time=True   # Color trajectory by time progression
+        )
 
         trial_name = "ZSINE_4"
 
 
-        self.est_params = np.array([42.0, 0.5, 0.07, 70.0, 250.0, 0.5])  # Initialize thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo
+        self.est_params = np.array([42.0, 0.5, 0.07, 200.0, 600.0, 0.5])  # Initialize thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo
 
 
         self.steps = self.traj.shape[1] - 1  # Number of steps in the trajectory
@@ -70,8 +82,6 @@ class Controller(Node):
 
         # Initialize MPC warm start flag
         self.first_solve = True
-
-            
 
 
         # Create a folder to save all CSV files
@@ -199,10 +209,12 @@ class Controller(Node):
         ]), 3) #current_pose
 
     def telemetry_callback(self, msg: Telemetry):
-        """Callback to receive telemetry data and extract battery voltage"""
         self.battery_voltage = msg.battery_voltage
-        # Optionally print battery voltage periodically (uncomment if needed)
-        # print(f"Battery voltage: {self.battery_voltage:.2f}V")
+
+    def publish_trajectory_visualization(self):
+        """Callback to periodically publish trajectory visualization to RViz2"""
+        if hasattr(self, 'traj'):
+            self.trajectory_visualizer.publish_all_visualizations( self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
 
     def copy_source_files_to_output(self):
         """Copy important source code files to the output folder for reproducibility"""
@@ -266,7 +278,8 @@ class Controller(Node):
             for i, control in enumerate(delayed_control_history):
                 self.sim_integrator.set("x", np.concatenate((estimated_state, np.array(control[0:4]).flatten())))
                 self.sim_integrator.set("u", np.array(control[4:8]))
-                self.sim_integrator.set("p", self.est_params)
+                sim_p = np.concatenate([self.est_params, np.array([1.0, 0.0, 0.0, 0.0])])  # append q_ref (unused by dynamics)
+                self.sim_integrator.set("p", sim_p)
                 status_sim = self.sim_integrator.solve()
                 if status_sim != 0:
                     raise Exception(f"Simulation integrator failed with status {status_sim}.")
@@ -319,32 +332,20 @@ class Controller(Node):
                 self.cmd_publisher_.publish(msg)
                 self.on_close()
 
-
-            ### SET REFERENCE TRAJECTORY
-            for j in range(self.N):
-                sc = self.step_counter + j * self.skip_steps
-                yref = np.concatenate((self.traj[:, sc], [0.0, 0.0, 0.0, 0.0]))
-                self.ocp.set(j, "yref", yref)
-                self.ocp.set(j, "p", self.est_params)
-
-            sn = self.step_counter + self.N * self.skip_steps
-            yref_N = self.traj[:, sn]
-            self.ocp.set(self.N, "yref", yref_N)
-            self.ocp.set(self.N, "p", self.est_params)
-
+            set_trajectory_reference_aligned(self.ocp, self.traj, self.N, self.step_counter, self.skip_steps)
 
             ### ESTIMATE CURRENT STATE AFTER DELAY
             #estimated_state = copy.deepcopy(self.x_est[:13])
             estimated_state = copy.deepcopy(self.current_pose[:13])
 
 
-            
             delayed_control_history = self.control_history[-self.delay_states:-1]
 
             for i, val in enumerate(delayed_control_history):
                 self.sim_integrator.set("x", np.concatenate((estimated_state, np.array(val[0:4]).flatten()))) 
                 self.sim_integrator.set("u", np.array(val[4:8])) 
-                self.sim_integrator.set("p", self.est_params)
+                sim_p = np.concatenate([self.est_params, np.array([1.0, 0.0, 0.0, 0.0])])  # append q_ref (unused by dynamics)
+                self.sim_integrator.set("p", sim_p)
                 status_sim = self.sim_integrator.solve()
                 x_next = self.sim_integrator.get("x")
                 estimated_state = x_next[:13]
@@ -353,8 +354,7 @@ class Controller(Node):
             # Ensure both inputs to np.concatenate are 1D arrays
             estimated_state_with_control = np.concatenate((estimated_state, np.array(self.control_history[-1][0:4]))) 
 
-            
-            relaxation_factor = 0.05 # 0.25 for orb slam 
+            relaxation_factor = 0.02 # 0.25 for orb slam 
             relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
             relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
             self.ocp.set(0, "lbx", relaxed_lbx)
@@ -362,24 +362,19 @@ class Controller(Node):
 
             ### MPC WARM START
             if self.first_solve:
-                # Set initial guess for the first solve
                 set_initial_guess(self.ocp, self.N)
                 self.first_solve = False
             else:
-                # Use warm start from previous solution
                 warm_start_from_previous_solution(self.ocp, self.N)
+
 
             ### SOLVE OCP
             status = self.ocp.solve()
             if status != 0:
                 raise Exception(f'acados returned status {status}.')
             x = self.ocp.get(1, "x")
-            u = x[-4:]  # Extract the last 4 elements as control inputs
+            u = x[-4:]
             u_rate = self.ocp.get(0, "u")
-
-            
-
-
 
             ### UKF predict
             old_u = np.array(self.control_history[-self.delay_states][0:4])
@@ -421,12 +416,10 @@ class Controller(Node):
             self.x_est[15] = np.clip(self.x_est[15], 0.035, 0.3)
             self.x_est[16] = np.clip(self.x_est[16], 0.0, 1000.0)
             self.x_est[17] = np.clip(self.x_est[17], 0.0, 1000.0)
-            self.x_est[18] = np.clip(self.x_est[18], 0.0, 1.0)
+            self.x_est[18] = np.clip(self.x_est[18], 0.5, 0.5)
 
             if self.x_est[17] <= self.x_est[16]:
                 self.x_est[17] = self.x_est[16]
-
-
 
             ### Update estimated parameters
             self.est_params = np.array([self.x_est[13], self.x_est[14], self.x_est[15], self.x_est[16], self.x_est[17], self.x_est[18]])
@@ -449,12 +442,11 @@ class Controller(Node):
             # Calculate and print data append time
             append_end_time = time.time()
             append_duration = (append_end_time - append_start_time) * 1000  # Convert to milliseconds
-            print(f"Data append time: {append_duration:.3f} ms")
-
-            print(f"Voltage {round(self.battery_voltage,3)} Height {round(self.current_pose[2],3)} estimated delay states {self.delay_states}")
-            print(f"est_params: {[round(val, 3) for val in self.est_params]} u: {[round(val, 3) for val in u]} u_rate: {[round(val, 3) for val in u_rate]}")
             ### SEND COMMANDS
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
+
+            #print(f"1: {round(u[0], 3)}, 2: {round(u[1], 3)}, 3: {round((u[2]), 3)}, 4: {round(u[3], 3)}")
+            #print(f"Estimated params - Thrust ratio: {round(self.est_params[0],2)}, Drag coeff z: {round(self.est_params[1],3)}, Tau rate: {round(self.est_params[2],3)}, Centre rate deg: {round(self.est_params[3],1)}, Max rate deg: {round(self.est_params[4],1)}, Rate expo: {round(self.est_params[5],3)}")
             self.cmd_publisher_.publish(msg)
             self.step_counter += 1
 
@@ -468,7 +460,7 @@ class Controller(Node):
         # Calculate and print control loop execution time
         end_time = time.time()
         execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
-        print(f"Control loop execution time: {execution_time:.2f} ms")
+        #print(f"Control loop execution time: {execution_time:.2f} ms")
         
         # Record the execution time
         self.control_loop_timing_history.append(execution_time)
@@ -485,7 +477,8 @@ class Controller(Node):
         # Set the state, input, and parameters in the CasADi integrator
         self.sim_integrator.set("x", state)
         self.sim_integrator.set("u", u_rate)
-        self.sim_integrator.set("p", param)
+        sim_p = np.concatenate([self.est_params, np.array([1.0, 0.0, 0.0, 0.0])])  # append q_ref (unused by dynamics)
+        self.sim_integrator.set("p", sim_p)
 
         # Perform the integration step
         self.sim_integrator.solve()
@@ -531,7 +524,6 @@ class Controller(Node):
         if noise_cov is not None:
             cov += noise_cov
         return mean, cov
-
 
 
     def signal_handler(self, sig, frame):

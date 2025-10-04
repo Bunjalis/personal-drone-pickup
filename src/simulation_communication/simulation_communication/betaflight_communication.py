@@ -26,9 +26,9 @@ class BetaflightInterfaceNode(Node):
         self.set_point = None
         self.current_pose = None
 
-        self.kp = 0.5
-        self.ki = 0.001
-        self.kd = 0.01
+        self.kp = 5.0
+        self.ki = 0.0
+        self.kd = 0.0
         
         self.last_pose = None
         self.last_orientation = None
@@ -37,9 +37,9 @@ class BetaflightInterfaceNode(Node):
         self.databuffer = []
         
         # Betaflight rates parameters
-        self.rates_d_val = 100  # Centre Rates
-        self.rates_f_val = 100  # Max Rates
-        self.rates_g_val = 0.0  # EXPO
+        self.rates_d_val = 200  # Centre Rates
+        self.rates_f_val = 600  # Max Rates
+        self.rates_g_val = 0.5  # EXPO
         
     def betaflight_rates(self, x):
         """

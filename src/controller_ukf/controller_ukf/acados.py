@@ -6,8 +6,30 @@ import casadi as ca
 from acados_template import AcadosSim, AcadosSimSolver
 
 
+# ---------------------------
+# Quaternion helper functions
+# ---------------------------
+def quat_conj(q):
+    """Conjugate of quaternion q = [w, x, y, z]."""
+    return ca.vertcat(q[0], -q[1], -q[2], -q[3])
+
+
+def quat_mul(q1, q2):
+    """Hamilton product q1 ⊗ q2, both [w, x, y, z]"""
+    w1, x1, y1, z1 = q1[0], q1[1], q1[2], q1[3]
+    w2, x2, y2, z2 = q2[0], q2[1], q2[2], q2[3]
+    return ca.vertcat(
+        w1*w2 - x1*x2 - y1*y2 - z1*z2,
+        w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        w1*z2 + x1*y2 - y1*x2 + z1*w2
+    )
+
+
+# --------------------------------
+# Public API: build OCP & simulator
+# --------------------------------
 def generate_ocp_controller(dynamics=None):
-    # Define the dynamics model
     if dynamics is None:
         quad_dynamics = QuadDynamics()
     else:
@@ -17,70 +39,79 @@ def generate_ocp_controller(dynamics=None):
 
     model = AcadosModel()
     model.name = 'quad_dynamics'
-    model.x = quad_dynamics.x  # [p, q, v, r, u] (17 states)
-    model.u = quad_dynamics.u_dot  # [u_dot] (control input)
-    model.p = quad_dynamics.p_param  # [ kT] parameters
+    model.x = quad_dynamics.x 
+    model.u = quad_dynamics.u_dot
+    p_dyn = quad_dynamics.p_param 
+    p_qref = ca.MX.sym('p_qref', 4)           
+    model.p = ca.vertcat(p_dyn, p_qref) 
 
+    model.f_expl_expr = dynamics_expr(model.x, model.u, model.p[:6])
 
-    # Explicit Dynamics
-    model.f_expl_expr = dynamics_expr(quad_dynamics.x, quad_dynamics.u_dot, quad_dynamics.p_param)
-
-    # Implicit Dynamics
     xdot = ca.MX.sym('xdot', model.x.size()[0])
     f_impl_expr = model.f_expl_expr - xdot
     model.xdot = xdot
     model.f_impl_expr = f_impl_expr
 
-
-
-    # Create OCP object
     ocp = AcadosOcp()
     ocp.model = model
-
     ocp.solver_options.N_horizon = 20
     ocp.solver_options.tf = 2.0
 
-    nu = 4  # Number of control inputs
-    nx = 17  # New state dimension (no omega)
-    ny = nx + nu
+    nu = 4
+    nx = 17
 
-    # Cost matrices (tune as needed)
-    Q_mat = 2 * np.diag([
-        50.0, 50.0, 50.0,    # position
-        2.0, 2.0, 2.0, 2.0,  # quaternion
-        0.1, 0.1, 0.1,      # velocity
-        0.1, 0.1, 0.1,      # angular rates
-        0.0001, 0.0001, 0.0001, 0.0001,  # u
+    # ---------- COST: NONLINEAR_LS with sign-invariant quaternion error ----------
+    q_idx = 3
+    x = model.x
+    u = model.u
+    q = x[q_idx:q_idx+4]
+    q_ref = model.p[6:10]
+
+    q_err = quat_mul(q_ref, quat_conj(q))
+    e_att = 2 * q_err[1:4]        
+
+    # Layout: [pos(3), vel(3), omega(3), u_state(4), u(4), e_att(3)] -> total ny = 20
+    y_expr   = ca.vertcat(x[0:3], x[7:10], x[10:13], x[13:17], u, e_att)
+    y_expr_e = ca.vertcat(x[0:3], x[7:10], x[10:13], x[13:17], e_att) 
+
+    ocp.model.cost_y_expr = y_expr
+    ocp.model.cost_y_expr_e = y_expr_e
+
+    ocp.cost.cost_type = 'NONLINEAR_LS'
+    ocp.cost.cost_type_e = 'NONLINEAR_LS'
+
+    ny = 3 + 3 + 3 + 4 + 4 + 3      
+    ny_e = 3 + 3 + 3 + 4 + 3        
+
+    W = np.diag([
+        4.0, 4.0, 8.0,
+        0.1, 0.1, 0.1,
+        0.1, 0.1, 0.1,
+        2e-4, 2e-4, 2e-4, 2e-4,
+        0.1, 0.1, 0.1, 0.1,
+        12.0, 12.0, 12.0
     ])
-    R_mat = 2 * np.diag([1.0, 1.0, 15.0, 1.0])
-    ocp.cost.W = scipy.linalg.block_diag(Q_mat, R_mat)
-    ocp.cost.W_e = Q_mat  # Terminal cost only considers the state
+    W_e = np.diag([
+        4.0, 4.0, 8.0,         # pos
+        0.2, 0.2, 0.2,         # vel
+        0.2, 0.2, 0.2,         # omega
+        2e-4, 2e-4, 2e-4, 2e-4,# u_state
+        12.0, 12.0, 12.0          # attitude error
+    ])
+    ocp.cost.W = W
+    ocp.cost.W_e = W_e
 
-    ocp.model.cost_y_expr = ca.vertcat(model.x, model.u)
-    ocp.model.cost_y_expr_e = model.x
+    ocp.cost.yref = np.zeros((ny,))
+    ocp.cost.yref_e = np.zeros((ny_e,))
 
+    # Initial condition
     x0 = np.zeros(nx)
-    # No initial quaternion constraint - let it be free
     ocp.constraints.x0 = x0
 
-    ocp.cost.cost_type = 'LINEAR_LS'
-    ocp.cost.cost_type_e = 'LINEAR_LS'
+    # -------- Parameters default (6 dyn + 4 q_ref) --------
+    ocp.parameter_values = np.array([38.0, 0.5, 0.07, 200.0, 600.0, 0.5, 1.0, 0.0, 0.0, 0.0])
 
-    ocp.cost.Vx = np.zeros((ny, nx))
-    ocp.cost.Vx[:nx, :nx] = 1 * np.eye(nx)
-    ocp.cost.Vu = np.zeros((ny, nu))
-    ocp.cost.Vu[-nu:, -nu:] = 1 * np.eye(nu)
-    ocp.cost.Vx_e = np.eye(nx)
-
-    ocp.cost.yref = np.zeros((ny, ))
-    ocp.cost.yref_e = np.zeros((nx, ))
-    ocp.cost.yref[3] = 1
-    ocp.cost.yref_e[3] = 1
-
-    ocp.parameter_values = np.array([38.0, 0.5, 0.07, 80.0, 250.0, 0.5])  # Default parameters: thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo
-
-
-    # Set solver options (as before)
+    # ---------- Solver options ----------
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
     ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
@@ -96,19 +127,15 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.nlp_solver_tol_comp = 1e-4
     ocp.solver_options.levenberg_marquardt = 1e-3
 
-
-    # Add constraints for throttle (x[2])
-    # Throttle bound
+    # ---------- State constraints (unchanged from your setup) ----------
     max_rate = 1.0
+    ocp.constraints.lbx = np.array([0.0, -max_rate, -max_rate, -max_rate])
+    ocp.constraints.ubx = np.array([1.0,  max_rate,  max_rate,  max_rate])
+    ocp.constraints.idxbx = np.array([15, 13, 14, 16]) 
 
-    ocp.constraints.lbx = np.array([0.0, -max_rate, -max_rate, -max_rate])   # Lower bounds: throttle and last 4 states
-    ocp.constraints.ubx = np.array([0.8,  max_rate,  max_rate,  max_rate])   # Upper bounds: throttle and last 4 states
-    ocp.constraints.idxbx = np.array([15, 13, 14, 16])          # Indices: throttle and last 4 states
-
-
-    # Set input constraints (tune as needed)
-    ocp.constraints.lbu = np.array([-15.0, -15.0, -5.0, -15.0])  # throttle, roll_rate, pitch_rate, yaw_rate
-    ocp.constraints.ubu = np.array([15.0, 15.0, 5.0, 15.0])
+    # Input bounds
+    ocp.constraints.lbu = np.array([-25.0, -25.0, -15.0, -25.0])  # [throttle_dot, roll_rate_dot, pitch_rate_dot, yaw_rate_dot]
+    ocp.constraints.ubu = np.array([ 25.0,  25.0,  15.0,  25.0])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver
@@ -117,26 +144,79 @@ def generate_ocp_controller(dynamics=None):
     # Create simulation configuration
     sim = AcadosSim()
     sim.model = ocp.model
-    sim.solver_options.T = 1.0 / 30.0  # Set integrator to run at 30Hz
-    sim.parameter_values = np.array([38.0, 0.5, 0.07, 80.0, 250.0, 670.0])  # Default parameters: thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo
+    sim.solver_options.T = 1.0 / 30.0
+    sim.parameter_values = np.array([38.0, 0.5, 0.07, 80.0, 250.0, 670.0, 1.0, 0.0, 0.0, 0.0])
     sim_solver = AcadosSimSolver(sim)
 
     return ocp_solver, sim_solver
 
 
+# ------------------------
+# Warm start convenience
+# ------------------------
 def set_initial_guess(ocp_solver, N_horizon=20):
-
-    u_init = np.array([0.0, 0.0, -1.0, 0.0])  # Convert to numpy array
+    u_init = np.array([0.0, 0.0, -1.0, 0.0], dtype=float)
     for i in range(N_horizon):
         ocp_solver.set(i, "u", u_init)
 
 
 def warm_start_from_previous_solution(ocp_solver, N_horizon=20):
-    """
-    Warm start the MPC solver using the previous solution shifted by one time step
-    """
+    """Shift control warm start by one stage."""
     for i in range(N_horizon - 1):
         u_prev = ocp_solver.get(i + 1, "u")
         ocp_solver.set(i, "u", u_prev)
     u_last = ocp_solver.get(N_horizon - 1, "u")
     ocp_solver.set(N_horizon - 1, "u", u_last)
+
+
+# -----------------------------------------------
+# Reference handling: sign-continuous quaternion
+# -----------------------------------------------
+def _normalize(q: np.ndarray) -> np.ndarray:
+    n = float(np.linalg.norm(q))
+    return q if n == 0.0 else (q / n)
+
+
+def _align_quat_to(prev_q: np.ndarray, q: np.ndarray) -> np.ndarray:
+    qn = _normalize(q)
+    return qn if float(np.dot(prev_q, qn)) >= 0.0 else -qn
+
+
+def _make_quat_sequence_continuous(q_list):
+    out = []
+    if not q_list:
+        return out
+    out.append(_normalize(q_list[0]))
+    for k in range(1, len(q_list)):
+        out.append(_align_quat_to(out[-1], q_list[k]))
+    return np.array(out)
+
+
+def set_trajectory_reference_aligned(ocp_solver, traj_states: np.ndarray, N_horizon: int, step_counter: int, skip_steps: int):
+
+    horizon_indices = [step_counter + j * skip_steps for j in range(N_horizon)]
+    terminal_index = step_counter + N_horizon * skip_steps
+    all_indices = horizon_indices + [terminal_index]
+
+    qs_raw = [traj_states[3:7, idx].copy() for idx in all_indices]
+    qs_cont = _make_quat_sequence_continuous(qs_raw)
+    dyn_par = np.array([38.0, 0.5, 0.07, 200.0, 600.0, 0.5], dtype=float)
+
+
+    for j, sc in enumerate(horizon_indices):
+        # 1) yref
+        yref = np.zeros((20,), dtype=float)
+        yref[0:3] = traj_states[0:3, sc]
+        yref[3:6]  = traj_states[7:10, sc]
+        yref[6:9]  = traj_states[10:13, sc]
+        yref[13:17]= [0.0, 0.0, 0.0, 0.0]
+        ocp_solver.set(j, "yref", yref)
+
+        # 2) parameters: [dyn(6), q_ref(4)]
+        qref = qs_cont[j]
+        ocp_solver.set(j, "p", np.concatenate([dyn_par, qref]))
+
+    yref_N = np.zeros((16,), dtype=float)
+    yref_N[0:3] = traj_states[0:3, terminal_index]
+    ocp_solver.set(N_horizon, "yref", yref_N)
+    ocp_solver.set(N_horizon, "p", np.concatenate([dyn_par, qs_cont[-1]]))

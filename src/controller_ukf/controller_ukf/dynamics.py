@@ -80,7 +80,7 @@ class QuadDynamics:
 
     def q_dynamics(self):
         return 1 / 2 * cs.mtimes(self.skew_symmetric(self.r), self.q)
-
+    
     def v_dynamics(self):
         a_thrust = cs.vertcat(0.0, 0.0, self.thrust_ratio * self.u[2]) 
         g = cs.vertcat(0.0, 0.0, 9.81)
