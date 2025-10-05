@@ -84,19 +84,19 @@ def generate_ocp_controller(dynamics=None):
     ny_e = 3 + 3 + 3 + 4 + 3        
 
     W = np.diag([
-        4.0, 4.0, 8.0,
-        0.1, 0.1, 0.1,
-        0.1, 0.1, 0.1,
+        12.0, 12.0, 12.0,
+        0.2, 0.2, 0.2,
+        0.2, 0.2, 0.2,
         2e-4, 2e-4, 2e-4, 2e-4,
-        0.1, 0.1, 0.1, 0.1,
-        12.0, 12.0, 12.0
+        5.0, 5.0, 5.0, 5.0,
+        10.0, 10.0, 10.0
     ])
     W_e = np.diag([
-        4.0, 4.0, 8.0,         # pos
+        12.0, 12.0, 12.0,         # pos
         0.2, 0.2, 0.2,         # vel
         0.2, 0.2, 0.2,         # omega
         2e-4, 2e-4, 2e-4, 2e-4,# u_state
-        12.0, 12.0, 12.0          # attitude error
+        15.0, 15.0, 15.0          # attitude error
     ])
     ocp.cost.W = W
     ocp.cost.W_e = W_e
@@ -109,7 +109,7 @@ def generate_ocp_controller(dynamics=None):
     ocp.constraints.x0 = x0
 
     # -------- Parameters default (6 dyn + 4 q_ref) --------
-    ocp.parameter_values = np.array([38.0, 0.5, 0.07, 200.0, 600.0, 0.5, 1.0, 0.0, 0.0, 0.0])
+    ocp.parameter_values = np.array([38.0, 0.5, 0.07, 100.0, 300.0, 0.5, 1.0, 0.0, 0.0, 0.0])
 
     # ---------- Solver options ----------
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
@@ -117,25 +117,25 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
     ocp.solver_options.nlp_solver_max_iter = 500
     ocp.solver_options.qp_solver_iter_max = 300
-    ocp.solver_options.qp_solver_tol_stat = 1e-4
-    ocp.solver_options.qp_solver_tol_eq = 1e-4
-    ocp.solver_options.qp_solver_tol_ineq = 1e-4
-    ocp.solver_options.qp_solver_tol_comp = 1e-4
-    ocp.solver_options.nlp_solver_tol_stat = 1e-4
-    ocp.solver_options.nlp_solver_tol_eq = 1e-4
-    ocp.solver_options.nlp_solver_tol_ineq = 1e-4
-    ocp.solver_options.nlp_solver_tol_comp = 1e-4
-    ocp.solver_options.levenberg_marquardt = 1e-3
+    ocp.solver_options.qp_solver_tol_stat = 1e-3
+    ocp.solver_options.qp_solver_tol_eq = 1e-3
+    ocp.solver_options.qp_solver_tol_ineq = 1e-3
+    ocp.solver_options.qp_solver_tol_comp = 1e-3
+    ocp.solver_options.nlp_solver_tol_stat = 1e-3
+    ocp.solver_options.nlp_solver_tol_eq = 1e-3
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-3
+    ocp.solver_options.nlp_solver_tol_comp = 1e-3
+    ocp.solver_options.levenberg_marquardt = 1e-2
 
     # ---------- State constraints (unchanged from your setup) ----------
-    max_rate = 1.0
+    max_rate = 0.3
     ocp.constraints.lbx = np.array([0.0, -max_rate, -max_rate, -max_rate])
-    ocp.constraints.ubx = np.array([1.0,  max_rate,  max_rate,  max_rate])
+    ocp.constraints.ubx = np.array([0.6,  max_rate,  max_rate,  max_rate])
     ocp.constraints.idxbx = np.array([15, 13, 14, 16]) 
 
     # Input bounds
-    ocp.constraints.lbu = np.array([-25.0, -25.0, -15.0, -25.0])  # [throttle_dot, roll_rate_dot, pitch_rate_dot, yaw_rate_dot]
-    ocp.constraints.ubu = np.array([ 25.0,  25.0,  15.0,  25.0])
+    ocp.constraints.lbu = np.array([-1.0, -1.0, -0.5, -1.0])  # [throttle_dot, roll_rate_dot, pitch_rate_dot, yaw_rate_dot]
+    ocp.constraints.ubu = np.array([ 1.0,  1.0,  0.5,  1.0])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver
@@ -192,7 +192,23 @@ def _make_quat_sequence_continuous(q_list):
     return np.array(out)
 
 
-def set_trajectory_reference_aligned(ocp_solver, traj_states: np.ndarray, N_horizon: int, step_counter: int, skip_steps: int):
+def update_ocp_parameters(ocp_solver, est_params, N_horizon):
+    """
+    Update the dynamic parameters for all stages in the OCP solver.
+    """
+    dyn_par = np.array(est_params, dtype=float)
+    default_qref = np.array([1.0, 0.0, 0.0, 0.0], dtype=float)
+    
+    # Update parameters for all intermediate stages
+    for j in range(N_horizon):
+        full_params = np.concatenate([dyn_par, default_qref])
+        ocp_solver.set(j, "p", full_params)
+    
+    # Update terminal stage parameters
+    ocp_solver.set(N_horizon, "p", np.concatenate([dyn_par, default_qref]))
+
+
+def set_trajectory_reference_aligned(ocp_solver, traj_states: np.ndarray, N_horizon: int, step_counter: int, skip_steps: int, est_params=None):
 
     horizon_indices = [step_counter + j * skip_steps for j in range(N_horizon)]
     terminal_index = step_counter + N_horizon * skip_steps
@@ -200,7 +216,12 @@ def set_trajectory_reference_aligned(ocp_solver, traj_states: np.ndarray, N_hori
 
     qs_raw = [traj_states[3:7, idx].copy() for idx in all_indices]
     qs_cont = _make_quat_sequence_continuous(qs_raw)
-    dyn_par = np.array([38.0, 0.5, 0.07, 200.0, 600.0, 0.5], dtype=float)
+
+    # Use provided parameters or default values
+    if est_params is not None:
+        dyn_par = np.array(est_params, dtype=float)
+    else:
+        dyn_par = np.array([43.0, 0.5, 0.07, 200.0, 600.0, 0.5], dtype=float)
 
 
     for j, sc in enumerate(horizon_indices):

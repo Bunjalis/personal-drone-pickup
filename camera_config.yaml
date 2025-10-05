@@ -1,0 +1,62 @@
+# Camera Configuration for ORB-SLAM3
+# These parameters should match the ones defined in modelLarge.sdf
+
+Camera:
+  # Camera calibration and distortion parameters (OpenCV)
+  fx: 554.254691
+  fy: 554.254691
+  cx: 320.5
+  cy: 240.5
+
+  k1: 0.0
+  k2: 0.0
+  p1: 0.0
+  p2: 0.0
+  k3: 0.0
+
+  # Camera frames per second
+  fps: 30.0
+
+  # Camera resolution
+  width: 640
+  height: 480
+
+  # Color order of the images (0: BGR, 1: RGB)
+  RGB: 1
+
+  # Camera pose relative to base_link
+  # Translation: [x, y, z] in meters
+  # Rotation: [roll, pitch, yaw] in radians
+  pose:
+    translation: [0.05, 0.0, 0.02]
+    rotation: [0.0, -0.2618, 0.0]  # 15 degrees upward pitch
+
+# ORB-SLAM3 Features
+ORBextractor:
+  # Number of features per image
+  nFeatures: 1000
+
+  # Scale factor between levels in the scale pyramid
+  scaleFactor: 1.2
+
+  # Number of levels in the scale pyramid
+  nLevels: 8
+
+  # Initial FAST threshold
+  iniThFAST: 20
+
+  # Minimum FAST threshold
+  minThFAST: 7
+
+# Viewer Parameters
+Viewer:
+  KeyFrameSize: 0.05
+  KeyFrameLineWidth: 1
+  GraphLineWidth: 0.9
+  PointSize: 2
+  CameraSize: 0.08
+  CameraLineWidth: 3
+  ViewpointX: 0
+  ViewpointY: -0.7
+  ViewpointZ: -1.8
+  ViewpointF: 500

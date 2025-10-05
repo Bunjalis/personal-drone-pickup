@@ -185,17 +185,6 @@
 
     </include>
 
-
-
-
-
-
-
-
-
-
-
-  <!-- Green floor -->
   <model name="floor">
     <static>true</static>
     <pose>0 0 0 0 0 0</pose>
@@ -225,43 +214,24 @@
     </link>
   </model>
 
-<!--
-
-<include>
-    <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Pine Tree</uri>
-  <name>tree_1</name>
-  <pose>4 0 0 0 0 0</pose>
-</include>
-
--->
-
-
-<model name="shelf">
-  <include>
-    <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/SquareShelf</uri>
-  </include>
-  <pose>2 -1 0 0 0 1.57</pose>
-</model>
-
-
-
-<model name="gate_1">
-  <include>
-    <uri>https://fuel.gazebosim.org/1.0/covenant-org/models/Big gate</uri>
-  </include>
-  <pose>2 1 0 0 0 1.57</pose>
-  <scale>0.1 0.1 0.1</scale>
-</model>
-
-
-
 <!-- ArUco Marker -->
 <model name="aruco_marker_1">
   <include>
     <uri>model://5x5_1000-0</uri>
   </include>
-  <pose>1.0 0 1.5 0 0 0</pose> <!-- Position marker at 2m forward, 1.5m high -->
+  <pose>1.5 0 0.8 0 0 0</pose> <!-- Position marker at 2m forward, 1.5m high -->
 </model>
+
+
+
+    <include>
+      <name>Lake House</name>
+      <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Lake House</uri>
+      <pose>7 0 -6.5 0 0 0</pose>
+    </include>
+
+
+
 
     
   </world>

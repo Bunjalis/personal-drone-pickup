@@ -37,8 +37,8 @@ class BetaflightInterfaceNode(Node):
         self.databuffer = []
         
         # Betaflight rates parameters
-        self.rates_d_val = 200  # Centre Rates
-        self.rates_f_val = 600  # Max Rates
+        self.rates_d_val = 100  # Centre Rates
+        self.rates_f_val = 300  # Max Rates
         self.rates_g_val = 0.5  # EXPO
         
     def betaflight_rates(self, x):

@@ -4,8 +4,8 @@ from scipy.spatial.transform import Rotation as R
 
 
 def takeoff_trajectory(dt):
-    steps_takeoff = 1 * 30  # 1 second of takeoff at 30 Hz
-    steps_hover = 2 * 30    # 2 seconds of hover at 30 Hz
+    steps_takeoff = 4 * 30  # 1 second of takeoff at 30 Hz
+    steps_hover = 4 * 30    # 2 seconds of hover at 30 Hz
 
     # Takeoff phase
     time_space_takeoff = np.linspace(0, steps_takeoff * dt, steps_takeoff)
@@ -200,9 +200,9 @@ def xyz_sine_trajectory(dt):
 
     steps = 20 * 30  # 10 seconds of hover at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
-    x_traj = 0.0 + 1.0 * np.sin(2.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space)
-    y_traj = 0.0 + 1.0 * np.sin(1.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space) # 0.0 + 0.5 * np.sin(1.0 * np.pi * time_space / 5.0)
-    z_traj = 1.5 + 0.5 * np.sin(3.0 * np.pi * time_space / 5.0)#1.2 * np.ones_like(time_space) #1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)    #
+    x_traj = 0.0 + 1.0 * np.sin(1.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space)
+    y_traj = 0.0 + 1.0 * np.sin(0.5 * np.pi * time_space / 5.0) #np.zeros_like(time_space) # 0.0 + 0.5 * np.sin(1.0 * np.pi * time_space / 5.0)
+    z_traj = 1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)#1.2 * np.ones_like(time_space) #1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)    #
 
     roll_traj = np.zeros_like(time_space)
     pitch_traj = np.zeros_like(time_space)
@@ -237,12 +237,12 @@ def circle_trajectory(dt):
     take_off_traj = takeoff_trajectory(dt)
 
     # Transition from hover to circle start (3 seconds)
-    steps_transition = 3 * 30  # 3 seconds at 30 Hz
+    steps_transition = 5 * 30  # 3 seconds at 30 Hz
     time_space_transition = np.linspace(0, steps_transition * dt, steps_transition)
     
     # Circle parameters
-    radius = 1.25  # 1 meter
-    period = 2.5  # seconds per rotation
+    radius = 1.0  # 1 meter
+    period = 12  # seconds per rotation
     omega = 2 * np.pi / period  # angular velocity (rad/s)
     
     # Get the final position from takeoff (should be 0, 0, 1.0)
@@ -402,7 +402,7 @@ def yaw_trajectory(dt):
     time_space_pre_hover = np.linspace(0, steps_pre_hover * dt, steps_pre_hover)
     
     # Yaw phase (3 seconds for full 360-degree rotation)
-    steps_yaw = 1 * 30  # 3 seconds at 30 Hz
+    steps_yaw = 3 * 30  # 3 seconds at 30 Hz
     time_space_yaw = np.linspace(0, steps_yaw * dt, steps_yaw)
     
     # Post-yaw hover (2 seconds)
@@ -444,7 +444,7 @@ def yaw_trajectory(dt):
     roll_traj_yaw = np.zeros_like(time_space_yaw)
     pitch_traj_yaw = np.zeros_like(time_space_yaw)
     yaw_traj_yaw = np.zeros_like(time_space_yaw)
-    pitch_traj_yaw = np.linspace(0, 2 * np.pi, steps_yaw)  # 360 degree yaw rotation
+    yaw_traj_yaw = np.linspace(0, 2 * np.pi, steps_yaw)  # 360 degree yaw rotation
     
     # Post-yaw: maintain final yaw angle (back to 0 degrees after full rotation)
     roll_traj_post = np.zeros_like(time_space_post_hover)
@@ -678,3 +678,151 @@ def power_loop_trajectory(dt):
     zeros = np.zeros((take_off_traj.shape[0], 1 * hz))
 
     return np.concatenate((take_off_traj, power_loop_traj, land_traj, zeros), axis=1)
+
+
+def christmas_tree_spiral_trajectory(dt):
+    """
+    Christmas tree/cone spiral trajectory:
+    - Starts at top center (2m height)
+    - Spirals down to 1.5m radius at 1m height
+    - Spirals back up to top center
+    """
+    take_off_traj = takeoff_trajectory(dt)
+    
+    # Phase durations
+    hz = 30
+    steps_ascent = 5 * hz      # 3s to reach top of tree
+    steps_spiral_down = 30 * hz # 15s spiraling down
+    steps_spiral_up = 30 * hz   # 15s spiraling back up
+    steps_final_hover = 5 * hz  # 2s hover at top
+    
+    # Tree parameters
+    tree_top_height = 2.0      # Top of tree at 2m
+    tree_bottom_height = 1.0   # Bottom of spiral at 1m
+    max_radius = 1.0           # Maximum radius at bottom
+    
+    # Takeoff end position
+    takeoff_end_x = take_off_traj[0, -1]
+    takeoff_end_y = take_off_traj[1, -1] 
+    takeoff_end_z = take_off_traj[2, -1]
+    
+    # Phase 1: Ascent to tree top center
+    time_space_ascent = np.linspace(0, steps_ascent * dt, steps_ascent)
+    x_traj_ascent = np.linspace(takeoff_end_x, 0.0, steps_ascent)  # Move to center
+    y_traj_ascent = np.linspace(takeoff_end_y, 0.0, steps_ascent)  # Move to center
+    z_traj_ascent = np.linspace(takeoff_end_z, tree_top_height, steps_ascent)
+    
+    # Phase 2: Spiral down (cone shape)
+    time_space_spiral_down = np.linspace(0, steps_spiral_down * dt, steps_spiral_down)
+    
+    # Height decreases linearly from top to bottom
+    z_traj_spiral_down = np.linspace(tree_top_height, tree_bottom_height, steps_spiral_down)
+    
+    # Radius increases linearly as we go down (cone shape)
+    # At top (z=2m): radius = 0
+    # At bottom (z=1m): radius = max_radius
+    height_progress = (tree_top_height - z_traj_spiral_down) / (tree_top_height - tree_bottom_height)
+    radius_spiral_down = max_radius * height_progress
+    
+    # Angular position - multiple spirals on the way down
+    num_spirals_down = 3  # 3 full rotations going down
+    theta_spiral_down = np.linspace(0, num_spirals_down * 2 * np.pi, steps_spiral_down)
+    
+    x_traj_spiral_down = radius_spiral_down * np.cos(theta_spiral_down)
+    y_traj_spiral_down = radius_spiral_down * np.sin(theta_spiral_down)
+    
+    # Phase 3: Spiral up (reverse cone)
+    time_space_spiral_up = np.linspace(0, steps_spiral_up * dt, steps_spiral_up)
+    
+    # Height increases linearly from bottom to top
+    z_traj_spiral_up = np.linspace(tree_bottom_height, tree_top_height, steps_spiral_up)
+    
+    # Radius decreases linearly as we go up
+    height_progress_up = (z_traj_spiral_up - tree_bottom_height) / (tree_top_height - tree_bottom_height)
+    radius_spiral_up = max_radius * (1 - height_progress_up)
+    
+    # Angular position - continue from where spiral down ended, add more rotations
+    num_spirals_up = 3  # 3 full rotations going up
+    theta_start_up = theta_spiral_down[-1]  # Continue from end of down spiral
+    theta_spiral_up = np.linspace(theta_start_up, theta_start_up + num_spirals_up * 2 * np.pi, steps_spiral_up)
+    
+    x_traj_spiral_up = radius_spiral_up * np.cos(theta_spiral_up)
+    y_traj_spiral_up = radius_spiral_up * np.sin(theta_spiral_up)
+    
+    # Phase 4: Final hover at top center
+    time_space_final_hover = np.linspace(0, steps_final_hover * dt, steps_final_hover)
+    x_traj_final_hover = np.zeros_like(time_space_final_hover)
+    y_traj_final_hover = np.zeros_like(time_space_final_hover)
+    z_traj_final_hover = np.full_like(time_space_final_hover, tree_top_height)
+    
+    # Combine all phases
+    x_traj_combined = np.concatenate((x_traj_ascent, x_traj_spiral_down, x_traj_spiral_up, x_traj_final_hover))
+    y_traj_combined = np.concatenate((y_traj_ascent, y_traj_spiral_down, y_traj_spiral_up, y_traj_final_hover))
+    z_traj_combined = np.concatenate((z_traj_ascent, z_traj_spiral_down, z_traj_spiral_up, z_traj_final_hover))
+    time_space_combined = np.concatenate((time_space_ascent, time_space_spiral_down, time_space_spiral_up, time_space_final_hover))
+    
+    # Orientation - maintain level flight with slight banking in turns
+    roll_traj = np.zeros_like(time_space_combined)
+    pitch_traj = np.zeros_like(time_space_combined)
+    yaw_traj = np.zeros_like(time_space_combined)
+    
+    # Add banking during spiral phases
+    bank_angle = np.deg2rad(15)  # 15 degree bank angle
+    
+    # Calculate angular velocity for banking
+    ascent_end = steps_ascent
+    spiral_down_end = ascent_end + steps_spiral_down
+    spiral_up_end = spiral_down_end + steps_spiral_up
+    
+    # Spiral down banking
+    omega_down = np.gradient(theta_spiral_down, dt)
+    for i in range(steps_spiral_down):
+        if abs(omega_down[i]) > 0.1:  # Only bank when turning
+            roll_traj[ascent_end + i] = -bank_angle * np.sign(omega_down[i])
+    
+    # Spiral up banking  
+    omega_up = np.gradient(theta_spiral_up, dt)
+    for i in range(steps_spiral_up):
+        if abs(omega_up[i]) > 0.1:  # Only bank when turning
+            roll_traj[spiral_down_end + i] = -bank_angle * np.sign(omega_up[i])
+    
+    # Convert RPY to quaternions
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()
+    qx_traj = quaternions[:, 0]
+    qy_traj = quaternions[:, 1] 
+    qz_traj = quaternions[:, 2]
+    qw_traj = quaternions[:, 3]
+    
+    # Calculate velocities
+    vx_traj = np.gradient(x_traj_combined, dt)
+    vy_traj = np.gradient(y_traj_combined, dt)
+    vz_traj = np.gradient(z_traj_combined, dt)
+    
+    # Calculate angular rates
+    roll_rate = np.gradient(roll_traj, dt)
+    pitch_rate = np.gradient(pitch_traj, dt)
+    yaw_rate = np.gradient(yaw_traj, dt)
+    
+    ax_traj = roll_rate
+    ay_traj = pitch_rate
+    az_traj = yaw_rate
+    
+    # Control inputs (placeholders)
+    u1 = np.zeros_like(time_space_combined)
+    u2 = np.zeros_like(time_space_combined)
+    u3 = np.zeros_like(time_space_combined) 
+    u4 = np.zeros_like(time_space_combined)
+    
+    christmas_tree_traj = np.array([
+        x_traj_combined, y_traj_combined, z_traj_combined,
+        qw_traj, qx_traj, qy_traj, qz_traj,
+        vx_traj, vy_traj, vz_traj,
+        ax_traj, ay_traj, az_traj,
+        u1, u2, u3, u4
+    ])
+    
+    land_traj = land_trajectory(dt, christmas_tree_traj[:, -1])
+    zeros = np.zeros((take_off_traj.shape[0], 1 * hz))
+    
+    return np.concatenate((take_off_traj, christmas_tree_traj, land_traj, zeros), axis=1)

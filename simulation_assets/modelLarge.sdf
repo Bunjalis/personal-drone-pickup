@@ -1,6 +1,6 @@
 <sdf version="1.6">
     <model name="x3">
-        <pose>0 0 0.1 0 0 0</pose>
+        <pose>0 0 0.0 0 0 0</pose>
         <link name="X3/base_link">
             <pose frame="">0 0 0 0 0 0</pose>
             <inertial>
@@ -19,7 +19,7 @@
                 <pose frame="">0 0 0 0 0.0 0</pose>
                 <geometry>
                     <box>
-                        <size>0.03 0.03 0.03</size>
+                        <size>0.12 0.05 0.2</size>
                     </box>
                 </geometry>
             </collision>
@@ -28,7 +28,7 @@
                 <pose frame="">0 0 0 0 0.0 0</pose>
                 <geometry>
                     <box>
-                        <size>0.03 0.03 0.03</size>
+                        <size>0.12 0.04 0.04</size>
                     </box>
                 </geometry>
             </visual>
@@ -49,6 +49,29 @@
                     </linear_acceleration>
                 </imu>
             </sensor>
+
+<sensor name="camera_sensor" type="camera">
+  <always_on>true</always_on>
+  <update_rate>30</update_rate>
+  <camera>
+    <image>
+      <width>640</width>
+      <height>480</height>
+      <format>R8G8B8</format>
+    </image>
+
+    <lens>
+      <type>pinhole</type>
+      <intrinsics>
+        <fx>245.18081</fx>
+        <fy>328.95366</fy>
+        <cx>327.82185</cx>
+        <cy>240.97510</cy>
+        <s>0</s>
+      </intrinsics>
+    </lens>
+  </camera>
+</sensor>
         </link>
 
 
@@ -72,7 +95,7 @@
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <geometry>
                     <mesh>
-                        <scale>0.1 0.1 0.1</scale>
+                        <scale>0.05 0.05 0.05</scale>
                         <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/x3 uav/4/files/meshes/propeller_ccw.dae</uri>
                     </mesh>
                 </geometry>
@@ -124,7 +147,7 @@
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <geometry>
                     <mesh>
-                        <scale>0.1 0.1 0.1</scale>
+                        <scale>0.05 0.05 0.05</scale>
                         <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/x3 uav/4/files/meshes/propeller_ccw.dae</uri>
                     </mesh>
                 </geometry>
@@ -176,7 +199,7 @@
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <geometry>
                     <mesh>
-                        <scale>0.1 0.1 0.1</scale>
+                        <scale>0.05 0.05 0.05</scale>
                         <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/x3 uav/4/files/meshes/propeller_cw.dae</uri>
                     </mesh>
                 </geometry>
@@ -228,7 +251,7 @@
                 <pose frame="">0 0 0 0 -0 0</pose>
                 <geometry>
                     <mesh>
-                        <scale>0.1 0.1 0.1</scale>
+                        <scale>0.05 0.05 0.05</scale>
                         <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/x3 uav/4/files/meshes/propeller_cw.dae</uri>
                     </mesh>
                 </geometry>
