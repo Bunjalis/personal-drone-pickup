@@ -22,12 +22,13 @@ Usage:
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Pose, PoseArray, PoseStamped, Point, Quaternion, Vector3
+from geometry_msgs.msg import Pose, PoseArray, PoseStamped, Point, Quaternion, Vector3, TransformStamped
 from nav_msgs.msg import Path
 from std_msgs.msg import Header, ColorRGBA
 from visualization_msgs.msg import Marker, MarkerArray
 from sensor_msgs.msg import PointCloud2, PointField
 from builtin_interfaces.msg import Time
+from tf2_ros import TransformBroadcaster
 import struct
 
 
@@ -39,10 +40,17 @@ class TrajectoryVisualizer:
         
         # Create publishers for different visualization types
         self.path_publisher = node.create_publisher(Path, '/trajectory_path', 10)
-        self.motion_capture_pose_publisher = node.create_publisher(PoseStamped, '/motion_capture_pose_viz', 10)
-        self.orb_slam_pose_publisher = node.create_publisher(PoseStamped, '/orb_slam_pose_viz', 10)
+        self.actual_path_publisher = node.create_publisher(Path, '/actual_path', 10)
+        self.mpc_plan_publisher = node.create_publisher(Path, '/mpc_plan', 10)
+        self.marker_publisher = node.create_publisher(MarkerArray, '/trajectory_markers', 10)
         
-        self.node.get_logger().info("TrajectoryVisualizer initialized")
+        # Create transform broadcaster instead of pose publishers
+        self.tf_broadcaster = TransformBroadcaster(node)
+        
+        # Store actual path history
+        self.actual_path_history = []
+        
+        self.node.get_logger().info("TrajectoryVisualizer initialized with TF broadcasting")
     
     def _create_header(self) -> Header:
         """Create a header with current timestamp and frame_id"""
@@ -95,40 +103,165 @@ class TrajectoryVisualizer:
     
    
    
-    def publish_pose_visualization(self, pose_data: np.ndarray, pose_type: str = "motion_capture"):
+    def publish_transform_frame(self, pose_data: np.ndarray, frame_name: str = "drone_mocap"):
         """
-        Publish a single pose for visualization in RViz2
+        Publish a transform from world frame to drone frame
         
         Args:
             pose_data: numpy array with [x, y, z, qw, qx, qy, qz, vx, vy, vz, wx, wy, wz]
-            pose_type: either "motion_capture" or "orb_slam"
+            frame_name: name for the child frame (e.g., "drone_mocap" or "drone_orbslam")
         """
         try:
             if pose_data is None or len(pose_data) < 7:
                 return
                 
-            pose_msg = PoseStamped()
-            pose_msg.header = self._create_header()
+            transform = TransformStamped()
+            transform.header = self._create_header()
+            transform.child_frame_id = frame_name
             
-            # Position
-            pose_msg.pose.position.x = float(pose_data[0])
-            pose_msg.pose.position.y = float(pose_data[1])
-            pose_msg.pose.position.z = float(pose_data[2])
+            # Translation
+            transform.transform.translation.x = float(pose_data[0])
+            transform.transform.translation.y = float(pose_data[1])
+            transform.transform.translation.z = float(pose_data[2])
             
-            # Orientation (quaternion)
-            pose_msg.pose.orientation.w = float(pose_data[3])
-            pose_msg.pose.orientation.x = float(pose_data[4])
-            pose_msg.pose.orientation.y = float(pose_data[5])
-            pose_msg.pose.orientation.z = float(pose_data[6])
+            # Rotation (quaternion)
+            transform.transform.rotation.w = float(pose_data[3])
+            transform.transform.rotation.x = float(pose_data[4])
+            transform.transform.rotation.y = float(pose_data[5])
+            transform.transform.rotation.z = float(pose_data[6])
             
-            # Select the appropriate publisher based on pose type
-            if pose_type == "motion_capture":
-                self.motion_capture_pose_publisher.publish(pose_msg)
-            elif pose_type == "orb_slam":
-                self.orb_slam_pose_publisher.publish(pose_msg)
+            # Broadcast the transform
+            self.tf_broadcaster.sendTransform(transform)
                 
         except Exception as e:
-            self.node.get_logger().error(f"Error publishing pose visualization for {pose_type}: {e}")
+            self.node.get_logger().error(f"Error publishing transform for {frame_name}: {e}")
     
+    def publish_actual_path(self, current_pose: np.ndarray):
+        """
+        Add current pose to actual path history and publish as dotted red line
+        
+        Args:
+            current_pose: numpy array with [x, y, z, qw, qx, qy, qz, ...]
+        """
+        try:
+            if current_pose is None or len(current_pose) < 7:
+                return
+            
+            # Add current pose to history (limit to last 1000 points to avoid memory issues)
+            pose_stamped = PoseStamped()
+            pose_stamped.header = self._create_header()
+            pose_stamped.pose.position.x = float(current_pose[0])
+            pose_stamped.pose.position.y = float(current_pose[1])
+            pose_stamped.pose.position.z = float(current_pose[2])
+            pose_stamped.pose.orientation.w = float(current_pose[3])
+            pose_stamped.pose.orientation.x = float(current_pose[4])
+            pose_stamped.pose.orientation.y = float(current_pose[5])
+            pose_stamped.pose.orientation.z = float(current_pose[6])
+            
+            self.actual_path_history.append(pose_stamped)
+            
+            # Keep only last 200 points (shorter trail)
+            if len(self.actual_path_history) > 200:
+                self.actual_path_history.pop(0)
+            
+            # Publish actual path
+            path_msg = Path()
+            path_msg.header = self._create_header()
+            path_msg.poses = self.actual_path_history.copy()
+            
+            self.actual_path_publisher.publish(path_msg)
+            
+            # Publish markers for dotted line effect
+            self._publish_dotted_path_markers(self.actual_path_history, "actual_path", 
+                                            ColorRGBA(r=1.0, g=0.0, b=0.0, a=1.0))
+            
+        except Exception as e:
+            self.node.get_logger().error(f"Error publishing actual path: {e}")
+    
+    def publish_mpc_plan(self, mpc_trajectory: np.ndarray):
+        """
+        Publish MPC trajectory plan as purple line
+        
+        Args:
+            mpc_trajectory: numpy array with shape (13, N) containing [x, y, z, qw, qx, qy, qz, vx, vy, vz, wx, wy, wz]
+        """
+        try:
+            if mpc_trajectory is None or mpc_trajectory.shape[1] < 2:
+                return
+            
+            path_msg = Path()
+            path_msg.header = self._create_header()
+            
+            poses = self._trajectory_to_poses(mpc_trajectory)
+            
+            for pose in poses:
+                pose_stamped = PoseStamped()
+                pose_stamped.header = self._create_header()
+                pose_stamped.pose = pose
+                path_msg.poses.append(pose_stamped)
+            
+            self.mpc_plan_publisher.publish(path_msg)
+            
+            # Publish markers for solid purple line
+            self._publish_solid_path_markers(path_msg.poses, "mpc_plan", 
+                                           ColorRGBA(r=0.5, g=0.0, b=1.0, a=1.0))
+            
+        except Exception as e:
+            self.node.get_logger().error(f"Error publishing MPC plan: {e}")
+    
+    def _publish_dotted_path_markers(self, poses, namespace, color):
+        """Publish dotted line markers"""
+        try:
+            marker_array = MarkerArray()
+            
+            for i, pose in enumerate(poses[::5]):  # Every 5th point for dotted effect
+                marker = Marker()
+                marker.header = self._create_header()
+                marker.ns = namespace
+                marker.id = i
+                marker.type = Marker.SPHERE
+                marker.action = Marker.ADD
+                marker.pose = pose.pose
+                marker.scale.x = 0.02
+                marker.scale.y = 0.02
+                marker.scale.z = 0.02
+                marker.color = color
+                marker_array.markers.append(marker)
+            
+            self.marker_publisher.publish(marker_array)
+            
+        except Exception as e:
+            self.node.get_logger().error(f"Error publishing dotted markers: {e}")
+    
+    def _publish_solid_path_markers(self, poses, namespace, color):
+        """Publish solid line markers"""
+        try:
+            marker_array = MarkerArray()
+            
+            if len(poses) < 2:
+                return
+            
+            marker = Marker()
+            marker.header = self._create_header()
+            marker.ns = namespace
+            marker.id = 0
+            marker.type = Marker.LINE_STRIP
+            marker.action = Marker.ADD
+            marker.scale.x = 0.02  # Line width
+            marker.color = color
+            
+            for pose in poses:
+                point = Point()
+                point.x = pose.pose.position.x
+                point.y = pose.pose.position.y
+                point.z = pose.pose.position.z
+                marker.points.append(point)
+            
+            marker_array.markers.append(marker)
+            self.marker_publisher.publish(marker_array)
+            
+        except Exception as e:
+            self.node.get_logger().error(f"Error publishing solid markers: {e}")
+
     def publish_all_visualizations(self, trajectory: np.ndarray, **kwargs):
         self.publish_trajectory_path(trajectory)

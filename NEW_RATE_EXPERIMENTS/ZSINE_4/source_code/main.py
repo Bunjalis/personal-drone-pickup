@@ -46,11 +46,11 @@ class Controller(Node):
 
         self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
 
-        self.traj = circle_trajectory(self.dt)  
+        self.traj = xyz_sine_trajectory(self.dt)  
 
         self.trajectory_visualizer.publish_all_visualizations( self.traj,  pose_subsample=10, show_velocity=True, velocity_scale=0.5,color_by_time=True  )
 
-        self.USE_MOTION_CAPTURE = False 
+        self.USE_MOTION_CAPTURE = True 
         
         trial_name = "ZSINE_4"
 
@@ -103,8 +103,6 @@ class Controller(Node):
         if self.USE_MOTION_CAPTURE:
             self.current_pose = self.motion_capture_pose
         
-        # Publish motion capture pose visualization immediately when new data arrives
-        self.trajectory_visualizer.publish_pose_visualization(self.motion_capture_pose, "motion_capture")
 
     def orb_slam_state_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
@@ -112,8 +110,6 @@ class Controller(Node):
         if not self.USE_MOTION_CAPTURE:
             self.current_pose = self.orb_slam_pose
         
-        # Publish ORB-SLAM pose visualization immediately when new data arrives
-        self.trajectory_visualizer.publish_pose_visualization(self.orb_slam_pose, "orb_slam")
 
     def telemetry_callback(self, msg: Telemetry):
         self.battery_voltage = msg.battery_voltage
@@ -177,8 +173,8 @@ class Controller(Node):
 
         # Apply a low-pass filter to smooth the delay value
         alpha = 0.05  # Reduced low-pass filter coefficient for slower updates
-        self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
-        self.delay_states = round(self.delay_states_float)
+        #self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
+        #self.delay_states = round(self.delay_states_float)
 
         print(f"Updated delay_states to {self.delay_states} with minimum average position error {round(min_error, 3)}")
         #print("Error latencies:", error_latencies)
@@ -234,7 +230,7 @@ class Controller(Node):
             # Ensure both inputs to np.concatenate are 1D arrays
             estimated_state_with_control = np.concatenate((estimated_state, np.array(self.data_logger.control_history[-1][0:4]))) 
 
-            relaxation_factor = 0.05 # 0.25 for orb slam 
+            relaxation_factor = 0.01 # 0.25 for orb slam 
             relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
             relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
             self.ocp.set(0, "lbx", relaxed_lbx)
@@ -255,6 +251,28 @@ class Controller(Node):
             x = self.ocp.get(1, "x")
             u = x[-4:]
             u_rate = self.ocp.get(0, "u")
+
+
+            ### SEND COMMANDS
+            msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
+
+            print(f"1: {round(u[0], 3)}, 2: {round(u[1], 3)}, 3: {round((u[2]), 3)}, 4: {round(u[3], 3)}")
+            print(f"Estimated params - Thrust ratio: {round(self.est_params[0],2)}, Drag coeff z: {round(self.est_params[1],3)}, Tau rate: {round(self.est_params[2],3)}, Centre rate deg: {round(self.est_params[3],1)}, Max rate deg: {round(self.est_params[4],1)}, Rate expo: {round(self.est_params[5],3)}")
+            self.cmd_publisher_.publish(msg)
+            
+            # Extract MPC trajectory for visualization
+            mpc_trajectory = np.zeros((13, self.N))
+            for i in range(self.N):
+                x_i = self.ocp.get(i, "x")
+                mpc_trajectory[:, i] = x_i[:13]
+            
+            # Replace the first state with the current measured pose to eliminate offset
+            mpc_trajectory[:, 0] = self.current_pose[:13]
+            
+            # Publish MPC plan visualization
+            self.trajectory_visualizer.publish_mpc_plan(mpc_trajectory)
+            self.trajectory_visualizer.publish_transform_frame(self.orb_slam_pose, "drone_orbslam")
+            self.trajectory_visualizer.publish_transform_frame(self.motion_capture_pose, "drone_mocap")
 
             ### UKF predict
             old_u = np.array(self.data_logger.control_history[-self.delay_states][0:4])
@@ -313,12 +331,9 @@ class Controller(Node):
             self.data_logger.log_delay_estimation(self.delay_states)
             self.data_logger.log_ukf_state(self.x_est)
             self.data_logger.log_battery_voltage(self.battery_voltage)
-            ### SEND COMMANDS
-            msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
-
-            print(f"1: {round(u[0], 3)}, 2: {round(u[1], 3)}, 3: {round((u[2]), 3)}, 4: {round(u[3], 3)}")
-            print(f"Estimated params - Thrust ratio: {round(self.est_params[0],2)}, Drag coeff z: {round(self.est_params[1],3)}, Tau rate: {round(self.est_params[2],3)}, Centre rate deg: {round(self.est_params[3],1)}, Max rate deg: {round(self.est_params[4],1)}, Rate expo: {round(self.est_params[5],3)}")
-            self.cmd_publisher_.publish(msg)
+            
+            # Publish actual path visualization (dotted red line)
+            self.trajectory_visualizer.publish_actual_path(self.current_pose)
             self.step_counter += 1
 
         else:
