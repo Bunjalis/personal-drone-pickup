@@ -50,3 +50,16 @@ Positive Roll = [-1, -1, 1, 1]
 Positive Pitch = [1, -1, 1, -1]
 Positive Yaw = [1, -1, -1, 1]
 
+
+
+
+
+
+#Mitchell's simulation  reference 
+
+ros2 launch drone_visualisation view_frame.launch.py
+gz sim -v -r world_drone_env.sdf 
+ros2 launch simulation_communication betaflight_simulation_launch.py 
+ros2 run controller_ukf main 
+
+ros2 run ros2_orb_slam3 mono_node_cpp 
