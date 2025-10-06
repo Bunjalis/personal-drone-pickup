@@ -95,7 +95,7 @@ def land_trajectory(dt, init_pose):
 def hover_trajectory(dt):
     take_off_traj = takeoff_trajectory(dt)
 
-    steps = 20 * 30  # 10 seconds of hover at 30 Hz
+    steps = 5 * 30  # 10 seconds of hover at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
     x_traj = np.zeros_like(time_space) #np.zeros_like(time_space)
     y_traj = np.zeros_like(time_space) #np.zeros_like(time_space) # 0.0 + 0.5 * np.sin(1.0 * np.pi * time_space / 5.0)

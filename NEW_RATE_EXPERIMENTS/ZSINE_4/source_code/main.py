@@ -33,6 +33,10 @@ class Controller(Node):
         self.orb_slam_pose = None
         self.current_pose = None
         self.battery_voltage = 0.0 
+        
+        # Safety feature: Track last pose update time
+        self.last_pose_update_time = time.time()
+        self.pose_timeout_threshold = 0.15  # seconds
 
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
 
@@ -46,15 +50,15 @@ class Controller(Node):
 
         self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
 
-        self.traj = xyz_sine_trajectory(self.dt)  
+        self.traj = hover_trajectory(self.dt)  
 
         self.trajectory_visualizer.publish_all_visualizations( self.traj,  pose_subsample=10, show_velocity=True, velocity_scale=0.5,color_by_time=True  )
 
-        self.USE_MOTION_CAPTURE = True 
+        self.USE_MOTION_CAPTURE = False 
         
         trial_name = "ZSINE_4"
 
-        self.est_params = np.array([42.0, 0.5, 0.07, 100.0, 300.0, 0.5])
+        self.est_params = np.array([35.0, 0.5, 0.07, 50.0, 350.0, 0.8])
 
         self.steps = self.traj.shape[1] - 1
 
@@ -85,12 +89,12 @@ class Controller(Node):
                           0.1, 0.1, 0.1, 0.1,  # Quaternion
                           0.1, 0.1, 0.1,  # Velocity
                           0.1, 0.1, 0.1,  # Angular rates
-                          0.5, 0.05, 0.2, 0.2, 0.2, 0.2])  # thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo uncertainties
+                          0.5, 0.05, 0.2, 0.5, 0.5, 0.2])  # thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo uncertainties
         self.Q = np.diag([1e-4, 1e-4, 1e-4,  # Position process noise
                           1e-5, 1e-5, 1e-5, 1e-5,  # Quaternion process noise
                           1e-3, 1e-3, 1e-3,  # Velocity process noise
                           1e-3, 1e-3, 1e-3,  # Angular rates process noise
-                          1e-6, 1e-6, 1e-6, 1e-2, 1e-2, 1e-6])  # thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo process noise
+                          1e-6, 1e-6, 1e-6, 1e-5, 1e-5, 1e-6])  # thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo process noise
         self.R = np.diag([0.05]*13)
 
 
@@ -102,6 +106,7 @@ class Controller(Node):
         self.motion_capture_pose = np.round(np.array([ p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z ]), 3)
         if self.USE_MOTION_CAPTURE:
             self.current_pose = self.motion_capture_pose
+            self.last_pose_update_time = time.time()  # Update safety timestamp
         
 
     def orb_slam_state_callback(self, msg: MotionCaptureState):
@@ -109,6 +114,7 @@ class Controller(Node):
         self.orb_slam_pose = np.round(np.array([ p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z ]), 3)
         if not self.USE_MOTION_CAPTURE:
             self.current_pose = self.orb_slam_pose
+            self.last_pose_update_time = time.time()  # Update safety timestamp
         
 
     def telemetry_callback(self, msg: Telemetry):
@@ -173,8 +179,8 @@ class Controller(Node):
 
         # Apply a low-pass filter to smooth the delay value
         alpha = 0.05  # Reduced low-pass filter coefficient for slower updates
-        #self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
-        #self.delay_states = round(self.delay_states_float)
+        self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
+        self.delay_states = round(self.delay_states_float)
 
         print(f"Updated delay_states to {self.delay_states} with minimum average position error {round(min_error, 3)}")
         #print("Error latencies:", error_latencies)
@@ -184,6 +190,14 @@ class Controller(Node):
 
     def control_loop(self):
         start_time = time.time()
+
+        # Safety check: Auto-disarm if no pose updates received for too long
+        if self.armed and (time.time() - self.last_pose_update_time) > self.pose_timeout_threshold:
+            print(f"SAFETY DISARM: No pose updates received for {time.time() - self.last_pose_update_time:.3f} seconds (threshold: {self.pose_timeout_threshold}s)")
+            self.armed = False
+            msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
+            self.cmd_publisher_.publish(msg)
+            return  # Exit control loop early
 
         if self.armed and self.pre_start_counter < self.pre_start_steps:
             print(f"Pre-start phase: {self.pre_start_counter + 1}/{self.pre_start_steps}")
