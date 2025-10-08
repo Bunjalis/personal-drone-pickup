@@ -57,15 +57,15 @@ class Controller(Node):
 
         self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
 
-        self.traj = circle_trajectory(self.dt)  
+        self.traj = xyz_sine_trajectory(self.dt)  
 
         self.trajectory_visualizer.publish_all_visualizations( self.traj,  pose_subsample=10, show_velocity=True, velocity_scale=0.5,color_by_time=True  )
 
-        self.USE_MOTION_CAPTURE = True 
+        self.USE_MOTION_CAPTURE = False 
         
         trial_name = "ZSINE_4"
 
-        self.est_params = np.array([35.0, 0.5, 0.07, 50.0, 350.0, 0.8])
+        self.est_params = np.array([35.0, 0.5, 0.07, 100.0, 300.0, 0.5])
 
         self.steps = self.traj.shape[1] - 1
 
@@ -342,6 +342,8 @@ class Controller(Node):
                 x_next = self.sim_integrator.get("x")
                 estimated_state = x_next[:13]
 
+            # Only correct the drones velocity, while keeping the position the same as the observed value
+            estimated_state[0:7] = self.current_pose[0:7]
 
             # Ensure both inputs to np.concatenate are 1D arrays
             estimated_state_with_control = np.concatenate((estimated_state, np.array(self.data_logger.control_history[-1][0:4]))) 

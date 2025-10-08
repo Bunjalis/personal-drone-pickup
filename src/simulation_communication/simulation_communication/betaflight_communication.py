@@ -203,6 +203,10 @@ class BetaflightInterfaceNode(Node):
         # Throttle remains linear mapping
         throttle = (msg.channel_2 + 1) / 2 * 4631
         
+        # If armed but throttle is below 5%, set it to 5%
+        if msg.armed and throttle < (0.05 * 4631):
+            throttle = 0.05 * 4631
+        
         self.set_point = [roll_rate, pitch_rate, throttle, yaw_rate]
 
 
