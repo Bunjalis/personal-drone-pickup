@@ -5,16 +5,18 @@ import numpy as np
 import copy
 import math
 import os
+import threading
 from rclpy.node import Node
 from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution, set_trajectory_reference_aligned, update_ocp_parameters
-from .gui import GUI
 from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, light_circle_trajectory, yaw_trajectory, power_loop_trajectory, christmas_tree_spiral_trajectory
 from .visualization import TrajectoryVisualizer
 from .data_logger import DataLogger
 from interfaces.msg import MotionCaptureState, ELRSCommand, Telemetry
+from interfaces.srv import SetArming
+from std_msgs.msg import String, Bool
 from geometry_msgs.msg import Pose, PoseArray
 from scipy.linalg import cholesky
 import matplotlib.pyplot as plt
@@ -28,6 +30,11 @@ class Controller(Node):
         self.orb_slam_state_subscription_ = self.create_subscription(MotionCaptureState, '/orb_slam_state', self.orb_slam_state_callback, 10)
         self.telemetry_subscription_ = self.create_subscription(Telemetry, '/telemetry', self.telemetry_callback, 10)
         self.trajectory_publisher_ = self.create_publisher(PoseArray, '/planned_trajectory', 10)
+        
+        # RViz2 integration - Service and subscriptions
+        self.arming_service_ = self.create_service(SetArming, 'drone_arming_service', self.handle_arming_service)
+        self.command_subscription_ = self.create_subscription(String, 'drone_command', self.command_callback, 10)
+        self.arming_state_publisher_ = self.create_publisher(Bool, 'drone_arming_state_feedback', 10)
         self.last_measured_pose = None
         self.motion_capture_pose = None
         self.orb_slam_pose = None
@@ -50,11 +57,11 @@ class Controller(Node):
 
         self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
 
-        self.traj = hover_trajectory(self.dt)  
+        self.traj = circle_trajectory(self.dt)  
 
         self.trajectory_visualizer.publish_all_visualizations( self.traj,  pose_subsample=10, show_velocity=True, velocity_scale=0.5,color_by_time=True  )
 
-        self.USE_MOTION_CAPTURE = False 
+        self.USE_MOTION_CAPTURE = True 
         
         trial_name = "ZSINE_4"
 
@@ -62,12 +69,7 @@ class Controller(Node):
 
         self.steps = self.traj.shape[1] - 1
 
-        self.gui = GUI(self)
         self.armed = False
-        
-        self.pre_start_duration = 2.0
-        self.pre_start_counter = 0 
-        self.pre_start_steps = int(self.pre_start_duration / self.dt)
 
         self.N = 20
         self.skip_steps = 3
@@ -76,7 +78,10 @@ class Controller(Node):
         self.data_logger = DataLogger(trial_name)
         self.copy_source_files_to_output()
         self.data_logger.save_trajectory(self.traj)
-
+        
+        # Arming state and takeoff flag
+        self.takeoff_requested = False
+        self.shutdown_requested = False
         
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -106,7 +111,7 @@ class Controller(Node):
         self.motion_capture_pose = np.round(np.array([ p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z ]), 3)
         if self.USE_MOTION_CAPTURE:
             self.current_pose = self.motion_capture_pose
-            self.last_pose_update_time = time.time()  # Update safety timestamp
+            self.last_pose_update_time = time.time()
         
 
     def orb_slam_state_callback(self, msg: MotionCaptureState):
@@ -114,11 +119,71 @@ class Controller(Node):
         self.orb_slam_pose = np.round(np.array([ p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z ]), 3)
         if not self.USE_MOTION_CAPTURE:
             self.current_pose = self.orb_slam_pose
-            self.last_pose_update_time = time.time()  # Update safety timestamp
+            self.last_pose_update_time = time.time() 
         
 
     def telemetry_callback(self, msg: Telemetry):
         self.battery_voltage = msg.battery_voltage
+
+    def handle_arming_service(self, request, response):
+        """Handle arming/disarming service requests from RViz"""
+        if request.arm:
+            if self.current_pose is not None:
+                self.armed = True
+                self.step_counter = 0
+                self.first_solve = True
+                response.success = True
+                response.message = "Drone armed successfully"
+                self.get_logger().info("Drone armed via service")
+            else:
+                response.success = False
+                response.message = "Cannot arm: No pose data available"
+                self.get_logger().warn("Arming failed: No pose data")
+        else:
+            self.armed = False
+            self.takeoff_requested = False
+            self.shutdown_requested = True
+            response.success = True
+            response.message = "Drone disarmed successfully - shutting down controller"
+            self.get_logger().info("Drone disarmed via service - initiating shutdown")
+        
+        # Publish arming state feedback
+        self.publish_arming_state()
+        return response
+
+    def command_callback(self, msg: String):
+        """Handle string commands from RViz (ARM, DISARM, TAKEOFF)"""
+        command = msg.data.upper()
+        
+        if command == "ARM":
+            if self.current_pose is not None:
+                self.armed = True
+                self.step_counter = 0
+                self.first_solve = True
+                self.get_logger().info("Drone armed via command")
+                self.publish_arming_state()
+            else:
+                self.get_logger().warn("Cannot arm: No pose data available")
+        
+        elif command == "DISARM":
+            self.armed = False
+            self.takeoff_requested = False
+            self.shutdown_requested = True
+            self.get_logger().info("Drone disarmed via command - initiating shutdown")
+            self.publish_arming_state()
+        
+        elif command == "TAKEOFF":
+            if self.armed:
+                self.takeoff_requested = True
+                self.get_logger().info("Takeoff requested")
+            else:
+                self.get_logger().warn("Cannot takeoff: Drone not armed")
+
+    def publish_arming_state(self):
+        """Publish current arming state to RViz"""
+        msg = Bool()
+        msg.data = self.armed
+        self.arming_state_publisher_.publish(msg)
 
     def publish_trajectory_visualization(self):
         if hasattr(self, 'traj'):
@@ -191,31 +256,68 @@ class Controller(Node):
     def control_loop(self):
         start_time = time.time()
 
-        # Safety check: Auto-disarm if no pose updates received for too long
+        # Check if shutdown was requested (manual disarm from RViz)
+        if self.shutdown_requested:
+            self.get_logger().info("Shutdown requested - closing controller")
+            
+            # Schedule shutdown on a separate thread to avoid blocking
+            def shutdown_thread():
+                time.sleep(0.1)  # Brief delay to let final messages publish
+                self.on_close()
+                try:
+                    self.destroy_node()
+                except:
+                    pass
+                try:
+                    rclpy.shutdown()
+                except:
+                    pass
+                # Force process termination
+                os.kill(os.getpid(), signal.SIGTERM)
+            
+            thread = threading.Thread(target=shutdown_thread, daemon=True)
+            thread.start()
+            return
+
         if self.armed and (time.time() - self.last_pose_update_time) > self.pose_timeout_threshold:
             print(f"SAFETY DISARM: No pose updates received for {time.time() - self.last_pose_update_time:.3f} seconds (threshold: {self.pose_timeout_threshold}s)")
             self.armed = False
+            self.takeoff_requested = False
             msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
             self.cmd_publisher_.publish(msg)
-            return  # Exit control loop early
+            self.publish_arming_state()
+            return 
 
-        if self.armed and self.pre_start_counter < self.pre_start_steps:
-            print(f"Pre-start phase: {self.pre_start_counter + 1}/{self.pre_start_steps}")
-            msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
-            self.cmd_publisher_.publish(msg)
-            self.pre_start_counter += 1
-            self.data_logger.log_battery_voltage(self.battery_voltage)
-
-
-        elif self.armed and self.current_pose is not None:
+        if self.armed and self.current_pose is not None:
 
             ### CHECK FOR END OF TRAJECTORY
             if self.step_counter + self.N * self.skip_steps > self.steps:
                 self.step_counter = 0
                 self.armed = False
+                self.takeoff_requested = False
                 msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
                 self.cmd_publisher_.publish(msg)
-                self.on_close()
+                self.publish_arming_state()
+                self.get_logger().info("Trajectory completed - saving data and shutting down")
+                
+                # Schedule shutdown on a separate thread to allow final message to publish
+                def shutdown_thread():
+                    time.sleep(0.2)  # Brief delay to ensure disarm command is sent
+                    self.on_close()
+                    try:
+                        self.destroy_node()
+                    except:
+                        pass
+                    try:
+                        rclpy.shutdown()
+                    except:
+                        pass
+                    # Force process termination
+                    os.kill(os.getpid(), signal.SIGTERM)
+                
+                thread = threading.Thread(target=shutdown_thread, daemon=True)
+                thread.start()
+                return
 
             # Update OCP parameters with current estimates
             update_ocp_parameters(self.ocp, self.est_params, self.N)
@@ -268,10 +370,16 @@ class Controller(Node):
 
 
             ### SEND COMMANDS
-            msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
-
-            print(f"1: {round(u[0], 3)}, 2: {round(u[1], 3)}, 3: {round((u[2]), 3)}, 4: {round(u[3], 3)}")
-            print(f"Estimated params - Thrust ratio: {round(self.est_params[0],2)}, Drag coeff z: {round(self.est_params[1],3)}, Tau rate: {round(self.est_params[2],3)}, Centre rate deg: {round(self.est_params[3],1)}, Max rate deg: {round(self.est_params[4],1)}, Rate expo: {round(self.est_params[5],3)}")
+            # Only execute trajectory if takeoff has been requested
+            if self.takeoff_requested:
+                msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
+                print(f"1: {round(u[0], 3)}, 2: {round(u[1], 3)}, 3: {round((u[2]), 3)}, 4: {round(u[3], 3)}")
+                print(f"Estimated params - Thrust ratio: {round(self.est_params[0],2)}, Drag coeff z: {round(self.est_params[1],3)}, Tau rate: {round(self.est_params[2],3)}, Centre rate deg: {round(self.est_params[3],1)}, Max rate deg: {round(self.est_params[4],1)}, Rate expo: {round(self.est_params[5],3)}")
+            else:
+                # Stay armed but don't send thrust commands until takeoff
+                msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
+                print("Armed - Waiting for TAKEOFF command")
+            
             self.cmd_publisher_.publish(msg)
             
             # Extract MPC trajectory for visualization
@@ -288,53 +396,54 @@ class Controller(Node):
             self.trajectory_visualizer.publish_transform_frame(self.orb_slam_pose, "drone_orbslam")
             self.trajectory_visualizer.publish_transform_frame(self.motion_capture_pose, "drone_mocap")
 
-            ### UKF predict
-            old_u = np.array(self.data_logger.control_history[-self.delay_states][0:4])
-            old_u_rate = np.array(self.data_logger.control_history[-self.delay_states][4:8])
-            sigma_pts, wm, wc = self.generate_sigma_points(self.x_est, self.P, self.alpha, self.beta, self.kappa)
-            sigma_pts_pred = np.array([
-                self.fx(pt, old_u, old_u_rate) for pt in sigma_pts
-            ])
-            x_pred, P_pred = self.unscented_transform(sigma_pts_pred, wm, wc, self.Q)
+            ### UKF predict and update - only when actually flying
+            if self.takeoff_requested:
+                old_u = np.array(self.data_logger.control_history[-self.delay_states][0:4])
+                old_u_rate = np.array(self.data_logger.control_history[-self.delay_states][4:8])
+                sigma_pts, wm, wc = self.generate_sigma_points(self.x_est, self.P, self.alpha, self.beta, self.kappa)
+                sigma_pts_pred = np.array([
+                    self.fx(pt, old_u, old_u_rate) for pt in sigma_pts
+                ])
+                x_pred, P_pred = self.unscented_transform(sigma_pts_pred, wm, wc, self.Q)
 
-            ### UKF update
-            sigma_meas = np.array([self.hx(pt) for pt in sigma_pts_pred])
-            z_pred, P_zz = self.unscented_transform(sigma_meas, wm, wc, self.R)
-            P_xz = np.zeros((x_pred.size, z_pred.size))
-            for i in range(sigma_pts.shape[0]):
-                dx = sigma_pts_pred[i] - x_pred
-                dz = sigma_meas[i] - z_pred
-                P_xz += wc[i] * np.outer(dx, dz)
+                ### UKF update
+                sigma_meas = np.array([self.hx(pt) for pt in sigma_pts_pred])
+                z_pred, P_zz = self.unscented_transform(sigma_meas, wm, wc, self.R)
+                P_xz = np.zeros((x_pred.size, z_pred.size))
+                for i in range(sigma_pts.shape[0]):
+                    dx = sigma_pts_pred[i] - x_pred
+                    dz = sigma_meas[i] - z_pred
+                    P_xz += wc[i] * np.outer(dx, dz)
 
-            K = P_xz @ np.linalg.inv(P_zz)
-            self.x_est = x_pred + K @ ((self.current_pose[:13]) - z_pred)
-            self.P = P_pred - K @ P_zz @ K.T
-            
-            # Ensure P remains positive definite
-            self.P = 0.5 * (self.P + self.P.T)  # Make symmetric
-            eigenvals = np.linalg.eigvals(self.P)
-            if np.min(eigenvals) < 1e-8:
-                print("Warning: Covariance matrix becoming singular, adding regularization")
-                self.P += np.eye(self.P.shape[0]) * 1e-5
+                K = P_xz @ np.linalg.inv(P_zz)
+                self.x_est = x_pred + K @ ((self.current_pose[:13]) - z_pred)
+                self.P = P_pred - K @ P_zz @ K.T
+                
+                # Ensure P remains positive definite
+                self.P = 0.5 * (self.P + self.P.T)  # Make symmetric
+                eigenvals = np.linalg.eigvals(self.P)
+                if np.min(eigenvals) < 1e-8:
+                    print("Warning: Covariance matrix becoming singular, adding regularization")
+                    self.P += np.eye(self.P.shape[0]) * 1e-5
 
-            ### Normalize quaternion to ensure it remains a valid unit quaternion
-            quat_norm = np.linalg.norm(self.x_est[3:7])
-            if quat_norm > 0:
-                self.x_est[3:7] = self.x_est[3:7] / quat_norm
+                ### Normalize quaternion to ensure it remains a valid unit quaternion
+                quat_norm = np.linalg.norm(self.x_est[3:7])
+                if quat_norm > 0:
+                    self.x_est[3:7] = self.x_est[3:7] / quat_norm
 
-            ### Constrain parameters to physically reasonable bounds
-            self.x_est[13] = np.clip(self.x_est[13], 20.0, 60.0)
-            self.x_est[14] = np.clip(self.x_est[14], 0.01, 1.0)
-            self.x_est[15] = np.clip(self.x_est[15], 0.04, 0.3)
-            self.x_est[16] = np.clip(self.x_est[16], 0.0, 1000.0)
-            self.x_est[17] = np.clip(self.x_est[17], 0.0, 1000.0)
-            self.x_est[18] = np.clip(self.x_est[18], 0.5, 0.5)
+                ### Constrain parameters to physically reasonable bounds
+                self.x_est[13] = np.clip(self.x_est[13], 20.0, 60.0)
+                self.x_est[14] = np.clip(self.x_est[14], 0.01, 1.0)
+                self.x_est[15] = np.clip(self.x_est[15], 0.04, 0.3)
+                self.x_est[16] = np.clip(self.x_est[16], 0.0, 1000.0)
+                self.x_est[17] = np.clip(self.x_est[17], 0.0, 1000.0)
+                self.x_est[18] = np.clip(self.x_est[18], 0.5, 0.5)
 
-            if self.x_est[17] <= self.x_est[16]:
-                self.x_est[17] = self.x_est[16]
+                if self.x_est[17] <= self.x_est[16]:
+                    self.x_est[17] = self.x_est[16]
 
-            ### Update estimated parameters
-            self.est_params = np.array([self.x_est[13], self.x_est[14], self.x_est[15], self.x_est[16], self.x_est[17], self.x_est[18]])
+                ### Update estimated parameters
+                self.est_params = np.array([self.x_est[13], self.x_est[14], self.x_est[15], self.x_est[16], self.x_est[17], self.x_est[18]])
 
             ### Log data using data logger
             self.data_logger.log_control_data(u, u_rate)
@@ -348,7 +457,10 @@ class Controller(Node):
             
             # Publish actual path visualization (dotted red line)
             self.trajectory_visualizer.publish_actual_path(self.current_pose)
-            self.step_counter += 1
+            
+            # Only increment step counter if takeoff was requested
+            if self.takeoff_requested:
+                self.step_counter += 1
 
         else:
             msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
@@ -449,19 +561,6 @@ class Controller(Node):
 
         # Plot system response and shutdown
         #self.plotSystemResponse()
-        
-        # Close GUI properly
-        try:
-            self.gui.quit()
-        except:
-            pass
-            
-        # Shutdown ROS properly
-        try:
-            self.destroy_node()
-            rclpy.shutdown()
-        except:
-            pass
 
 
 
@@ -472,15 +571,22 @@ def main(args=None):
     signal.signal(signal.SIGINT, controller.signal_handler)
     
     try:
-        while rclpy.ok():
-            rclpy.spin_once(controller, timeout_sec=0.1)
-            controller.gui.handle_events()
+        rclpy.spin(controller)
     except KeyboardInterrupt:
         print("Keyboard interrupt received")
     except Exception as e:
         print(f"Exception occurred: {e}")
     finally:
         controller.on_close()
+        # Final cleanup
+        try:
+            controller.destroy_node()
+        except:
+            pass
+        try:
+            rclpy.shutdown()
+        except:
+            pass
 
 if __name__ == '__main__':
     main()

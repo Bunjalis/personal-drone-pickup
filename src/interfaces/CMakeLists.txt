@@ -28,6 +28,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ELRSCommand.msg"
   "msg/Telemetry.msg"
   "msg/InvertedPendulumStates.msg"
+  "srv/SetArming.srv"
   DEPENDENCIES std_msgs geometry_msgs  # Specify dependencies here
 )
 
