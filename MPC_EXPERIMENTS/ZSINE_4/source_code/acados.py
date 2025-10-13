@@ -84,16 +84,16 @@ def generate_ocp_controller(dynamics=None):
     ny_e = 3 + 3 + 3 + 4 + 3        
 
     W = np.diag([
-        15.0, 15.0, 15.0,
-        0.2, 0.2, 0.2,
+        40.0, 40.0, 40.0,
+        10.0, 10.0, 10.0,
         0.2, 0.2, 0.2,
         2e-4, 2e-4, 2e-4, 2e-4,
-        5.0, 5.0, 5.0, 5.0,
+        2.0, 2.0, 5.0, 2.0,
         1.0, 1.0, 1.0
     ])
     W_e = np.diag([
-        15.0, 15.0, 15.0,         # pos
-        0.2, 0.2, 0.2,         # vel
+        40.0, 40.0, 40.0,         # pos
+        10.0, 10.0, 10.0,        # vel
         0.2, 0.2, 0.2,         # omega
         2e-4, 2e-4, 2e-4, 2e-4,# u_state
         1.0, 1.0, 1.0          # attitude error
@@ -109,7 +109,7 @@ def generate_ocp_controller(dynamics=None):
     ocp.constraints.x0 = x0
 
     # -------- Parameters default (6 dyn + 4 q_ref) --------
-    ocp.parameter_values = np.array([38.0, 0.5, 0.07, 50.0, 670.0, 0.5, 1.0, 0.0, 0.0, 0.0])
+    ocp.parameter_values = np.array([38.0, 0.5, 0.07, 100.0, 100.0, 0.5, 1.0, 0.0, 0.0, 0.0])
 
     # ---------- Solver options ----------
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
@@ -117,20 +117,20 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
     ocp.solver_options.nlp_solver_max_iter = 500
     ocp.solver_options.qp_solver_iter_max = 300
-    ocp.solver_options.qp_solver_tol_stat = 1e-4
-    ocp.solver_options.qp_solver_tol_eq = 1e-4
-    ocp.solver_options.qp_solver_tol_ineq = 1e-4
-    ocp.solver_options.qp_solver_tol_comp = 1e-4
-    ocp.solver_options.nlp_solver_tol_stat = 1e-4
-    ocp.solver_options.nlp_solver_tol_eq = 1e-4
-    ocp.solver_options.nlp_solver_tol_ineq = 1e-4
-    ocp.solver_options.nlp_solver_tol_comp = 1e-4
-    ocp.solver_options.levenberg_marquardt = 1e-4
+    ocp.solver_options.qp_solver_tol_stat = 1e-3
+    ocp.solver_options.qp_solver_tol_eq = 1e-3
+    ocp.solver_options.qp_solver_tol_ineq = 1e-3
+    ocp.solver_options.qp_solver_tol_comp = 1e-3
+    ocp.solver_options.nlp_solver_tol_stat = 1e-3
+    ocp.solver_options.nlp_solver_tol_eq = 1e-3
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-3
+    ocp.solver_options.nlp_solver_tol_comp = 1e-3
+    ocp.solver_options.levenberg_marquardt = 1e-3
 
     # ---------- State constraints (unchanged from your setup) ----------
-    max_rate = 0.5
+    max_rate = 0.25
     ocp.constraints.lbx = np.array([0.0, -max_rate, -max_rate, -max_rate])
-    ocp.constraints.ubx = np.array([0.7,  max_rate,  max_rate,  max_rate])
+    ocp.constraints.ubx = np.array([0.5,  max_rate,  max_rate,  max_rate])
     ocp.constraints.idxbx = np.array([15, 13, 14, 16]) 
 
     # Input bounds
@@ -145,7 +145,7 @@ def generate_ocp_controller(dynamics=None):
     sim = AcadosSim()
     sim.model = ocp.model
     sim.solver_options.T = 1.0 / 30.0
-    sim.parameter_values = np.array([38.0, 0.5, 0.07, 80.0, 50.0, 670.0, 1.0, 0.0, 0.0, 0.0])
+    sim.parameter_values = np.array([38.0, 0.5, 0.12, 100.0, 100.0, 0.5, 1.0, 0.0, 0.0, 0.0])
     sim_solver = AcadosSimSolver(sim)
 
     return ocp_solver, sim_solver
@@ -216,13 +216,7 @@ def set_trajectory_reference_aligned(ocp_solver, traj_states: np.ndarray, N_hori
 
     qs_raw = [traj_states[3:7, idx].copy() for idx in all_indices]
     qs_cont = _make_quat_sequence_continuous(qs_raw)
-
-    # Use provided parameters or default values
-    if est_params is not None:
-        dyn_par = np.array(est_params, dtype=float)
-    else:
-        dyn_par = np.array([43.0, 0.5, 0.07, 50.0, 670.0, 0.0], dtype=float)
-
+    dyn_par = np.array(est_params, dtype=float)
 
     for j, sc in enumerate(horizon_indices):
         # 1) yref

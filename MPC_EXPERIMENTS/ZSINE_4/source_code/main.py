@@ -64,7 +64,7 @@ class Controller(Node):
         
         trial_name = "ZSINE_4"
 
-        self.est_params = np.array([38.0, 0.0, 0.07, 100.0, 300.0, 0.0])
+        self.est_params = np.array([25.0, 0.0, 0.07, 70.0, 670.0, 0.5])
 
         self.steps = self.traj.shape[1] - 1
 
@@ -246,7 +246,7 @@ class Controller(Node):
         #self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
         #self.delay_states = round(self.delay_states_float)
 
-        print(f"Updated delay_states to {self.delay_states} with minimum average position error {round(min_error, 3)}")
+        #print(f"Updated delay_states to {self.delay_states} with minimum average position error {round(min_error, 3)}")
         #print("Error latencies:", error_latencies)
         
 
@@ -374,8 +374,8 @@ class Controller(Node):
             # Only execute trajectory if takeoff has been requested
             if self.takeoff_requested:
                 msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
-                print(f"1: {round(u[0], 3)}, 2: {round(u[1], 3)}, 3: {round((u[2]), 3)}, 4: {round(u[3], 3)}")
-                print(f"Estimated params - Thrust ratio: {round(self.est_params[0],2)}, Drag coeff z: {round(self.est_params[1],3)}, Tau rate: {round(self.est_params[2],3)}, Centre rate deg: {round(self.est_params[3],1)}, Max rate deg: {round(self.est_params[4],1)}, Rate expo: {round(self.est_params[5],3)}")
+                print(f"r: {round(u[0], 3)}, p: {round(u[1], 3)}, t: {round((u[2]), 3)}, y: {round(u[3], 3)}")
+                print(f"EST. params - TR: {round(self.est_params[0],2)}, DC z: {round(self.est_params[1],3)}, Tau: {round(self.est_params[2],3)}, Centre deg: {round(self.est_params[3],1)}, Max deg: {round(self.est_params[4],1)}, expo: {round(self.est_params[5],3)}")
             else:
                 # Stay armed but don't send thrust commands until takeoff
                 msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)

@@ -444,10 +444,10 @@ def objective_function(parameters, csv_file='control_results_hover_1.csv'):
 if __name__ == "__main__":
     # ===== CONFIGURATION =====
     # Define the CSV file to use for optimization
-    csv_file = 'control_results_hover_10_updated.csv'
+    csv_file = 'hover_circle.csv'
     
     # Initial parameter guess: [thrust_constant, actuator_time_constant, motor_position, Jx, Jy, Jz]
-    initial_params = np.array([7.42678162e-07, 0.08, 0.02, 0.02, 0.02])  # Thrust, Tau, Position, Jx, Jy, Jz
+    initial_params = np.array([7.42678162e-07, 0.08, 0.025, 0.025, 0.025])  # Thrust, Tau, Position, Jx, Jy, Jz
 
     # Run with default parameters
     print("Running model error analysis with default parameters...")
