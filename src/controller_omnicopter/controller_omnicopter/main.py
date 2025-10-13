@@ -46,8 +46,8 @@ class Controller(Node):
 
         # self.timer_test_angular = self.create_timer(self.dt, self.angular_velocity_test)
 
-        self.traj = hover_and_yaw(self.dt)
-        #self.traj = hover_trajectory(self.dt)
+        self.traj = circle_trajectory(self.dt)
+        #self.traj = hover_and_yaw(self.dt)
         #self.traj = zsine_trajectory(self.dt)
 
         self.steps = self.traj.shape[1] - 1

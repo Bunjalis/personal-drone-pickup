@@ -50,20 +50,20 @@ class QuadDynamics:
         self.params = cs.vertcat(self.theta_roll, self.theta_pitch, self.theta_yaw, self.thrust_base, self.motor_time_constant)
         
         # Fixed motor distance (not adaptive)
-        self.motor_distance_fixed = 0.12  # Fixed distance from center to motor (m)
+        self.motor_distance_fixed = 0.15  # Fixed distance from center to motor (m)
 
 
         # Fixed scale factor for thrust constant
         self.thrust_scale = 1e-7  # Fixed e-07 multiplier
         
         # Known mass constant (not adaptive)
-        self.mass_constant = 1.08  # kg - known/measured mass
+        self.mass_constant = 1.00  # kg - known/measured mass
 
         #init_params = [0.0,0.0,0.0,1.1,7.42678162e-07,0.12,0.07]
         
 
 
-        self.J = np.array([0.02, 0.02, 0.02])
+        self.J = np.array([0.025, 0.025, 0.025])
         self.max_rpm = 4631.0
 
         self.motor_moment_directions = np.array([-1, 1, 1, -1, -1, 1, 1, -1])  # Direction of each motor's moment

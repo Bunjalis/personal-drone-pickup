@@ -101,7 +101,7 @@ def move_to_start_of_main_trajectory(dt, init_pose, final_pose):
 def hover_trajectory(dt):
         take_off_traj = takeoff_trajectory(dt)
 
-        steps = 15 * 30  # 10 seconds of hover at 30 Hz
+        steps = 30 * 30  # 10 seconds of hover at 30 Hz
         time_space = np.linspace(0, steps * dt, steps)
         x_traj = np.zeros_like(time_space)
         y_traj = np.zeros_like(time_space)
@@ -237,11 +237,11 @@ def circle_trajectory(dt):
     take_off_traj = takeoff_trajectory(dt)
     move_to_start = move_to_start_of_main_trajectory(dt, take_off_traj[:, -1], np.array([1.5, 0.0, 1.5]))
 
-    radius = 1.0
-    height = 1.0
-    angular_velocity_start = 0.2  # m/s
-    angular_velocity_end = 1.0  # rad/s
-    duration = 15  
+    radius = 0.5
+    height = 1.5
+    angular_velocity_start = 0.1  # m/s
+    angular_velocity_end = 0.2  # rad/s
+    duration = 30
     steps = int(duration / dt)
 
     time_space = np.linspace(0, duration, steps)
@@ -360,7 +360,7 @@ def hover_and_yaw(dt):
     yaw_traj_yaw = np.zeros_like(yaw_time_space)
     # Full 360 degree rotation (2π radians) over 8 seconds
     #yaw_traj_yaw= 2 * np.pi * (yaw_time_space / yaw_duration)
-    pitch_traj_yaw= 2 * np.pi * (yaw_time_space / yaw_duration)
+    yaw_traj_yaw= 2 * np.pi * (yaw_time_space / yaw_duration)
     
     # Phase 3: Final hover
     final_hover_duration = 10.0  # 3 seconds of final hover

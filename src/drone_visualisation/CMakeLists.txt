@@ -60,7 +60,6 @@ install(DIRECTORY
   launch
   urdf
   meshes
-  config
   rviz
   DESTINATION share/${PROJECT_NAME}
 )

@@ -32,7 +32,7 @@ class MotionCapturePublisher(Node):
         self.pose_publisher = self.create_publisher(PoseStamped, '/rviz_pose', 10)
         
         # UDP Setup
-        self.HOST = "192.168.1.105"
+        self.HOST = "192.168.0.87"
         self.PORT = 1511
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.HOST, self.PORT))
