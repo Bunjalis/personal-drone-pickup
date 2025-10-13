@@ -11,7 +11,7 @@ from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution, set_trajectory_reference_aligned, update_ocp_parameters
-from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, light_circle_trajectory, yaw_trajectory, power_loop_trajectory, christmas_tree_spiral_trajectory
+from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, power_loop_trajectory, figure8_zsine_trajectory, fast_xyz_sine_trajectory
 from .visualization import TrajectoryVisualizer
 from .data_logger import DataLogger
 from interfaces.msg import MotionCaptureState, ELRSCommand, Telemetry
@@ -56,7 +56,7 @@ class Controller(Node):
 
         self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
 
-        self.traj = circle_trajectory(self.dt)  
+        self.traj = fast_xyz_sine_trajectory(self.dt)  
 
         self.trajectory_visualizer.publish_all_visualizations( self.traj,  pose_subsample=10, show_velocity=True, velocity_scale=0.5,color_by_time=True  )
 
@@ -64,7 +64,7 @@ class Controller(Node):
         
         trial_name = "ZSINE_4"
 
-        self.est_params = np.array([25.0, 0.0, 0.07, 70.0, 670.0, 0.5])
+        self.est_params = np.array([25.0, 0.0, 0.07, 10.0, 500.0, 0.5])
 
         self.steps = self.traj.shape[1] - 1
 
@@ -98,7 +98,7 @@ class Controller(Node):
                           1e-5, 1e-5, 1e-5, 1e-5,  # Quaternion process noise
                           1e-3, 1e-3, 1e-3,  # Velocity process noise
                           1e-3, 1e-3, 1e-3,  # Angular rates process noise
-                          1e-5, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6])  # thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo process noise
+                          1e-4, 1e-4, 1e-4, 5, 15, 0.1])  # thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo process noise
         self.R = np.diag([0.05]*13)
 
 

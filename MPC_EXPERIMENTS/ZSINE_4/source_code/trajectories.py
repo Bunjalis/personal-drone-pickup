@@ -1,8 +1,6 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-
-
 def takeoff_trajectory(dt):
     steps_takeoff = 4 * 30  # 1 second of takeoff at 30 Hz
     steps_hover = 4 * 30    # 2 seconds of hover at 30 Hz
@@ -194,15 +192,91 @@ def z_sin_trajectory(dt):
 
 
 
-
 def xyz_sine_trajectory(dt):
     take_off_traj = takeoff_trajectory(dt)
 
     steps = 20 * 30  # 10 seconds of hover at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
-    x_traj = 0.0 + 1.0 * np.sin(2.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space)
+    x_traj = 0.0 + 1.0 * np.sin(1.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space)
+    y_traj = 0.0 + 1.0 * np.sin(0.5 * np.pi * time_space / 5.0) #np.zeros_like(time_space) # 0.0 + 0.5 * np.sin(1.0 * np.pi * time_space / 5.0)
+    z_traj = 1.5 + 0.5 * np.sin(2.0 * np.pi * time_space / 5.0)#1.2 * np.ones_like(time_space) #1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)    #
+
+    roll_traj = np.zeros_like(time_space)
+    pitch_traj = np.zeros_like(time_space)
+    yaw_traj = np.zeros_like(time_space)
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
+    qx_traj = quaternions[:, 0]
+    qy_traj = quaternions[:, 1]
+    qz_traj = quaternions[:, 2]
+    qw_traj = quaternions[:, 3]
+    vx_traj = np.gradient(x_traj, dt)
+    vy_traj = np.gradient(y_traj, dt)
+    vz_traj = np.gradient(z_traj, dt)
+    ax_traj = np.zeros_like(time_space)
+    ay_traj = np.zeros_like(time_space)
+    az_traj = np.zeros_like(time_space)
+    u1 = np.zeros_like(time_space)
+    u2 = np.zeros_like(time_space)
+    u3 = np.zeros_like(time_space)
+    u4 = np.zeros_like(time_space)
+    hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                 vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
+
+    land_traj = land_trajectory(dt, take_off_traj[:, -1])
+    zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
+
+    return np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+
+
+def fast_xyz_sine_trajectory(dt):
+    take_off_traj = takeoff_trajectory(dt)
+
+    steps = 20 * 30  # 10 seconds of hover at 30 Hz
+    time_space = np.linspace(0, steps * dt, steps)
+    y_traj = 0.0 + 0.75 * np.sin(4.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space)
+    x_traj = np.zeros_like(time_space)
+    z_traj = 1.5 + 0.75 * np.sin(1.0 * np.pi * time_space / 5.0)#1.2 * np.ones_like(time_space) #1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)    #
+
+    roll_traj = np.zeros_like(time_space)
+    pitch_traj = np.zeros_like(time_space)
+    yaw_traj = np.zeros_like(time_space)
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
+    qx_traj = quaternions[:, 0]
+    qy_traj = quaternions[:, 1]
+    qz_traj = quaternions[:, 2]
+    qw_traj = quaternions[:, 3]
+    vx_traj = np.gradient(x_traj, dt)
+    vy_traj = np.gradient(y_traj, dt)
+    vz_traj = np.gradient(z_traj, dt)
+    ax_traj = np.zeros_like(time_space)
+    ay_traj = np.zeros_like(time_space)
+    az_traj = np.zeros_like(time_space)
+    u1 = np.zeros_like(time_space)
+    u2 = np.zeros_like(time_space)
+    u3 = np.zeros_like(time_space)
+    u4 = np.zeros_like(time_space)
+    hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                 vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
+
+    land_traj = land_trajectory(dt, take_off_traj[:, -1])
+    zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
+
+    return np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+
+
+
+
+
+def fence_trajectory(dt):
+    take_off_traj = takeoff_trajectory(dt)
+
+    steps = 20 * 30  # 10 seconds of hover at 30 Hz
+    time_space = np.linspace(0, steps * dt, steps)
+    x_traj = 0.0 + 1.0 * np.sin(1.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space)
     y_traj = 0.0 + 1.0 * np.sin(1.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space) # 0.0 + 0.5 * np.sin(1.0 * np.pi * time_space / 5.0)
-    z_traj = 1.5 + 0.5 * np.sin(3.0 * np.pi * time_space / 5.0)#1.2 * np.ones_like(time_space) #1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)    #
+    z_traj = 1.5 + 0.5 * np.sin(6.0 * np.pi * time_space / 5.0)#1.2 * np.ones_like(time_space) #1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)    #
 
     roll_traj = np.zeros_like(time_space)
     pitch_traj = np.zeros_like(time_space)
@@ -297,202 +371,79 @@ def circle_trajectory(dt):
 
 
 
-def light_circle_trajectory(dt):
+
+
+
+def figure8_zsine_trajectory(dt, duration=10.0, repeats=3, z_amplitude=0.5, z_offset=1.5):
+    """
+    Generates a repeated figure-8 trajectory (each loop duration, repeated N times) on a zsine slope.
+    Args:
+        dt: timestep (s)
+        duration: duration of one figure-8 (s)
+        repeats: number of times to repeat the figure-8
+        z_amplitude: amplitude of zsine (m)
+        z_offset: base z height (m)
+    Returns:
+        traj: np.ndarray shape (16, N)
+    """
     take_off_traj = takeoff_trajectory(dt)
 
-    # Circle parameters
-    circles = [
-        {'height': 1.0, 'radius': 0.75, 'period': 10.0},  # Circle 1
-        {'height': 1.25, 'radius': 0.5, 'period': 10.0},  # Circle 2
-        {'height': 1.5, 'radius': 0.25, 'period': 10.0}   # Circle 3
-    ]
-    
-    loops_per_circle = 5
-    transition_time = 4.0  # seconds between circles
-    
-    # Initialize trajectory arrays
-    x_traj_total = []
-    y_traj_total = []
-    z_traj_total = []
-    
-    for i, circle in enumerate(circles):
-        # Execute 3 loops for this circle
-        loop_duration = circle['period'] * loops_per_circle
-        steps_loop = int(loop_duration * 30)  # 30 Hz
-        time_space_loop = np.linspace(0, loop_duration, steps_loop)
-        omega = 2 * np.pi / circle['period']
-        
-        # Circle trajectory
-        x_circle = circle['radius'] * np.cos(omega * time_space_loop)
-        y_circle = circle['radius'] * np.sin(omega * time_space_loop)
-        z_circle = circle['height'] * np.ones_like(time_space_loop)
-        
-        x_traj_total.extend(x_circle)
-        y_traj_total.extend(y_circle)
-        z_traj_total.extend(z_circle)
-        
-        # Add transition to next circle (except after the last circle)
-        if i < len(circles) - 1:
-            steps_transition = int(transition_time * 30)  # 2 seconds at 30 Hz
-            
-            # Start and end positions for transition
-            start_x = x_circle[-1]
-            start_y = y_circle[-1]
-            start_z = z_circle[-1]
-            
-            next_circle = circles[i + 1]
-            end_x = next_circle['radius']  # Start next circle at (radius, 0)
-            end_y = 0.0
-            end_z = next_circle['height']
-            
-            # Linear interpolation for transition
-            x_transition = np.linspace(start_x, end_x, steps_transition)
-            y_transition = np.linspace(start_y, end_y, steps_transition)
-            z_transition = np.linspace(start_z, end_z, steps_transition)
-            
-            x_traj_total.extend(x_transition)
-            y_traj_total.extend(y_transition)
-            z_traj_total.extend(z_transition)
-    
-    # Convert to numpy arrays
-    x_traj = np.array(x_traj_total)
-    y_traj = np.array(y_traj_total)
-    z_traj = np.array(z_traj_total)
-    
-    # Create time array for the entire trajectory
-    time_space = np.arange(len(x_traj)) * dt
+    # Build one figure-8 segment
+    steps = int(duration / dt)
+    t = np.linspace(0, duration, steps)
+    R_ = 1.0  # 1m radius
+    y_seg = R_ * np.sin(2 * np.pi * t / duration)
+    x_seg = R_ * np.sin(2 * np.pi * t / duration) * np.cos(2 * np.pi * t / duration)
+    z_seg = z_offset + z_amplitude * np.sin(2 * np.pi * t / duration)
 
-    roll_traj = np.zeros_like(time_space)
-    pitch_traj = np.zeros_like(time_space)
-    yaw_traj = np.zeros_like(time_space)
-    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
-    quaternions = R.from_euler('xyz', rpy_traj).as_quat()  # Convert to quaternions
-    qx_traj = quaternions[:, 0]
-    qy_traj = quaternions[:, 1]
-    qz_traj = quaternions[:, 2]
-    qw_traj = quaternions[:, 3]
-    vx_traj = np.gradient(x_traj, dt)
-    vy_traj = np.gradient(y_traj, dt)
-    vz_traj = np.gradient(z_traj, dt)
-    ax_traj = np.zeros_like(time_space)
-    ay_traj = np.zeros_like(time_space)
-    az_traj = np.zeros_like(time_space)
-    u1 = np.zeros_like(time_space)
-    u2 = np.zeros_like(time_space)
-    u3 = np.zeros_like(time_space)
-    u4 = np.zeros_like(time_space)
-    hover_traj = np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
-                           vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
+    vx = np.gradient(x_seg, dt)
+    vy = np.gradient(y_seg, dt)
+    vz = np.gradient(z_seg, dt)
+    yaw_seg = np.zeros_like(vx)
+    roll_seg = np.zeros_like(yaw_seg)
+    pitch_seg = np.zeros_like(yaw_seg)
+    rpy_seg = np.vstack((roll_seg, pitch_seg, yaw_seg)).T
+    quats = R.from_euler('xyz', rpy_seg).as_quat()
+    qx_seg = quats[:, 0]
+    qy_seg = quats[:, 1]
+    qz_seg = quats[:, 2]
+    qw_seg = quats[:, 3]
+    ax_seg = np.zeros_like(x_seg)
+    ay_seg = np.zeros_like(y_seg)
+    az_seg = np.zeros_like(z_seg)
+    u1 = np.zeros_like(x_seg)
+    u2 = np.zeros_like(x_seg)
+    u3 = np.zeros_like(x_seg)
+    u4 = np.zeros_like(x_seg)
+
+    # Repeat the segment
+    x_traj = np.tile(x_seg, repeats)
+    y_traj = np.tile(y_seg, repeats)
+    z_traj = np.tile(z_seg, repeats)
+    qw_traj = np.tile(qw_seg, repeats)
+    qx_traj = np.tile(qx_seg, repeats)
+    qy_traj = np.tile(qy_seg, repeats)
+    qz_traj = np.tile(qz_seg, repeats)
+    vx_traj = np.tile(vx, repeats)
+    vy_traj = np.tile(vy, repeats)
+    vz_traj = np.tile(vz, repeats)
+    ax_traj = np.tile(ax_seg, repeats)
+    ay_traj = np.tile(ay_seg, repeats)
+    az_traj = np.tile(az_seg, repeats)
+    u1 = np.tile(u1, repeats)
+    u2 = np.tile(u2, repeats)
+    u3 = np.tile(u3, repeats)
+    u4 = np.tile(u4, repeats)
+
+    hover_traj = np.array([
+        x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+        vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4
+    ])
 
     land_traj = land_trajectory(dt, hover_traj[:, -1])
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
     return np.concatenate((take_off_traj, hover_traj, land_traj, zeros), axis=1)
-
-
-def yaw_trajectory(dt):
-    """
-    Trajectory that performs takeoff, hover, yaw rotation, then land.
-    The drone yaws 90 degrees over 1 second while hovering.
-    """
-    take_off_traj = takeoff_trajectory(dt)
-    
-    # Pre-yaw hover (2 seconds)
-    steps_pre_hover = 0 * 30  # 2 seconds at 30 Hz
-    time_space_pre_hover = np.linspace(0, steps_pre_hover * dt, steps_pre_hover)
-    
-    # Yaw phase (3 seconds for full 360-degree rotation)
-    steps_yaw = 3 * 30  # 3 seconds at 30 Hz
-    time_space_yaw = np.linspace(0, steps_yaw * dt, steps_yaw)
-    
-    # Post-yaw hover (2 seconds)
-    steps_post_hover = 5 * 30  # 2 seconds at 30 Hz  
-    time_space_post_hover = np.linspace(0, steps_post_hover * dt, steps_post_hover)
-    
-    # Get takeoff end position
-    takeoff_end_x = take_off_traj[0, -1]  # x position
-    takeoff_end_y = take_off_traj[1, -1]  # y position
-    takeoff_end_z = take_off_traj[2, -1]  # z position
-    
-    # Position trajectories - maintain hover position throughout
-    hover_altitude = 1.0
-    x_traj_pre_hover = np.full_like(time_space_pre_hover, takeoff_end_x)
-    y_traj_pre_hover = np.full_like(time_space_pre_hover, takeoff_end_y)
-    z_traj_pre_hover = np.full_like(time_space_pre_hover, hover_altitude)
-    
-    x_traj_yaw = np.full_like(time_space_yaw, takeoff_end_x)
-    y_traj_yaw = np.full_like(time_space_yaw, takeoff_end_y)
-    z_traj_yaw = np.full_like(time_space_yaw, hover_altitude)
-    
-    x_traj_post_hover = np.full_like(time_space_post_hover, takeoff_end_x)
-    y_traj_post_hover = np.full_like(time_space_post_hover, takeoff_end_y)
-    z_traj_post_hover = np.full_like(time_space_post_hover, hover_altitude)
-    
-    # Combine position trajectories
-    x_traj_combined = np.concatenate((x_traj_pre_hover, x_traj_yaw, x_traj_post_hover))
-    y_traj_combined = np.concatenate((y_traj_pre_hover, y_traj_yaw, y_traj_post_hover))
-    z_traj_combined = np.concatenate((z_traj_pre_hover, z_traj_yaw, z_traj_post_hover))
-    time_space_combined = np.concatenate((time_space_pre_hover, time_space_yaw, time_space_post_hover))
-    
-    # Orientation trajectories
-    # Pre-yaw: maintain zero orientation
-    roll_traj_pre = np.zeros_like(time_space_pre_hover)
-    pitch_traj_pre = np.zeros_like(time_space_pre_hover)
-    yaw_traj_pre = np.zeros_like(time_space_pre_hover)
-    
-    # Yaw phase: rotate 360 degrees (2π radians) over 3 seconds
-    roll_traj_yaw = np.zeros_like(time_space_yaw)
-    pitch_traj_yaw = np.zeros_like(time_space_yaw)
-    yaw_traj_yaw = np.zeros_like(time_space_yaw)
-    yaw_traj_yaw = np.linspace(0, 2 * np.pi, steps_yaw)  # 360 degree yaw rotation
-    
-    # Post-yaw: maintain final yaw angle (back to 0 degrees after full rotation)
-    roll_traj_post = np.zeros_like(time_space_post_hover)
-    pitch_traj_post = np.zeros_like(time_space_post_hover)
-    yaw_traj_post = np.full_like(time_space_post_hover, 2 * np.pi)  # Maintain 360 degrees (equivalent to 0)
-    
-    # Combine orientation trajectories
-    roll_traj = np.concatenate((roll_traj_pre, roll_traj_yaw, roll_traj_post))
-    pitch_traj = np.concatenate((pitch_traj_pre, pitch_traj_yaw, pitch_traj_post))
-    yaw_traj = np.concatenate((yaw_traj_pre, yaw_traj_yaw, yaw_traj_post))
-    
-    # Convert to quaternions
-    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
-    quaternions = R.from_euler('xyz', rpy_traj).as_quat()
-    qx_traj = quaternions[:, 0]
-    qy_traj = quaternions[:, 1]
-    qz_traj = quaternions[:, 2]
-    qw_traj = quaternions[:, 3]
-    
-    # Calculate velocities and angular rates
-    vx_traj = np.gradient(x_traj_combined, dt)
-    vy_traj = np.gradient(y_traj_combined, dt)
-    vz_traj = np.gradient(z_traj_combined, dt)
-    
-    # Calculate angular rates (derivatives of roll, pitch, yaw)
-    roll_rate = np.gradient(roll_traj, dt)  # Angular velocity around x-axis
-    pitch_rate = np.gradient(pitch_traj, dt)  # Angular velocity around y-axis
-    yaw_rate = np.gradient(yaw_traj, dt)  # Angular velocity around z-axis
-    
-    # Desired angular velocities for the trajectory
-    ax_traj = roll_rate   # Desired angular velocity around x-axis
-    ay_traj = pitch_rate  # Desired angular velocity around y-axis
-    az_traj = yaw_rate    # Desired angular velocity around z-axis
-    
-    u1 = np.zeros_like(time_space_combined)
-    u2 = np.zeros_like(time_space_combined)
-    u3 = np.zeros_like(time_space_combined)
-    u4 = np.zeros_like(time_space_combined)
-    
-    yaw_hover_traj = np.array([x_traj_combined, y_traj_combined, z_traj_combined, qw_traj, qx_traj, qy_traj, qz_traj,
-                              vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
-    
-    land_traj = land_trajectory(dt, yaw_hover_traj[:, -1])
-    zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
-    
-    return np.concatenate((take_off_traj, yaw_hover_traj, land_traj, zeros), axis=1)
-
-
 
 
 
@@ -679,150 +630,3 @@ def power_loop_trajectory(dt):
 
     return np.concatenate((take_off_traj, power_loop_traj, land_traj, zeros), axis=1)
 
-
-def christmas_tree_spiral_trajectory(dt):
-    """
-    Christmas tree/cone spiral trajectory:
-    - Starts at top center (2m height)
-    - Spirals down to 1.5m radius at 1m height
-    - Spirals back up to top center
-    """
-    take_off_traj = takeoff_trajectory(dt)
-    
-    # Phase durations
-    hz = 30
-    steps_ascent = 5 * hz      # 3s to reach top of tree
-    steps_spiral_down = 30 * hz # 15s spiraling down
-    steps_spiral_up = 30 * hz   # 15s spiraling back up
-    steps_final_hover = 5 * hz  # 2s hover at top
-    
-    # Tree parameters
-    tree_top_height = 2.0      # Top of tree at 2m
-    tree_bottom_height = 1.0   # Bottom of spiral at 1m
-    max_radius = 1.0           # Maximum radius at bottom
-    
-    # Takeoff end position
-    takeoff_end_x = take_off_traj[0, -1]
-    takeoff_end_y = take_off_traj[1, -1] 
-    takeoff_end_z = take_off_traj[2, -1]
-    
-    # Phase 1: Ascent to tree top center
-    time_space_ascent = np.linspace(0, steps_ascent * dt, steps_ascent)
-    x_traj_ascent = np.linspace(takeoff_end_x, 0.0, steps_ascent)  # Move to center
-    y_traj_ascent = np.linspace(takeoff_end_y, 0.0, steps_ascent)  # Move to center
-    z_traj_ascent = np.linspace(takeoff_end_z, tree_top_height, steps_ascent)
-    
-    # Phase 2: Spiral down (cone shape)
-    time_space_spiral_down = np.linspace(0, steps_spiral_down * dt, steps_spiral_down)
-    
-    # Height decreases linearly from top to bottom
-    z_traj_spiral_down = np.linspace(tree_top_height, tree_bottom_height, steps_spiral_down)
-    
-    # Radius increases linearly as we go down (cone shape)
-    # At top (z=2m): radius = 0
-    # At bottom (z=1m): radius = max_radius
-    height_progress = (tree_top_height - z_traj_spiral_down) / (tree_top_height - tree_bottom_height)
-    radius_spiral_down = max_radius * height_progress
-    
-    # Angular position - multiple spirals on the way down
-    num_spirals_down = 3  # 3 full rotations going down
-    theta_spiral_down = np.linspace(0, num_spirals_down * 2 * np.pi, steps_spiral_down)
-    
-    x_traj_spiral_down = radius_spiral_down * np.cos(theta_spiral_down)
-    y_traj_spiral_down = radius_spiral_down * np.sin(theta_spiral_down)
-    
-    # Phase 3: Spiral up (reverse cone)
-    time_space_spiral_up = np.linspace(0, steps_spiral_up * dt, steps_spiral_up)
-    
-    # Height increases linearly from bottom to top
-    z_traj_spiral_up = np.linspace(tree_bottom_height, tree_top_height, steps_spiral_up)
-    
-    # Radius decreases linearly as we go up
-    height_progress_up = (z_traj_spiral_up - tree_bottom_height) / (tree_top_height - tree_bottom_height)
-    radius_spiral_up = max_radius * (1 - height_progress_up)
-    
-    # Angular position - continue from where spiral down ended, add more rotations
-    num_spirals_up = 3  # 3 full rotations going up
-    theta_start_up = theta_spiral_down[-1]  # Continue from end of down spiral
-    theta_spiral_up = np.linspace(theta_start_up, theta_start_up + num_spirals_up * 2 * np.pi, steps_spiral_up)
-    
-    x_traj_spiral_up = radius_spiral_up * np.cos(theta_spiral_up)
-    y_traj_spiral_up = radius_spiral_up * np.sin(theta_spiral_up)
-    
-    # Phase 4: Final hover at top center
-    time_space_final_hover = np.linspace(0, steps_final_hover * dt, steps_final_hover)
-    x_traj_final_hover = np.zeros_like(time_space_final_hover)
-    y_traj_final_hover = np.zeros_like(time_space_final_hover)
-    z_traj_final_hover = np.full_like(time_space_final_hover, tree_top_height)
-    
-    # Combine all phases
-    x_traj_combined = np.concatenate((x_traj_ascent, x_traj_spiral_down, x_traj_spiral_up, x_traj_final_hover))
-    y_traj_combined = np.concatenate((y_traj_ascent, y_traj_spiral_down, y_traj_spiral_up, y_traj_final_hover))
-    z_traj_combined = np.concatenate((z_traj_ascent, z_traj_spiral_down, z_traj_spiral_up, z_traj_final_hover))
-    time_space_combined = np.concatenate((time_space_ascent, time_space_spiral_down, time_space_spiral_up, time_space_final_hover))
-    
-    # Orientation - maintain level flight with slight banking in turns
-    roll_traj = np.zeros_like(time_space_combined)
-    pitch_traj = np.zeros_like(time_space_combined)
-    yaw_traj = np.zeros_like(time_space_combined)
-    
-    # Add banking during spiral phases
-    bank_angle = np.deg2rad(15)  # 15 degree bank angle
-    
-    # Calculate angular velocity for banking
-    ascent_end = steps_ascent
-    spiral_down_end = ascent_end + steps_spiral_down
-    spiral_up_end = spiral_down_end + steps_spiral_up
-    
-    # Spiral down banking
-    omega_down = np.gradient(theta_spiral_down, dt)
-    for i in range(steps_spiral_down):
-        if abs(omega_down[i]) > 0.1:  # Only bank when turning
-            roll_traj[ascent_end + i] = -bank_angle * np.sign(omega_down[i])
-    
-    # Spiral up banking  
-    omega_up = np.gradient(theta_spiral_up, dt)
-    for i in range(steps_spiral_up):
-        if abs(omega_up[i]) > 0.1:  # Only bank when turning
-            roll_traj[spiral_down_end + i] = -bank_angle * np.sign(omega_up[i])
-    
-    # Convert RPY to quaternions
-    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
-    quaternions = R.from_euler('xyz', rpy_traj).as_quat()
-    qx_traj = quaternions[:, 0]
-    qy_traj = quaternions[:, 1] 
-    qz_traj = quaternions[:, 2]
-    qw_traj = quaternions[:, 3]
-    
-    # Calculate velocities
-    vx_traj = np.gradient(x_traj_combined, dt)
-    vy_traj = np.gradient(y_traj_combined, dt)
-    vz_traj = np.gradient(z_traj_combined, dt)
-    
-    # Calculate angular rates
-    roll_rate = np.gradient(roll_traj, dt)
-    pitch_rate = np.gradient(pitch_traj, dt)
-    yaw_rate = np.gradient(yaw_traj, dt)
-    
-    ax_traj = roll_rate
-    ay_traj = pitch_rate
-    az_traj = yaw_rate
-    
-    # Control inputs (placeholders)
-    u1 = np.zeros_like(time_space_combined)
-    u2 = np.zeros_like(time_space_combined)
-    u3 = np.zeros_like(time_space_combined) 
-    u4 = np.zeros_like(time_space_combined)
-    
-    christmas_tree_traj = np.array([
-        x_traj_combined, y_traj_combined, z_traj_combined,
-        qw_traj, qx_traj, qy_traj, qz_traj,
-        vx_traj, vy_traj, vz_traj,
-        ax_traj, ay_traj, az_traj,
-        u1, u2, u3, u4
-    ])
-    
-    land_traj = land_trajectory(dt, christmas_tree_traj[:, -1])
-    zeros = np.zeros((take_off_traj.shape[0], 1 * hz))
-    
-    return np.concatenate((take_off_traj, christmas_tree_traj, land_traj, zeros), axis=1)

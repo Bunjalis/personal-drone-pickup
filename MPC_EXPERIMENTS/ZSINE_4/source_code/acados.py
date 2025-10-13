@@ -84,19 +84,19 @@ def generate_ocp_controller(dynamics=None):
     ny_e = 3 + 3 + 3 + 4 + 3        
 
     W = np.diag([
-        40.0, 40.0, 40.0,
+        60.0, 60.0, 40.0,
         10.0, 10.0, 10.0,
         0.2, 0.2, 0.2,
         2e-4, 2e-4, 2e-4, 2e-4,
-        2.0, 2.0, 5.0, 2.0,
-        1.0, 1.0, 1.0
+        0.1, 0.1, 5.0, 0.1,  # Reduced control effort penalty
+        0.5, 0.5, 5.0
     ])
     W_e = np.diag([
-        40.0, 40.0, 40.0,         # pos
+        60.0, 60.0, 40.0,         # pos
         10.0, 10.0, 10.0,        # vel
         0.2, 0.2, 0.2,         # omega
         2e-4, 2e-4, 2e-4, 2e-4,# u_state
-        1.0, 1.0, 1.0          # attitude error
+        0.5, 0.5, 5.0          # attitude error
     ])
     ocp.cost.W = W
     ocp.cost.W_e = W_e
@@ -115,8 +115,8 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
     ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
-    ocp.solver_options.nlp_solver_max_iter = 500
-    ocp.solver_options.qp_solver_iter_max = 300
+    ocp.solver_options.nlp_solver_max_iter = 100  # Reduced for real-time performance with full SQP
+    ocp.solver_options.qp_solver_iter_max = 500
     ocp.solver_options.qp_solver_tol_stat = 1e-3
     ocp.solver_options.qp_solver_tol_eq = 1e-3
     ocp.solver_options.qp_solver_tol_ineq = 1e-3
@@ -128,14 +128,15 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.levenberg_marquardt = 1e-3
 
     # ---------- State constraints (unchanged from your setup) ----------
-    max_rate = 0.25
+    max_rate = 1.0
     ocp.constraints.lbx = np.array([0.0, -max_rate, -max_rate, -max_rate])
     ocp.constraints.ubx = np.array([0.5,  max_rate,  max_rate,  max_rate])
     ocp.constraints.idxbx = np.array([15, 13, 14, 16]) 
 
     # Input bounds
-    ocp.constraints.lbu = np.array([-5.0, -5.0, -0.5, -5.0])  # [throttle_dot, roll_rate_dot, pitch_rate_dot, yaw_rate_dot]
-    ocp.constraints.ubu = np.array([ 5.0,  5.0,  0.5,  5.0])
+
+    ocp.constraints.lbu = np.array([-15.0, -15.0, -0.5, -15.0])  # [throttle_dot, roll_rate_dot, pitch_rate_dot, yaw_rate_dot]
+    ocp.constraints.ubu = np.array([ 15.0,  15.0,  0.5,  15.0])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver
