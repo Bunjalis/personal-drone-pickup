@@ -3,7 +3,7 @@
     "acados_lib_path": "/home/esther/acados/lib",
     "code_export_directory": "/home/esther/drone_sim/drone_cage_control/c_generated_code",
     "cython_include_dirs": [
-        "/usr/lib/python3/dist-packages/numpy/core/include",
+        "/home/esther/.local/lib/python3.10/site-packages/numpy/core/include",
         "/usr/include/python3.10"
     ],
     "dims": {
@@ -58,7 +58,7 @@
         "dyn_impl_dae_fun": null,
         "dyn_impl_dae_fun_jac": null,
         "dyn_impl_dae_jac": null,
-        "f_expl_expr": "vertcat(v, penVel, (1.74533*roll_rate_cmd), (1.74533*pitch_rate_cmd), (9.81*q[1]), (-9.81*q[0]), (((9.81*penPos[0])/0.3)-(9.81*q[1])), (((9.81*penPos[1])/0.3)+(9.81*q[0])))",
+        "f_expl_expr": "vertcat(v, penVel, (1.74533*roll_rate_cmd), (1.74533*pitch_rate_cmd), (9.81*q[1]), (-9.81*q[0]), ((2.*(9.81*penPos[0]))-(9.81*q[1])), ((2.*(9.81*penPos[1]))+(9.81*q[0])))",
         "f_impl_expr": [],
         "gnsf_nontrivial_f_LO": 1,
         "gnsf_purely_linear": 0,

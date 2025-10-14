@@ -562,6 +562,27 @@ class Controller(Node):
         
         msg = ELRSCommand()
         msg.armed = False
+        '''if self.current_pose is not None and self.currentPenPose is not None:
+            penState = self.currentPenPose
+            state = self.current_pose
+            goal = self.setpoint
+            xd, yd, zd = self.setpoint
+            yawd = 0.0
+            x, y, z = state[0:3]
+            r, p, yaw = self.quaternion_to_euler(*state[3:7])
+            vx, vy, vz = state[7:10]
+            vr, vp, vyaw = state[10:13]
+            a, b, eta = penState[0:3]
+            if not self.usingSim:
+                a, b_dot, eta= a-x, b-y, eta-z
+
+            a_dot, b_dot, eta_dot = penState[7:10]
+            if not self.usingSim:
+                a_dot, b_dot, eta_dot = a_dot-vx, b_dot-vy, eta_dot-vz
+            
+       
+            print(f"current posX: {x}, current posY: {y},  a: {a}, b: {b}, roll: {r},  pitch: {p}, a_dot: {a_dot}, b_dot: {b_dot}")'''
+
         if self.usingBetaFlight:
             msg.channel_0 = 0.0
             msg.channel_1 = 0.0
@@ -591,6 +612,9 @@ class Controller(Node):
                 msg.channel_3 = 0.05
 
             self.pre_start_counter += 1
+
+            #if self.current_pose is not None and self.currentPenPose is not None:
+            #    print(f"current posX: {x}, current posY: {y},  a: {a}, b: {b}, roll: {r},  pitch: {p}, a_dot: {a_dot}, b_dot: {b_dot}")
 
         elif self.armed and self.current_pose is not None and self.currentPenPose is not None:
             '''if self.step_counter + self.N * self.skip_steps > self.steps:
@@ -665,7 +689,7 @@ class Controller(Node):
             
             
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
-            #self.cmd_publisher_.publish(msg)
+            self.cmd_publisher_.publish(msg)
             
             
         else:         

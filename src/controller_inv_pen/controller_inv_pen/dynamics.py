@@ -89,7 +89,7 @@ class QuadDynamics:
     def penVel_dynamics(self):
     
         g = 9.81
-        L = 0.3
+        L = 0.5 #0.3
         a_ddot = self.penPos[0]*g/L - self.q[1]*g
         b_ddot = self.penPos[1]*g/L + self.q[0]*g
         return cs.vertcat(a_ddot, b_ddot)
