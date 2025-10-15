@@ -195,6 +195,7 @@ class BetaflightInterfaceNode(Node):
 
 
     def controller_commands_callback(self, msg):
+<<<<<<< HEAD
         # Apply betaflight rates mapping to roll, pitch, and yaw channels
         roll_rate = self.betaflight_rates(msg.channel_0)
         pitch_rate = self.betaflight_rates(msg.channel_1)
@@ -208,6 +209,9 @@ class BetaflightInterfaceNode(Node):
             throttle = 0.05 * 4631
         
         self.set_point = [roll_rate, pitch_rate, throttle, yaw_rate]
+=======
+        self.set_point = [msg.channel_0 * 100, msg.channel_1 *100, (msg.channel_2 + 1)/2 * 4631, -msg.channel_3 * 100]
+>>>>>>> f4f57238c9c58ba0836c7479a51a02955766d398
 
 
 

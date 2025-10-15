@@ -18,8 +18,6 @@
       <real_time_factor>1.0</real_time_factor>
       <real_time_update_rate>800</real_time_update_rate>
     </physics>
-    
-
     <plugin
       filename="ignition-gazebo-physics-system"
       name="gz::sim::systems::Physics">
@@ -78,34 +76,31 @@
         </visual>
       </link>
     </model>
-    
-    <include>
-      
 
+    <include>
       <uri>
-        modelFIP.sdf
+        modelPenDrone.sdf
       </uri>
-      
-      
+
       <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
             <publish_link_pose>true</publish_link_pose>
             <publish_nested_model_pose>true</publish_nested_model_pose>
             <use_pose_vector_msg>true</use_pose_vector_msg>
-            <update_frequency>800</update_frequency>
+            <update_frequency>500</update_frequency>
           </plugin>
 
-      <pose>0 0 0.01 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
+      <pose>0.0 0.0 0.01 0 0 0</pose> <!-- Added pose with yaw of 90 degrees   --> 
       <plugin
         filename="ignition-gazebo-multicopter-motor-model-system"
         name="gz::sim::systems::MulticopterMotorModel">
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_0_joint</jointName>
         <linkName>X3/rotor_0</linkName>
-        <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <turningDirection>cw</turningDirection>
+        <timeConstantUp>0.0</timeConstantUp>
+        <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
-        <motorConstant>1.42e-06</motorConstant>
+        <motorConstant>0.35e-06</motorConstant>
         <momentConstant>0.2</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>0</motorNumber>
@@ -121,11 +116,11 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_1_joint</jointName>
         <linkName>X3/rotor_1</linkName>
-        <turningDirection>cw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <turningDirection>ccw</turningDirection>
+        <timeConstantUp>0.0</timeConstantUp>
+        <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
-        <motorConstant>1.42e-06</motorConstant>
+        <motorConstant>0.35e-06</motorConstant>
         <momentConstant>0.2</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>1</motorNumber>
@@ -141,11 +136,11 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_2_joint</jointName>
         <linkName>X3/rotor_2</linkName>
-        <turningDirection>cw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <turningDirection>ccw</turningDirection>
+        <timeConstantUp>0.0</timeConstantUp>
+        <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
-        <motorConstant>1.42e-06</motorConstant>
+        <motorConstant>0.35e-06</motorConstant>
         <momentConstant>0.2</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>2</motorNumber>
@@ -161,11 +156,11 @@
         <robotNamespace>X3</robotNamespace>
         <jointName>X3/rotor_3_joint</jointName>
         <linkName>X3/rotor_3</linkName>
-        <turningDirection>ccw</turningDirection>
-        <timeConstantUp>0</timeConstantUp>
-        <timeConstantDown>0</timeConstantDown>
+        <turningDirection>cw</turningDirection>
+        <timeConstantUp>0.0</timeConstantUp>
+        <timeConstantDown>0.0</timeConstantDown>
         <maxRotVelocity>4631.0</maxRotVelocity>
-        <motorConstant>1.42e-06</motorConstant>
+        <motorConstant>0.35e-06</motorConstant>
         <momentConstant>0.2</momentConstant>
         <commandSubTopic>gazebo/command/motor_speed</commandSubTopic>
         <motorNumber>3</motorNumber>
@@ -182,17 +177,20 @@
 
 
 
-
-
-
-      
-
-
-      
-
-
-
     </include>
 
+    <include>
+        <uri>
+            pendulum.sdf
+        </uri>
+        
+        <plugin filename="gz-sim-pose-publisher-system" name="gz::sim::systems::PosePublisher">
+            <publish_link_pose>true</publish_link_pose>
+            <publish_nested_model_pose>true</publish_nested_model_pose>
+            <use_pose_vector_msg>true</use_pose_vector_msg>
+            <update_frequency>1000</update_frequency>
+        </plugin>
+    </include> 
+   
   </world>
 </sdf>

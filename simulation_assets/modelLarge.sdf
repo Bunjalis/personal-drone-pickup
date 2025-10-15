@@ -5,7 +5,11 @@
             <pose frame="">0 0 0 0 0 0</pose>
             <inertial>
                 <pose frame="">0.0 0.0 0 0 -0 0</pose>
+<<<<<<< HEAD
                 <mass>0.6</mass>
+=======
+                <mass>0.596</mass>
+>>>>>>> f4f57238c9c58ba0836c7479a51a02955766d398
                 <inertia>
                     <ixx>0.001744744189</ixx>
                     <ixy>0</ixy>

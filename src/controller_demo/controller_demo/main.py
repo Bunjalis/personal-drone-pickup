@@ -19,7 +19,7 @@ class Controller(Node):
         self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
 
         self.current_pose = None
-        self.setpoint = np.array([1.0, 1.0, 1.0])
+        self.setpoint = np.array([0.0, 0.0, 1.0])
 
         # Set up control loop
         self.control_frequency = 120.0
@@ -31,7 +31,7 @@ class Controller(Node):
         self.armed = False
 
         self.g = 9.81
-        self.M = 0.65
+        self.M = 0.5
         self.Ixx = 0.001744744189
         self.Iyy = 0.001400539551
         self.Izz = 0.002782410904
@@ -50,6 +50,8 @@ class Controller(Node):
         self.rollError = []
         self.pitchError = []
         self.yawError = []
+        self.x_dotError = []
+        self.y_dotError = []
         self.timePoints = []
         self.t = 0
         self.xError_prev = 0.0
@@ -65,7 +67,7 @@ class Controller(Node):
         self.dataWriter = csv.DictWriter(self.dataFile, fieldnames=['xError', 'yError', 'zError', 'rollError', 'pitchError', 'yawError'])
         self.dataWriter.writeheader()
 
-        self.usingBetaFLight =False
+        self.usingBetaFlight =True
 
     # Recieve motion capture data
     def pose_callback(self, msg: MotionCaptureState):
@@ -80,7 +82,7 @@ class Controller(Node):
         # For saftey generate a message with all channels set to 0.0
         msg = ELRSCommand()
         msg.armed = False
-        if self.usingBetaFLight:
+        if self.usingBetaFlight:
             msg.channel_0 = 0.0 # roll (-1,1)
             msg.channel_1 = 0.0 # pitch
             msg.channel_2 = -1.0 # throttle (-1 = 0)
@@ -96,14 +98,14 @@ class Controller(Node):
         self.t += self.dt
 
         # Pre-start state: Send 0.05 on all channels for one second before starting control loop.
-        if self.armed and self.pre_start_counter < self.pre_start_steps and not self.usingBetaFLight:
+        if self.armed and self.pre_start_counter < self.pre_start_steps and not self.usingBetaFlight:
             msg.armed = True
             msg.channel_0 = 0.05
             msg.channel_1 = 0.05
             msg.channel_2 = 0.05
             msg.channel_3 = 0.05
             self.pre_start_counter += 1
-        if self.armed and self.pre_start_counter < self.pre_start_steps and self.usingBetaFLight:
+        if self.armed and self.pre_start_counter < self.pre_start_steps and self.usingBetaFlight:
             msg.armed = True
             msg.channel_0 = 0.0
             msg.channel_1 = 0.0
@@ -164,6 +166,8 @@ class Controller(Node):
             self.pitchError.append(pd-p)
             self.yawError.append(yawd-yaw)
             self.timePoints.append(self.t)
+            self.x_dotError.append(vx)
+            self.y_dotError.append(vy)
             
             self.dataWriter.writerow({'xError': xd-x, 'yError': yd-y, 'zError': zd-z, 'rollError': rd-r, 'pitchError':pd-p, 'yawError': yawd-yaw})
             
@@ -176,7 +180,7 @@ class Controller(Node):
             max_motor_speed = 4631.0# 1755*25.2
             
             
-            if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
+            '''if force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct)< 0:
                 u1 = 0.0
             else:
                 u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
@@ -197,7 +201,7 @@ class Controller(Node):
             else:
                  u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) - yawTau/(4*Ct))/max_motor_speed
                  
-            u = [u1,u2,u3,u4]
+            u = [u1,u2,u3,u4]'''
 
 
             '''u1 = sqrt(force/(4*Cf) - rTau/(4*Cf*l_x)  + pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed
@@ -206,17 +210,24 @@ class Controller(Node):
             u4 = sqrt(force/(4*Cf) + rTau/(4*Cf*l_x)  - pTau/(4*Cf*l_y) + yawTau/(4*Ct))/max_motor_speed'''
             
             
-
-            '''maxForce = (Cf*max_motor_speed**2) 
+            Cf = 0.8e-6 
+            maxForce = (Cf*max_motor_speed**2) 
             maxTorque = (Ct*max_motor_speed**2) 
         
             wy = -1*np.array([12.6320, 125.3600,   25.0785])@np.array([[x-xd], [p], [vx]])
             wy = (( wy[0]))/100.0
             wx = -1*np.array([-12.6320,   125.3600,   -25.0785])@np.array([[y-yd], [r], [vy]]) # roll control
             wx = (( wx[0]))/100.0
+
+            maxForce = (Cf*max_motor_speed**2) 
+            maxTorque = (Ct*max_motor_speed**2) 
+        
+            
            
             kpz, kiz, kdz = 15.0, 10.0, 10.0 
+            #kpz, kiz, kdz = 10.0, 5.0, 10.0 
             force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*self.M
+            force = (self.g + kpz*(zd-z) + kdz*(0-vz) +kiz*(zd-z)*dt)*(self.M) 
             throttle = 2*(force)/(maxForce) - 1
             if throttle < -1:
                 throttle = -1.0
@@ -226,7 +237,7 @@ class Controller(Node):
             wz =  -0.5*(yawd-yaw) #-0.001*sumYawError*dt# (0.2500*u1 - 0.2500*u2 - 0.2500*u3 + 0.2500*u4)/100.0 # -0.002*yaw#kpyaw*(yawd-yaw) + kiyaw*(yawd-yaw)*dt - kdyaw*vyaw #-yaw #-1.25*yaw -0.5*vyaw#2.0*(0.2500*u1 - 0.2500*u2 - 0.2500*u3 + 0.2500*u4)/100.0
       
             print(f"force: {force}, r: {wx}, p: {wy}, yaw: {wz}")
-            u = [wx, wy, throttle, wz]'''
+            u = [wx, wy, throttle, wz]
     
 
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
@@ -273,6 +284,19 @@ class Controller(Node):
         ax3[1].set_title('pitch position error over time')
         ax3[1].set_ylabel('pitch position error')
         ax3[1].set_xlabel('time (s)')
+        plt.tight_layout()
+        plt.show()
+
+        figure5, ax5 = plt.subplots(2,1)
+        ax5[0].plot(time, self.x_dotError)
+        ax5[0].set_title('x_dot error over time')
+        ax5[0].set_ylabel('x_dot error')
+        ax5[0].set_xlabel('time (s)')
+
+        ax5[1].plot(time, self.y_dotError)
+        ax5[1].set_title('y_dot error over time')
+        ax5[1].set_ylabel('y_dot error')
+        ax5[1].set_xlabel('time (s)')
         plt.tight_layout()
         plt.show()
 

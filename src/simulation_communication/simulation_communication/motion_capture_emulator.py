@@ -51,12 +51,17 @@ class PentaVerify(Node):
         # Extract current pose and time using the parameterized object ID
         # when using world_large.sdf quadcopter is 5
         # when using world_inv_pen.sdf quadcopter is 6 and pendulum is 5
+<<<<<<< HEAD
         if len(msg.poses) <= self.target_object_id:
             self.get_logger().warn(f'Target object ID {self.target_object_id} not available in pose array (length: {len(msg.poses)})')
             return
             
         current_position = msg.poses[self.target_object_id].position
         current_orientation = msg.poses[self.target_object_id].orientation
+=======
+        current_position = msg.poses[-1].position
+        current_orientation = msg.poses[-1].orientation
+>>>>>>> f4f57238c9c58ba0836c7479a51a02955766d398
        
         # Ensure w is positive
         current_orientation.x, current_orientation.y, current_orientation.z, current_orientation.w = self.normalize_quaternion_positive_w(
