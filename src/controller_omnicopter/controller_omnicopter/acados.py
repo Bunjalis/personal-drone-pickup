@@ -52,8 +52,8 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     q_cost = np.array([
         2.1, 2.1, 2.1,      # position
         6.1, 6.1, 6.1, 6.1, # quaternion (we'll apply norm-weighting below)
-        0.1, 0.1, 0.1,      # velocity
-        0.1, 0.1, 0.1,      # body rates
+        0.5, 0.5, 0.5,      # velocity
+        0.5, 0.5, 0.5,      # body rates
         0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001,  # actual actuator states (small weight)
         0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001   # desired actuator states (medium weight)
     ])
@@ -96,7 +96,7 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     ocp.constraints.x0 = x0
 
     # ---------- Initial parameter values (adaptive estimator parameters) ----------
-    p0 = np.array([0.0, 0.0, 0.0, 7.42678162, 0.12])  # [theta_roll, theta_pitch, theta_yaw, thrust_base, motor_time_constant]
+    p0 = np.array([0.0, 0.0, 0.0, 7.42678162, 0.08])  # [theta_roll, theta_pitch, theta_yaw, thrust_base, motor_time_constant]
     ocp.parameter_values = p0
 
     # ---------- Input constraints ----------
@@ -107,8 +107,8 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
 
     # ---------- State constraints (for actuator values) ----------
     # Constrain both actual and desired actuator states to be within reasonable bounds
-    actuator_min = -1.0
-    actuator_max = 1.0
+    actuator_min = -0.7
+    actuator_max = 0.7
     
     # State bounds for all shooting nodes (not initial)
     # Use large finite values instead of inf to avoid JSON serialization issues
@@ -131,17 +131,17 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
 
     # Iterations / tolerances
-    ocp.solver_options.nlp_solver_max_iter = 3000
-    ocp.solver_options.qp_solver_iter_max = 1500
+    ocp.solver_options.nlp_solver_max_iter = 1000
+    ocp.solver_options.qp_solver_iter_max = 500
 
-    ocp.solver_options.qp_solver_tol_stat = 5e-5
-    ocp.solver_options.qp_solver_tol_eq = 5e-5
-    ocp.solver_options.qp_solver_tol_ineq = 5e-5
-    ocp.solver_options.qp_solver_tol_comp = 5e-5
-    ocp.solver_options.nlp_solver_tol_stat = 5e-5
-    ocp.solver_options.nlp_solver_tol_eq = 5e-5
-    ocp.solver_options.nlp_solver_tol_ineq = 5e-5
-    ocp.solver_options.nlp_solver_tol_comp = 5e-5
+    ocp.solver_options.qp_solver_tol_stat = 5e-3
+    ocp.solver_options.qp_solver_tol_eq = 5e-3
+    ocp.solver_options.qp_solver_tol_ineq = 5e-3
+    ocp.solver_options.qp_solver_tol_comp = 5e-3
+    ocp.solver_options.nlp_solver_tol_stat = 5e-3
+    ocp.solver_options.nlp_solver_tol_eq = 5e-3
+    ocp.solver_options.nlp_solver_tol_ineq = 5e-3
+    ocp.solver_options.nlp_solver_tol_comp = 5e-3
 
     # Create OCP solver
     ocp_solver = AcadosOcpSolver(ocp)

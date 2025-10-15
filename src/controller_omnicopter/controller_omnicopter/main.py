@@ -40,13 +40,13 @@ class Controller(Node):
 
         self.ocp, self.sim_integrator = generate_ocp_controller()
 
-        self.dt = 1.0 / 30.0
+        self.dt = 1.0 / 60.0
         self.step_counter = 0
         self.timer = self.create_timer(self.dt, self.control_loop)
 
         # self.timer_test_angular = self.create_timer(self.dt, self.angular_velocity_test)
 
-        self.traj = circle_trajectory(self.dt)
+        self.traj = hover_trajectory(self.dt)
         #self.traj = hover_and_yaw(self.dt)
         #self.traj = zsine_trajectory(self.dt)
 
@@ -64,7 +64,7 @@ class Controller(Node):
         # Parameters: [theta_roll, theta_pitch, theta_yaw, thrust_base, motor_time_constant, ixx, iyy, izz]
         # thrust_base = 7.42678162 (will be multiplied by 1e-7 in dynamics)
         # mass and motor_distance are now known constants in the dynamics model
-        self.params = np.array([0.0, 0.0, 0.0, 7.42678162, 0.12])
+        self.params = np.array([0.031, 0.0, 0.0, 7.02678162, 0.04])
         
         # Initialize UKF estimator for adaptive parameter estimation (always enabled)
         self.ukf = UKFEstimator(self.sim_integrator, self.dt, initial_params=self.params)

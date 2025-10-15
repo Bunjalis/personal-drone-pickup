@@ -50,7 +50,7 @@ class QuadDynamics:
         self.params = cs.vertcat(self.theta_roll, self.theta_pitch, self.theta_yaw, self.thrust_base, self.motor_time_constant)
         
         # Fixed motor distance (not adaptive)
-        self.motor_distance_fixed = 0.15  # Fixed distance from center to motor (m)
+        self.motor_distance_fixed = 0.17  # Fixed distance from center to motor (m)
 
 
         # Fixed scale factor for thrust constant
