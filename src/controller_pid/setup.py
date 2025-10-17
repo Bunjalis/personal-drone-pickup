@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'controller_demo'
+package_name = 'controller_pid'
 
 setup(
     name=package_name,
@@ -15,11 +15,11 @@ setup(
     zip_safe=True,
     maintainer='mitchell',
     maintainer_email='mitch.torok@gmail.com',
-    description='TODO: Package description',
+    description='Basic PID drone control',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
-            'main = controller_demo.main:main'
+            'main = controller_pid.main:main'
         ],
     },
 )
