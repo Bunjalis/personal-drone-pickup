@@ -11,7 +11,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         # Include launch files
-        ('share/' + package_name + '/launch', ['launch/simulation_launch.py', 'launch/betaflight_simulation_launch.py', 'launch/ukf_simulation_launch.py', 'launch/omnicopter_simulation_launch.py']),
+        ('share/' + package_name + '/launch', ['launch/betaflight_linear_simulation_launch.py', 'launch/betaflight_simulation_launch.py', 'launch/omnicopter_simulation_launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

@@ -12,76 +12,55 @@ from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution, set_trajectory_reference_aligned, update_ocp_parameters
 from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, power_loop_trajectory, figure8_zsine_trajectory, fast_xyz_sine_trajectory
-from .visualization import TrajectoryVisualizer
-from .data_logger import DataLogger
+from utility_objects.visualization import TrajectoryVisualizer
+from utility_objects.data_logger import DataLogger
+from utility_objects.callback_manager import CallbackManager
 from interfaces.msg import MotionCaptureState, ELRSCommand, Telemetry
-from interfaces.srv import SetArming
-from std_msgs.msg import String, Bool
-from geometry_msgs.msg import Pose, PoseArray
 from scipy.linalg import cholesky
-import matplotlib.pyplot as plt
+
+
+POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
+USE_MOTION_CAPTURE = True  # Set to False to use ORB-SLAM data instead
+FREQUENCY_HZ = 30.0
+DT = 1.0 / FREQUENCY_HZ
+
+LOGGING_NAME = 'controller_ukf'
 
 class Controller(Node):
     def __init__(self):
         super().__init__('controller')
 
-        self.cmd_publisher_ = self.create_publisher(ELRSCommand, '/ELRSCommand', 10)
-        self.pose_subscription_ = self.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
-        self.orb_slam_state_subscription_ = self.create_subscription(MotionCaptureState, '/orb_slam_state', self.orb_slam_state_callback, 10)
-        self.telemetry_subscription_ = self.create_subscription(Telemetry, '/telemetry', self.telemetry_callback, 10)
-        self.trajectory_publisher_ = self.create_publisher(PoseArray, '/planned_trajectory', 10)
-        
-        # RViz2 integration - Service and subscriptions
-        self.arming_service_ = self.create_service(SetArming, 'drone_arming_service', self.handle_arming_service)
-        self.command_subscription_ = self.create_subscription(String, 'drone_command', self.command_callback, 10)
-        self.arming_state_publisher_ = self.create_publisher(Bool, 'drone_arming_state_feedback', 10)
-        self.last_measured_pose = None
-        self.motion_capture_pose = None
-        self.orb_slam_pose = None
-        self.current_pose = None
-        self.battery_voltage = 0.0 
-        
-        # Safety feature: Track last pose update time
-        self.last_pose_update_time = time.time()
-        self.pose_timeout_threshold = 0.25
+        # General Settings
+        self.cb = CallbackManager(self)
+
+        self.traj, trajectory_name = xyz_sine_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
+        self.trajectory_visualizer.publish_all_visualizations(self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
 
-        self.ocp, self.sim_integrator = generate_ocp_controller()
-
-        self.dt = 1.0 /30.0
+        self.timer = self.create_timer(DT, self.control_loop)
         self.step_counter = 0
-        self.timer = self.create_timer(self.dt, self.control_loop)
-
-        self.visualization_timer = self.create_timer(0.5, self.publish_trajectory_visualization)
-
-        self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
-
-        self.traj = xyz_sine_trajectory(self.dt)  
-
-        self.trajectory_visualizer.publish_all_visualizations( self.traj,  pose_subsample=10, show_velocity=True, velocity_scale=0.5,color_by_time=True  )
-
-        self.USE_MOTION_CAPTURE = True 
-        
-        trial_name = "ZSINE_4"
-
-        self.est_params = np.array([40.0, 0.0, 0.07, 70.0, 670.0, 0.5])
-
         self.steps = self.traj.shape[1] - 1
 
         self.armed = False
-
-        self.N = 20
-        self.skip_steps = 3
-
-        self.first_solve = True
-        self.data_logger = DataLogger(trial_name)
-        self.copy_source_files_to_output()
-        self.data_logger.save_trajectory(self.traj)
-        
-        # Arming state and takeoff flag
         self.takeoff_requested = False
         self.shutdown_requested = False
+
+
+        # MPC settings
+        self.N = 20
+        self.skip_steps = 3
+        self.first_solve = True
+        self.ocp, self.sim_integrator = generate_ocp_controller()
+
+
+        # ORB-Slam interface 
+        self.orb_slam_pose = None
+        self.orb_slam_state_subscription_ = self.create_subscription(MotionCaptureState, '/orb_slam_state', self.orb_slam_state_callback, 10)
+
         
+        # UKF settings
+        self.est_params = np.array([45.0, 0.0, 0.12, 70.0, 670.0, 0.5])
+
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
         self.x_est = np.array([0.0, 0.0, 0.0, 
@@ -89,123 +68,48 @@ class Controller(Node):
                                 0.0, 0.0, 0.0, 
                                 0.0, 0.0, 0.0, 
                                 self.est_params[0], self.est_params[1], self.est_params[2], self.est_params[3], self.est_params[4], self.est_params[5]])
-        self.P = np.diag([0.1, 0.1, 0.1,  # Increase initial uncertainty for position
-                          0.1, 0.1, 0.1, 0.1,  # Quaternion
-                          0.1, 0.1, 0.1,  # Velocity
-                          0.1, 0.1, 0.1,  # Angular rates
-                          0.1, 0.1, 0.1, 0.1, 0.1, 0.1])  # thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo uncertainties
-        self.Q = np.diag([1e-4, 1e-4, 1e-4,  # Position process noise
-                          1e-5, 1e-5, 1e-5, 1e-5,  # Quaternion process noise
-                          1e-3, 1e-3, 1e-3,  # Velocity process noise
-                          1e-3, 1e-3, 1e-3,  # Angular rates process noise
-                          1e-4, 1e-4, 1e-4, 1, 1, 0.1])  # thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo process noise
+        self.P = np.diag([0.1, 0.1, 0.1,
+                          0.1, 0.1, 0.1, 0.1,
+                          0.1, 0.1, 0.1, 
+                          0.1, 0.1, 0.1, 
+                          0.1, 0.1, 0.1, 0.1, 0.1, 0.1]) 
+        self.Q = np.diag([1e-4, 1e-4, 1e-4, 
+                          1e-5, 1e-5, 1e-5, 1e-5,
+                          1e-3, 1e-3, 1e-3,
+                          1e-3, 1e-3, 1e-3,
+                          1e-4, 1e-4, 1e-4, 1, 1, 0.1])
         self.R = np.diag([0.05]*13)
 
 
+        # Delay estimation
         self.delay_states = 1
         self.delay_states_float = float(self.delay_states)
+        self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
 
-    def pose_callback(self, msg: MotionCaptureState):
-        p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
-        self.motion_capture_pose = np.round(np.array([ p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z ]), 3)
-        if self.USE_MOTION_CAPTURE:
-            self.current_pose = self.motion_capture_pose
-            self.last_pose_update_time = time.time()
-        
+
+        # Logging
+        log_headers = [
+            'step', 'timestamp', 'u0', 'u1', 'u2', 'u3',
+            'pose_x', 'pose_y', 'pose_z', 'pose_qw', 'pose_qx', 'pose_qy', 'pose_qz',
+        ]
+        self.data_logger = DataLogger(LOGGING_NAME, trajectory_name, log_headers)
+
+        self.observed_state_history = []       
+        self.control_history = []
+        self.estimated_state_history = []
+        self.UKF_state_estimation_history = []
+
 
     def orb_slam_state_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
         self.orb_slam_pose = np.round(np.array([ p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z ]), 3)
-        if not self.USE_MOTION_CAPTURE:
+        if not USE_MOTION_CAPTURE:
             self.current_pose = self.orb_slam_pose
             self.last_pose_update_time = time.time() 
         
 
-    def telemetry_callback(self, msg: Telemetry):
-        self.battery_voltage = msg.battery_voltage
-
-    def handle_arming_service(self, request, response):
-        """Handle arming/disarming service requests from RViz"""
-        if request.arm:
-            if self.current_pose is not None:
-                self.armed = True
-                self.step_counter = 0
-                self.first_solve = True
-                response.success = True
-                response.message = "Drone armed successfully"
-                self.get_logger().info("Drone armed via service")
-            else:
-                response.success = False
-                response.message = "Cannot arm: No pose data available"
-                self.get_logger().warn("Arming failed: No pose data")
-        else:
-            self.armed = False
-            self.takeoff_requested = False
-            self.shutdown_requested = True
-            response.success = True
-            response.message = "Drone disarmed successfully - shutting down controller"
-            self.get_logger().info("Drone disarmed via service - initiating shutdown")
-        
-        # Publish arming state feedback
-        self.publish_arming_state()
-        return response
-
-    def command_callback(self, msg: String):
-        """Handle string commands from RViz (ARM, DISARM, TAKEOFF)"""
-        command = msg.data.upper()
-        
-        if command == "ARM":
-            if self.current_pose is not None:
-                self.armed = True
-                self.step_counter = 0
-                self.first_solve = True
-                self.get_logger().info("Drone armed via command")
-                self.publish_arming_state()
-            else:
-                self.get_logger().warn("Cannot arm: No pose data available")
-        
-        elif command == "DISARM":
-            self.armed = False
-            self.takeoff_requested = False
-            self.shutdown_requested = True
-            self.get_logger().info("Drone disarmed via command - initiating shutdown")
-            self.publish_arming_state()
-        
-        elif command == "TAKEOFF":
-            if self.armed:
-                self.takeoff_requested = True
-                self.get_logger().info("Takeoff requested")
-            else:
-                self.get_logger().warn("Cannot takeoff: Drone not armed")
-
-    def publish_arming_state(self):
-        """Publish current arming state to RViz"""
-        msg = Bool()
-        msg.data = self.armed
-        self.arming_state_publisher_.publish(msg)
-
-    def publish_trajectory_visualization(self):
-        if hasattr(self, 'traj'):
-            self.trajectory_visualizer.publish_all_visualizations( self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
-
-    def copy_source_files_to_output(self):
-        current_file = __file__
-        if current_file.endswith('.pyc'):
-            current_file = current_file[:-1] 
-        
-        source_files_info = {
-            'main.py': current_file,
-            'acados.py': os.path.join(os.path.dirname(current_file), 'acados.py'),
-            'trajectories.py': os.path.join(os.path.dirname(current_file), 'trajectories.py'),
-            'dynamics.py': os.path.join(os.path.dirname(current_file), 'dynamics.py'),
-            'data_logger.py': os.path.join(os.path.dirname(current_file), 'data_logger.py')
-        }
-        
-        self.data_logger.copy_source_files_to_output(source_files_info)
-
-
     def delay_estimation_timer(self):
-        if len(self.data_logger.observed_state_history) < 30 or len(self.data_logger.control_history) < 30:
+        if len(self.observed_state_history) < 30 or len(self.control_history) < 30:
             return
 
         min_error = float('inf')
@@ -215,8 +119,8 @@ class Controller(Node):
         # Iterate over possible delay values to find the one that minimizes the position error
         for delay in range(1, 12):  # Test delays from 1 to 10
             total_position_error = 0
-            estimated_state = copy.deepcopy(self.data_logger.observed_state_history[-30])  # Start with the oldest state in the last 30
-            delayed_control_history = self.data_logger.control_history[-(30 + delay):-delay]  # Use delayed controls
+            estimated_state = copy.deepcopy(self.observed_state_history[-30])  # Start with the oldest state in the last 30
+            delayed_control_history = self.control_history[-(30 + delay):-delay]  # Use delayed controls
 
             for i, control in enumerate(delayed_control_history):
                 self.sim_integrator.set("x", np.concatenate((estimated_state, np.array(control[0:4]).flatten())))
@@ -230,7 +134,7 @@ class Controller(Node):
                 estimated_state = x_next[:13]
 
                 # Accumulate the position error over all sample points
-                position_error = np.linalg.norm(estimated_state[:3] - self.data_logger.observed_state_history[-(30 - i)][:3])
+                position_error = np.linalg.norm(estimated_state[:3] - self.observed_state_history[-(30 - i)][:3])
                 total_position_error += position_error
 
             # Calculate the average position error for the current delay
@@ -253,69 +157,23 @@ class Controller(Node):
 
 
     def control_loop(self):
-        start_time = time.time()
 
-        # Check if shutdown was requested (manual disarm from RViz)
+
         if self.shutdown_requested:
-            self.get_logger().info("Shutdown requested - closing controller")
-            
-            # Schedule shutdown on a separate thread to avoid blocking
-            def shutdown_thread():
-                time.sleep(0.1)  # Brief delay to let final messages publish
-                self.on_close()
-                try:
-                    self.destroy_node()
-                except:
-                    pass
-                try:
-                    rclpy.shutdown()
-                except:
-                    pass
-                # Force process termination
-                os.kill(os.getpid(), signal.SIGTERM)
-            
-            thread = threading.Thread(target=shutdown_thread, daemon=True)
-            thread.start()
+            self.cb.request_shutdown()
             return
 
-        if self.armed and (time.time() - self.last_pose_update_time) > self.pose_timeout_threshold:
-            print(f"SAFETY DISARM: No pose updates received for {time.time() - self.last_pose_update_time:.3f} seconds (threshold: {self.pose_timeout_threshold}s)")
-            self.armed = False
-            self.takeoff_requested = False
+        if self.armed and (time.time() - self.last_pose_update_time) > POSE_TIMEOUT_THRESHOLD:
             msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
-            self.cmd_publisher_.publish(msg)
-            self.publish_arming_state()
+            self.cb.disarm(msg)
             return 
 
         if self.armed and self.current_pose is not None:
-
             ### CHECK FOR END OF TRAJECTORY
             if self.step_counter + self.N * self.skip_steps > self.steps:
-                self.step_counter = 0
-                self.armed = False
-                self.takeoff_requested = False
                 msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
-                self.cmd_publisher_.publish(msg)
-                self.publish_arming_state()
-                self.get_logger().info("Trajectory completed - saving data and shutting down")
-                
-                # Schedule shutdown on a separate thread to allow final message to publish
-                def shutdown_thread():
-                    time.sleep(0.2)  # Brief delay to ensure disarm command is sent
-                    self.on_close()
-                    try:
-                        self.destroy_node()
-                    except:
-                        pass
-                    try:
-                        rclpy.shutdown()
-                    except:
-                        pass
-                    # Force process termination
-                    os.kill(os.getpid(), signal.SIGTERM)
-                
-                thread = threading.Thread(target=shutdown_thread, daemon=True)
-                thread.start()
+                self.cb.disarm(msg)
+                self.cb.request_shutdown()
                 return
 
             # Update OCP parameters with current estimates
@@ -327,8 +185,11 @@ class Controller(Node):
             #estimated_state = copy.deepcopy(self.x_est[:13])
             estimated_state = copy.deepcopy(self.current_pose[:13])
 
+            if len(self.control_history) <= 0:
+                delayed_control_history = [estimated_state]
+            else:
+                delayed_control_history = self.control_history[-self.delay_states:-1]   
 
-            delayed_control_history = self.data_logger.control_history[-self.delay_states:-1]
 
             for i, val in enumerate(delayed_control_history):
                 self.sim_integrator.set("x", np.concatenate((estimated_state, np.array(val[0:4]).flatten()))) 
@@ -343,15 +204,18 @@ class Controller(Node):
 
             # Only correct the drones velocity, while keeping the position the same as the observed value
             estimated_state[0:7] = self.current_pose[0:7]
+            if len(self.control_history) == 0:
+                self.get_logger().warn("Control history is empty - cannot set state bounds accurately")
+                estimated_state_with_control = np.concatenate((estimated_state, np.array([0.0, 0.0, 0.0, 0.0]))) 
+            else:
+                estimated_state_with_control = np.concatenate((estimated_state, np.array(self.control_history[-1][0:4]))) 
 
-            # Ensure both inputs to np.concatenate are 1D arrays
-            estimated_state_with_control = np.concatenate((estimated_state, np.array(self.data_logger.control_history[-1][0:4]))) 
-
-            relaxation_factor = 0.0001 # 0.25 for orb slam 
+            relaxation_factor = 0.025 # 0.25 for orb slam 
             relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
             relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
             self.ocp.set(0, "lbx", relaxed_lbx)
             self.ocp.set(0, "ubx", relaxed_ubx)
+
 
             ### MPC WARM START
             if self.first_solve:
@@ -360,7 +224,6 @@ class Controller(Node):
             else:
                 warm_start_from_previous_solution(self.ocp, self.N)
 
-
             ### SOLVE OCP
             status = self.ocp.solve()
             if status != 0:
@@ -368,6 +231,7 @@ class Controller(Node):
             x = self.ocp.get(1, "x")
             u = x[-4:]
             u_rate = self.ocp.get(0, "u")
+
 
 
             ### SEND COMMANDS
@@ -381,7 +245,7 @@ class Controller(Node):
                 msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
                 print("Armed - Waiting for TAKEOFF command")
             
-            self.cmd_publisher_.publish(msg)
+            self.cb.cmd_publisher_.publish(msg)
             
             # Extract MPC trajectory for visualization
             mpc_trajectory = np.zeros((13, self.N))
@@ -395,12 +259,13 @@ class Controller(Node):
             # Publish MPC plan visualization
             self.trajectory_visualizer.publish_mpc_plan(mpc_trajectory)
             self.trajectory_visualizer.publish_transform_frame(self.orb_slam_pose, "drone_orbslam")
-            self.trajectory_visualizer.publish_transform_frame(self.motion_capture_pose, "drone_mocap")
+            self.trajectory_visualizer.publish_transform_frame(self.current_pose, "drone_mocap")
+
 
             ### UKF predict and update - only when actually flying
             if self.takeoff_requested:
-                old_u = np.array(self.data_logger.control_history[-self.delay_states][0:4])
-                old_u_rate = np.array(self.data_logger.control_history[-self.delay_states][4:8])
+                old_u = np.array(self.control_history[-self.delay_states][0:4])
+                old_u_rate = np.array(self.control_history[-self.delay_states][4:8])
                 sigma_pts, wm, wc = self.generate_sigma_points(self.x_est, self.P, self.alpha, self.beta, self.kappa)
                 sigma_pts_pred = np.array([
                     self.fx(pt, old_u, old_u_rate) for pt in sigma_pts
@@ -446,16 +311,17 @@ class Controller(Node):
                 ### Update estimated parameters
                 self.est_params = np.array([self.x_est[13], self.x_est[14], self.x_est[15], self.x_est[16], self.x_est[17], self.x_est[18]])
 
-            ### Log data using data logger
-            self.data_logger.log_control_data(u, u_rate)
-            self.data_logger.log_observed_state(self.current_pose)
-            self.data_logger.log_motion_capture_state(self.motion_capture_pose)
-            self.data_logger.log_parameter_estimation(self.est_params)
-            self.data_logger.log_estimated_state(estimated_state)
-            self.data_logger.log_delay_estimation(self.delay_states)
-            self.data_logger.log_ukf_state(self.x_est)
-            self.data_logger.log_battery_voltage(self.battery_voltage)
-            
+
+            log_row = [
+                self.step_counter,
+                time.time(),
+                float(u[0]), float(u[1]), float(u[2]), float(u[3]),
+                float(self.current_pose[0]), float(self.current_pose[1]), float(self.current_pose[2]),
+                float(self.current_pose[3]), float(self.current_pose[4]), float(self.current_pose[5]), float(self.current_pose[6])
+            ]
+            self.data_logger.append_row(log_row)
+
+
             # Publish actual path visualization (dotted red line)
             self.trajectory_visualizer.publish_actual_path(self.current_pose)
             
@@ -463,20 +329,15 @@ class Controller(Node):
             if self.takeoff_requested:
                 self.step_counter += 1
 
+            self.control_history.append( np.concatenate( (u, u_rate) ).tolist() )
+            self.observed_state_history.append( self.current_pose[:13].tolist() )
+            self.estimated_state_history.append( estimated_state[:13].tolist() )
+            self.UKF_state_estimation_history.append( self.x_est.tolist() )
+
         else:
             msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
-            self.cmd_publisher_.publish(msg)
+            self.cb.cmd_publisher_.publish(msg)
             self.step_counter = 0
-            # Record battery voltage during disarmed phase
-            self.data_logger.log_battery_voltage(self.battery_voltage)
-
-        # Calculate and print control loop execution time
-        end_time = time.time()
-        execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
-        #print(f"Control loop execution time: {execution_time:.2f} ms")
-        
-        # Record the execution time
-        self.data_logger.log_control_timing(execution_time)
 
 
     # --- UKF Functions ---
@@ -545,25 +406,12 @@ class Controller(Node):
         sys.exit(0)
 
     def on_close(self):
-        # Check if on_close has already been called
         if getattr(self, 'on_close_called', False):
             return
-
-        self.on_close_called = True  # Set the flag to True
-
-        print("Saving data and shutting down...")
-        
-        # Disarm the drone first
+        self.on_close_called = True
         msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
-        self.cmd_publisher_.publish(msg)
-
-        # Save all data using the data logger
-        self.data_logger.close_and_save()
-
-        # Plot system response and shutdown
-        #self.plotSystemResponse()
-
-
+        self.cb.cmd_publisher_.publish(msg)
+        self.data_logger.close()
 
 
 def main(args=None): 

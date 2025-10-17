@@ -2,6 +2,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 def takeoff_trajectory(dt):
+
     steps_takeoff = 4 * 30  # 1 second of takeoff at 30 Hz
     steps_hover = 4 * 30    # 2 seconds of hover at 30 Hz
 
@@ -42,8 +43,9 @@ def takeoff_trajectory(dt):
     u2 = np.zeros_like(time_space_total)
     u3 = np.zeros_like(time_space_total)
     u4 = np.zeros_like(time_space_total)
-    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+    traj = np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
                      vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
+    return traj, "takeoff"
     
 
 def land_trajectory(dt, init_pose):
@@ -85,13 +87,14 @@ def land_trajectory(dt, init_pose):
     u2 = np.zeros_like(time_space_total)
     u3 = np.zeros_like(time_space_total)
     u4 = np.zeros_like(time_space_total)
-    return np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+    traj = np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
                      vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
+    return traj, "land"
 
 
 
 def hover_trajectory(dt):
-    take_off_traj = takeoff_trajectory(dt)
+    take_off_traj, _ = takeoff_trajectory(dt)
 
     steps = 5 * 30  # 10 seconds of hover at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
@@ -121,16 +124,18 @@ def hover_trajectory(dt):
     hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
                  vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
 
-    land_traj = land_trajectory(dt, take_off_traj[:, -1])
+    land_traj, _ = land_trajectory(dt, take_off_traj[:, -1])
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
-    return np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+    traj = np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+    return traj, "hover"
 
 
 
 
 def z_sin_trajectory(dt):
-    take_off_traj = takeoff_trajectory(dt)
+    trajectory_name = "ZSINE"
+    take_off_traj, _ = takeoff_trajectory(dt)
 
     # Phase 1: Hover for 20 seconds
     steps_hover = 20 * 30  # 20 seconds of hover at 30 Hz
@@ -184,16 +189,17 @@ def z_sin_trajectory(dt):
     hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
                  vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
 
-    land_traj = land_trajectory(dt, hover_traj[:, -1])
+    land_traj, _ = land_trajectory(dt, hover_traj[:, -1])
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
-    return np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+    traj = np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+    return traj, "z_sin"
 
 
 
 
 def xyz_sine_trajectory(dt):
-    take_off_traj = takeoff_trajectory(dt)
+    take_off_traj, _ = takeoff_trajectory(dt)
 
     steps = 20 * 30  # 10 seconds of hover at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
@@ -223,14 +229,15 @@ def xyz_sine_trajectory(dt):
     hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
                  vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
 
-    land_traj = land_trajectory(dt, take_off_traj[:, -1])
+    land_traj, _ = land_trajectory(dt, take_off_traj[:, -1])
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
-    return np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+    traj = np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+    return traj, "xyz_sine"
 
 
 def fast_xyz_sine_trajectory(dt):
-    take_off_traj = takeoff_trajectory(dt)
+    take_off_traj, _ = takeoff_trajectory(dt)
 
     steps = 20 * 30  # 10 seconds of hover at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
@@ -260,17 +267,18 @@ def fast_xyz_sine_trajectory(dt):
     hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
                  vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
 
-    land_traj = land_trajectory(dt, take_off_traj[:, -1])
+    land_traj, _ = land_trajectory(dt, take_off_traj[:, -1])
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
-    return np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+    traj = np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+    return traj, "fast_xyz_sine"
 
 
 
 
 
 def fence_trajectory(dt):
-    take_off_traj = takeoff_trajectory(dt)
+    take_off_traj, _ = takeoff_trajectory(dt)
 
     steps = 20 * 30  # 10 seconds of hover at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
@@ -300,15 +308,16 @@ def fence_trajectory(dt):
     hover_traj =  np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
                  vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
 
-    land_traj = land_trajectory(dt, take_off_traj[:, -1])
+    land_traj, _ = land_trajectory(dt, take_off_traj[:, -1])
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
-    return np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+    traj = np.concatenate((take_off_traj,hover_traj, land_traj,zeros), axis=1)
+    return traj, "fence"
 
 
 
 def circle_trajectory(dt):
-    take_off_traj = takeoff_trajectory(dt)
+    take_off_traj, _ = takeoff_trajectory(dt)
 
     # Transition from hover to circle start (3 seconds)
     steps_transition = 5 * 30  # 3 seconds at 30 Hz
@@ -364,10 +373,11 @@ def circle_trajectory(dt):
     hover_traj = np.array([x_traj_combined, y_traj_combined, z_traj_combined, qw_traj, qx_traj, qy_traj, qz_traj,
                            vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
 
-    land_traj = land_trajectory(dt, hover_traj[:, -1])
+    land_traj, _ = land_trajectory(dt, hover_traj[:, -1])
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
-    return np.concatenate((take_off_traj, hover_traj, land_traj, zeros), axis=1)
+    traj = np.concatenate((take_off_traj, hover_traj, land_traj, zeros), axis=1)
+    return traj, "circle"
 
 
 
@@ -386,7 +396,7 @@ def figure8_zsine_trajectory(dt, duration=10.0, repeats=3, z_amplitude=0.5, z_of
     Returns:
         traj: np.ndarray shape (16, N)
     """
-    take_off_traj = takeoff_trajectory(dt)
+    take_off_traj, _ = takeoff_trajectory(dt)
 
     # Build one figure-8 segment
     steps = int(duration / dt)
@@ -440,16 +450,17 @@ def figure8_zsine_trajectory(dt, duration=10.0, repeats=3, z_amplitude=0.5, z_of
         vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4
     ])
 
-    land_traj = land_trajectory(dt, hover_traj[:, -1])
+    land_traj, _ = land_trajectory(dt, hover_traj[:, -1])
     zeros = np.zeros((take_off_traj.shape[0], 1 * 30))
 
-    return np.concatenate((take_off_traj, hover_traj, land_traj, zeros), axis=1)
+    traj = np.concatenate((take_off_traj, hover_traj, land_traj, zeros), axis=1)
+    return traj, "figure8_zsine"
 
 
 
 
 def power_loop_trajectory(dt):
-    take_off_traj = takeoff_trajectory(dt)
+    take_off_traj, _ = takeoff_trajectory(dt)
 
     # Phase lengths (Hz assumed 30 via your code)
     hz = 30
@@ -625,8 +636,9 @@ def power_loop_trajectory(dt):
         u1, u2, u3, u4
     ])
 
-    land_traj = land_trajectory(dt, power_loop_traj[:, -1])
+    land_traj, _ = land_trajectory(dt, power_loop_traj[:, -1])
     zeros = np.zeros((take_off_traj.shape[0], 1 * hz))
 
-    return np.concatenate((take_off_traj, power_loop_traj, land_traj, zeros), axis=1)
+    traj = np.concatenate((take_off_traj, power_loop_traj, land_traj, zeros), axis=1)
+    return traj, "power_loop"
 

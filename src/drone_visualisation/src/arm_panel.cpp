@@ -13,24 +13,28 @@ ArmPanel::ArmPanel(QWidget* parent)
   // Status label
   status_label_ = new QLabel("Status: Waiting for controller...");
   status_label_->setStyleSheet("font-size: 12px; padding: 5px; background-color: #f0f0f0; border-radius: 3px;");
+  status_label_->setFixedHeight(30);  // or setMinimumHeight(40);
   status_label_->setAlignment(Qt::AlignCenter);
   layout->addWidget(status_label_);
   
   // Battery voltage label
   battery_label_ = new QLabel("Battery: -- V");
   battery_label_->setStyleSheet("font-size: 12px; padding: 5px; background-color: #f0f0f0; border-radius: 3px;");
+  battery_label_->setFixedHeight(30);  // or setMinimumHeight(40);
   battery_label_->setAlignment(Qt::AlignCenter);
   layout->addWidget(battery_label_);
   
   // ARM/DISARM button
   arm_button_ = new QPushButton("ARM");
   arm_button_->setStyleSheet("background-color: #51cf66; color: white; font-weight: bold;");
+  arm_button_->setFixedHeight(80);      // or setMinimumHeight(40);
   layout->addWidget(arm_button_);
   
   // TAKEOFF button
   takeoff_button_ = new QPushButton("TAKEOFF");
   takeoff_button_->setStyleSheet("background-color: #4dabf7; color: white; font-weight: bold;");
   takeoff_button_->setEnabled(false);  // Disabled by default
+  takeoff_button_->setFixedHeight(80);  // or setMinimumHeight(40);
   layout->addWidget(takeoff_button_);
   
   setLayout(layout);
