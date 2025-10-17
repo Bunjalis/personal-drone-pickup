@@ -107,8 +107,8 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
 
     # ---------- State constraints (for actuator values) ----------
     # Constrain both actual and desired actuator states to be within reasonable bounds
-    actuator_min = -0.7
-    actuator_max = 0.7
+    actuator_min = -0.8
+    actuator_max = 0.8
     
     # State bounds for all shooting nodes (not initial)
     # Use large finite values instead of inf to avoid JSON serialization issues
@@ -134,14 +134,14 @@ def generate_ocp_controller(dynamics=None, N_horizon: int = 30, T_horizon: float
     ocp.solver_options.nlp_solver_max_iter = 1000
     ocp.solver_options.qp_solver_iter_max = 500
 
-    ocp.solver_options.qp_solver_tol_stat = 5e-3
-    ocp.solver_options.qp_solver_tol_eq = 5e-3
-    ocp.solver_options.qp_solver_tol_ineq = 5e-3
-    ocp.solver_options.qp_solver_tol_comp = 5e-3
-    ocp.solver_options.nlp_solver_tol_stat = 5e-3
-    ocp.solver_options.nlp_solver_tol_eq = 5e-3
-    ocp.solver_options.nlp_solver_tol_ineq = 5e-3
-    ocp.solver_options.nlp_solver_tol_comp = 5e-3
+    ocp.solver_options.qp_solver_tol_stat = 5e-4
+    ocp.solver_options.qp_solver_tol_eq = 5e-4
+    ocp.solver_options.qp_solver_tol_ineq = 5e-4
+    ocp.solver_options.qp_solver_tol_comp = 5e-4
+    ocp.solver_options.nlp_solver_tol_stat = 5e-4
+    ocp.solver_options.nlp_solver_tol_eq = 5e-4
+    ocp.solver_options.nlp_solver_tol_ineq = 5e-4
+    ocp.solver_options.nlp_solver_tol_comp = 5e-4
 
     # Create OCP solver
     ocp_solver = AcadosOcpSolver(ocp)

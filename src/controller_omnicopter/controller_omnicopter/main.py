@@ -5,6 +5,7 @@ import numpy as np
 import math
 import csv
 import os
+import datetime as date
 from rclpy.node import Node
 from datetime import datetime
 from scipy.spatial.transform import Rotation as R
@@ -46,7 +47,7 @@ class Controller(Node):
 
         # self.timer_test_angular = self.create_timer(self.dt, self.angular_velocity_test)
 
-        self.traj = hover_trajectory(self.dt)
+        self.traj = zsine_trajectory(self.dt)
         #self.traj = hover_and_yaw(self.dt)
         #self.traj = zsine_trajectory(self.dt)
 
@@ -64,6 +65,7 @@ class Controller(Node):
         # Parameters: [theta_roll, theta_pitch, theta_yaw, thrust_base, motor_time_constant, ixx, iyy, izz]
         # thrust_base = 7.42678162 (will be multiplied by 1e-7 in dynamics)
         # mass and motor_distance are now known constants in the dynamics model
+        # on roll 0.031
         self.params = np.array([0.031, 0.0, 0.0, 7.02678162, 0.04])
         
         # Initialize UKF estimator for adaptive parameter estimation (always enabled)
@@ -86,7 +88,8 @@ class Controller(Node):
         # CSV init
         if not hasattr(self, 'csv_initialized'):
             self.csv_initialized = True
-            self.csv_file = open('control_results.csv', mode='w', newline='')
+            name = date.datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.csv_file = open(f'control_results_{name}.csv', mode='w', newline='')
             self.csv_writer = csv.writer(self.csv_file)
             
             # Create descriptive headers for x0 (29D current state)

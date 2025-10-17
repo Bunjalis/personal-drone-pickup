@@ -478,8 +478,8 @@ def zsine_trajectory(dt):
     take_off_traj = takeoff_trajectory(dt)
     
     # Define vertical sine wave parameters
-    base_height = 1.5      # Base altitude (center of sine wave)
-    amplitude = 0.8        # Vertical amplitude (±0.8 meters)
+    base_height = 1.0      # Base altitude (center of sine wave)
+    amplitude = 0.5       # Vertical amplitude (±0.8 meters)
     frequency = 0.05       # Slow frequency (Hz) - about 6.7 second period
     duration = 40.0        # Duration of the sine wave motion
     

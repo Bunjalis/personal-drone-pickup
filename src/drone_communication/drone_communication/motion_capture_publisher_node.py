@@ -89,7 +89,7 @@ class ParseData():
         }
 
         # Low-pass filter parameters
-        self.alpha = 0.5  # Smoothing factor (0 < alpha <= 1)
+        self.alpha = 0.2  # Smoothing factor (0 < alpha <= 1)
 
 
         # Butterworth filter parameters

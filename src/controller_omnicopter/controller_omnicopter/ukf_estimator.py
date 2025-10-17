@@ -90,7 +90,7 @@ class UKFEstimator:
         P[13, 13] = 1e-6      # theta_roll uncertainty (increased for stability)
         P[14, 14] = 1e-6      # theta_pitch uncertainty (increased for stability)
         P[15, 15] = 1e-6      # theta_yaw uncertainty (increased for stability)
-        P[16, 16] = 0.4       # thrust_base uncertainty (around 7.42) - reasonable for adaptation
+        P[16, 16] = 1e-2       # thrust_base uncertainty (around 7.42) - reasonable for adaptation
         P[17, 17] = 1e-3      # motor_time_constant uncertainty (s)
         
         return P

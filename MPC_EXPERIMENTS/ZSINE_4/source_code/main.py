@@ -56,7 +56,7 @@ class Controller(Node):
 
         self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
 
-        self.traj = figure8_zsine_trajectory(self.dt)  
+        self.traj = xyz_sine_trajectory(self.dt)  
 
         self.trajectory_visualizer.publish_all_visualizations( self.traj,  pose_subsample=10, show_velocity=True, velocity_scale=0.5,color_by_time=True  )
 
