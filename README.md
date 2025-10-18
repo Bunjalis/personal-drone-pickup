@@ -132,6 +132,25 @@ If you wish to create your own, simply copy an existing package, rename it, and 
 ---
 
 
+
+# Utility Classes
+
+Three utility classes are provided and shared between controllers.  
+Please **do not modify or edit existing functions**, but you may add new ones if they are likely to be shared and useful across multiple controllers.
+
+- **`utility_objects/callback_manager.py`** — Manages shared ROS 2 publishers, subscribers, and client/service interfaces.  
+- **`utility_objects/data_logger.py`** — Provides a simple and consistent interface for creating custom CSV log files.  
+- **`utility_objects/visualization.py`** — Contains methods and ROS 2 patterns for visualising drone states and trajectories in RViz.
+
+
+
+
+
+
+---
+
+
+
 ## Mitchell's simulation  reference 
 
 
