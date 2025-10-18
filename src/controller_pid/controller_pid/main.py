@@ -17,13 +17,14 @@ POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
 FREQUENCY_HZ = 120.0
 DT = 1.0 / FREQUENCY_HZ
 
-LOGGING_NAME = 'controller_ukf'
+LOGGING_NAME = 'controller_pid'
 
 class Controller(Node):
     def __init__(self):
         super().__init__('controller')
 
         # General Settings
+        self.last_pose_update_time = time.time()
         self.cb = CallbackManager(self)
 
         self.traj, trajectory_name = xyz_sine_trajectory(DT)
@@ -33,6 +34,7 @@ class Controller(Node):
         self.timer = self.create_timer(DT, self.control_loop)
         self.step_counter = 0
         self.steps = self.traj.shape[1] - 1
+        
 
         self.armed = False
         self.takeoff_requested = False
@@ -45,13 +47,9 @@ class Controller(Node):
         ]
         self.data_logger = DataLogger(LOGGING_NAME, trajectory_name, log_headers)
 
-        self.observed_state_history = []       
-        self.control_history = []
-        self.estimated_state_history = []
-        self.UKF_state_estimation_history = []
-
         self.M = 1.0
         self.g = 9.81
+
 
 
     def control_loop(self):
@@ -64,8 +62,12 @@ class Controller(Node):
             msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
             self.cb.disarm(msg)
             return 
+        
+        if self.armed and not self.takeoff_requested and self.current_pose is not None:
+            msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
+            self.cb.cmd_publisher_.publish(msg)
 
-        if self.armed and self.takeoff_requested and self.current_pose is not None:
+        elif self.armed and self.takeoff_requested and self.current_pose is not None:
 
             if self.step_counter > self.steps:
                 msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
