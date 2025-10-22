@@ -44,6 +44,15 @@ This section outlines the basic interface that allows custom controllers to inte
 - ROS 2 Humble  
 - Gazebo Harmonic  
 
+## Dependences/install commands
+```bash
+sudo apt update
+sudo pip3 install transforms3d
+sudo apt install ros-humble-tf-transformations
+sudo apt remove 'ros-humble-ros-gz-*'
+sudo apt install ros-humble-ros-gzharmonic-*
+```
+
 ## Building
 To build the workspace, run:
 
