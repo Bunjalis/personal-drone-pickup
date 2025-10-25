@@ -15,14 +15,14 @@ class CallbackManager:
     def __init__( self,node):      
         self.node = node
 
-        self.cmd_publisher_ = self.node.create_publisher(ELRSCommand, '/ELRSCommand', 10)
+        self.cmd_publisher_ = self.node.create_publisher(ELRSCommand, '/ELRSCommand', 1)
 
-        self.pose_subscription_ = self.node.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 10)
-        self.telemetry_subscription_ = self.node.create_subscription(Telemetry, '/telemetry', self.telemetry_callback, 10)
+        self.pose_subscription_ = self.node.create_subscription(MotionCaptureState, '/motion_capture_state', self.pose_callback, 5)
+        self.telemetry_subscription_ = self.node.create_subscription(Telemetry, '/telemetry', self.telemetry_callback, 5)
 
         self.arming_service_ = self.node.create_service(SetArming, 'drone_arming_service', self.handle_arming_service)
-        self.command_subscription_ = self.node.create_subscription(String, 'drone_command', self.command_callback, 10)
-        self.arming_state_publisher_ = self.node.create_publisher(Bool, 'drone_arming_state_feedback', 10)
+        self.command_subscription_ = self.node.create_subscription(String, 'drone_command', self.command_callback, 5)
+        self.arming_state_publisher_ = self.node.create_publisher(Bool, 'drone_arming_state_feedback', 5)
 
 
     def pose_callback(self, msg: MotionCaptureState):

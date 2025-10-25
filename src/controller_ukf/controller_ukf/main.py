@@ -11,7 +11,7 @@ from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution, set_trajectory_reference_aligned, update_ocp_parameters
-from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, power_loop_trajectory, figure8_zsine_trajectory, fast_xyz_sine_trajectory
+from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, power_loop_trajectory, figure8_zsine_trajectory, fast_xyz_sine_trajectory, fence_trajectory,power_loop_trajectory
 from utility_objects.visualization import TrajectoryVisualizer
 from utility_objects.data_logger import DataLogger
 from utility_objects.callback_manager import CallbackManager
@@ -33,7 +33,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self)
 
-        self.traj, trajectory_name = xyz_sine_trajectory(DT)
+        self.traj, trajectory_name = circle_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
 
@@ -59,7 +59,7 @@ class Controller(Node):
 
         
         # UKF settings
-        self.est_params = np.array([45.0, 0.0, 0.12, 70.0, 670.0, 0.5])
+        self.est_params = np.array([38.0, 0.0, 0.12,200.0, 600.0, 0.5])
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -91,6 +91,7 @@ class Controller(Node):
         log_headers = [
             'step', 'timestamp', 'u0', 'u1', 'u2', 'u3',
             'pose_x', 'pose_y', 'pose_z', 'pose_qw', 'pose_qx', 'pose_qy', 'pose_qz',
+            'MPC_setup_time', 'MPC_solve_time', 'Visualisation_time', 'UKF_update_time',
         ]
         self.data_logger = DataLogger(LOGGING_NAME, trajectory_name, log_headers)
 
@@ -109,6 +110,8 @@ class Controller(Node):
         
 
     def delay_estimation_timer(self):
+        print(f"test")
+        '''
         if len(self.observed_state_history) < 30 or len(self.control_history) < 30:
             return
 
@@ -152,6 +155,8 @@ class Controller(Node):
 
         #print(f"Updated delay_states to {self.delay_states} with minimum average position error {round(min_error, 3)}")
         #print("Error latencies:", error_latencies)
+
+        '''
         
 
 
@@ -175,10 +180,11 @@ class Controller(Node):
                 self.cb.disarm(msg)
                 self.cb.request_shutdown()
                 return
+            
+            start_time = time.time()
 
             # Update OCP parameters with current estimates
             update_ocp_parameters(self.ocp, self.est_params, self.N)
-            
             set_trajectory_reference_aligned(self.ocp, self.traj, self.N, self.step_counter, self.skip_steps, self.est_params)
 
             ### ESTIMATE CURRENT STATE AFTER DELAY
@@ -210,12 +216,15 @@ class Controller(Node):
             else:
                 estimated_state_with_control = np.concatenate((estimated_state, np.array(self.control_history[-1][0:4]))) 
 
+
+            
             relaxation_factor = 0.025 # 0.25 for orb slam 
             relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
             relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
             self.ocp.set(0, "lbx", relaxed_lbx)
             self.ocp.set(0, "ubx", relaxed_ubx)
 
+            
 
             ### MPC WARM START
             if self.first_solve:
@@ -223,6 +232,8 @@ class Controller(Node):
                 self.first_solve = False
             else:
                 warm_start_from_previous_solution(self.ocp, self.N)
+
+            mpc_setup_time = time.time()
 
             ### SOLVE OCP
             status = self.ocp.solve()
@@ -233,19 +244,26 @@ class Controller(Node):
             u_rate = self.ocp.get(0, "u")
 
 
+            mpc_solve_time = time.time()
+
+
+
 
             ### SEND COMMANDS
             # Only execute trajectory if takeoff has been requested
             if self.takeoff_requested:
                 msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
-                print(f"r: {round(u[0], 3)}, p: {round(u[1], 3)}, t: {round((u[2]), 3)}, y: {round(u[3], 3)}")
+                #print(f"r: {round(u[0], 3)}, p: {round(u[1], 3)}, t: {round((u[2]), 3)}, y: {round(u[3], 3)}")
                 print(f"EST. params - TR: {round(self.est_params[0],2)}, DC z: {round(self.est_params[1],3)}, Tau: {round(self.est_params[2],3)}, Centre deg: {round(self.est_params[3],1)}, Max deg: {round(self.est_params[4],1)}, expo: {round(self.est_params[5],3)}")
             else:
                 # Stay armed but don't send thrust commands until takeoff
                 msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
-                print("Armed - Waiting for TAKEOFF command")
+                #print("Armed - Waiting for TAKEOFF command")
             
             self.cb.cmd_publisher_.publish(msg)
+
+
+
             
             # Extract MPC trajectory for visualization
             mpc_trajectory = np.zeros((13, self.N))
@@ -260,6 +278,9 @@ class Controller(Node):
             self.trajectory_visualizer.publish_mpc_plan(mpc_trajectory)
             self.trajectory_visualizer.publish_transform_frame(self.orb_slam_pose, "drone_orbslam")
             self.trajectory_visualizer.publish_transform_frame(self.current_pose, "drone_mocap")
+            self.trajectory_visualizer.publish_actual_path(self.current_pose)
+
+            send_command_and_visualisation = time.time()
 
 
             ### UKF predict and update - only when actually flying
@@ -312,19 +333,21 @@ class Controller(Node):
                 self.est_params = np.array([self.x_est[13], self.x_est[14], self.x_est[15], self.x_est[16], self.x_est[17], self.x_est[18]])
 
 
+            end_ukf_time = time.time()
+
             log_row = [
                 self.step_counter,
                 time.time(),
                 float(u[0]), float(u[1]), float(u[2]), float(u[3]),
                 float(self.current_pose[0]), float(self.current_pose[1]), float(self.current_pose[2]),
-                float(self.current_pose[3]), float(self.current_pose[4]), float(self.current_pose[5]), float(self.current_pose[6])
+                float(self.current_pose[3]), float(self.current_pose[4]), float(self.current_pose[5]), float(self.current_pose[6]),
+                round(mpc_setup_time - start_time, 4),
+                round(mpc_solve_time - mpc_setup_time, 4),
+                round(send_command_and_visualisation - mpc_solve_time, 4),
+                round(end_ukf_time - send_command_and_visualisation, 4),
             ]
             self.data_logger.append_row(log_row)
 
-
-            # Publish actual path visualization (dotted red line)
-            self.trajectory_visualizer.publish_actual_path(self.current_pose)
-            
             # Only increment step counter if takeoff was requested
             if self.takeoff_requested:
                 self.step_counter += 1
@@ -333,6 +356,11 @@ class Controller(Node):
             self.observed_state_history.append( self.current_pose[:13].tolist() )
             self.estimated_state_history.append( estimated_state[:13].tolist() )
             self.UKF_state_estimation_history.append( self.x_est.tolist() )
+
+
+            saved_data = time.time()
+
+            print(f"time taken to log {round(saved_data - end_ukf_time, 4)} seconds")
 
         else:
             msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
