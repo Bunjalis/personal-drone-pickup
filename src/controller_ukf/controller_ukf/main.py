@@ -20,7 +20,7 @@ from scipy.linalg import cholesky
 
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
-USE_MOTION_CAPTURE = True  # Set to False to use ORB-SLAM data instead
+USE_MOTION_CAPTURE = False  # Set to False to use ORB-SLAM data instead
 FREQUENCY_HZ = 30.0
 DT = 1.0 / FREQUENCY_HZ
 
@@ -31,7 +31,7 @@ class Controller(Node):
         super().__init__('controller')
 
         # General Settings
-        self.cb = CallbackManager(self)
+        self.cb = CallbackManager(self,USE_MOTION_CAPTURE)
 
         self.traj, trajectory_name = circle_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
@@ -59,7 +59,7 @@ class Controller(Node):
 
         
         # UKF settings
-        self.est_params = np.array([38.0, 0.0, 0.12,200.0, 600.0, 0.5])
+        self.est_params = np.array([42.0, 0.5, 0.12,100.0, 100.0, 0.5])
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -89,8 +89,12 @@ class Controller(Node):
 
         # Logging
         log_headers = [
-            'step', 'timestamp', 'u0', 'u1', 'u2', 'u3',
+            'step', 'timestamp', 
+            'u0','u1','u2','u3','u0_rate', 'u1_rate', 'u2_rate', 'u3_rate',
             'pose_x', 'pose_y', 'pose_z', 'pose_qw', 'pose_qx', 'pose_qy', 'pose_qz',
+            'pose_vx', 'pose_vy', 'pose_vz','pose_avx', 'pose_avy', 'pose_avz',
+            'traj_x_ref', 'traj_y_ref', 'traj_z_ref', 'traj_qw_ref', 'traj_qx_ref', 'traj_qy_ref', 'traj_qz_ref',
+            'est_param_thrust_ratio', 'est_param_drag_coeff_z', 'est_param_tau_rate', 'est_param_centre_rate_deg', 'est_param_max_rate_deg', 'est_param_rate_expo',
             'MPC_setup_time', 'MPC_solve_time', 'Visualisation_time', 'UKF_update_time',
         ]
         self.data_logger = DataLogger(LOGGING_NAME, trajectory_name, log_headers)
@@ -218,7 +222,7 @@ class Controller(Node):
 
 
             
-            relaxation_factor = 0.025 # 0.25 for orb slam 
+            relaxation_factor = 0.05 # 0.25 for orb slam 
             relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
             relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
             self.ocp.set(0, "lbx", relaxed_lbx)
@@ -338,13 +342,12 @@ class Controller(Node):
             log_row = [
                 self.step_counter,
                 time.time(),
-                float(u[0]), float(u[1]), float(u[2]), float(u[3]),
-                float(self.current_pose[0]), float(self.current_pose[1]), float(self.current_pose[2]),
-                float(self.current_pose[3]), float(self.current_pose[4]), float(self.current_pose[5]), float(self.current_pose[6]),
-                round(mpc_setup_time - start_time, 4),
-                round(mpc_solve_time - mpc_setup_time, 4),
-                round(send_command_and_visualisation - mpc_solve_time, 4),
-                round(end_ukf_time - send_command_and_visualisation, 4),
+                float(u[0]), float(u[1]), float(u[2]), float(u[3]), float(u_rate[0]), float(u_rate[1]), float(u_rate[2]), float(u_rate[3]),
+                float(self.current_pose[0]), float(self.current_pose[1]), float(self.current_pose[2]),  float(self.current_pose[3]), float(self.current_pose[4]), float(self.current_pose[5]), float(self.current_pose[6]),
+                float(self.current_pose[7]), float(self.current_pose[8]), float(self.current_pose[9]),  float(self.current_pose[10]), float(self.current_pose[11]), float(self.current_pose[12]),
+                float(self.traj[0, self.step_counter]), float(self.traj[1, self.step_counter]), float(self.traj[2, self.step_counter]),  float(self.traj[3, self.step_counter]), float(self.traj[4, self.step_counter]), float(self.traj[5, self.step_counter]), float(self.traj[6, self.step_counter]),
+                float(self.est_params[0]), float(self.est_params[1]), float(self.est_params[2]), float(self.est_params[3]), float(self.est_params[4]), float(self.est_params[5]),
+                round(mpc_setup_time - start_time, 4), round(mpc_solve_time - mpc_setup_time, 4), round(send_command_and_visualisation - mpc_solve_time, 4), round(end_ukf_time - send_command_and_visualisation, 4),
             ]
             self.data_logger.append_row(log_row)
 

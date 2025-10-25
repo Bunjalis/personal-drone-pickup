@@ -12,7 +12,7 @@ from interfaces.msg import MotionCaptureState, Telemetry, ELRSCommand
 from interfaces.srv import SetArming
 
 class CallbackManager:
-    def __init__( self,node):      
+    def __init__( self,node,USE_MOTION_CAPTURE: bool = True):      
         self.node = node
 
         self.cmd_publisher_ = self.node.create_publisher(ELRSCommand, '/ELRSCommand', 1)
@@ -24,12 +24,15 @@ class CallbackManager:
         self.command_subscription_ = self.node.create_subscription(String, 'drone_command', self.command_callback, 5)
         self.arming_state_publisher_ = self.node.create_publisher(Bool, 'drone_arming_state_feedback', 5)
 
+        self.use_motion_capture = USE_MOTION_CAPTURE
+
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
         arr = np.round(np.array([p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z]), 3)
-        self.node.current_pose = arr
-        self.node.last_pose_update_time = time.time()
+        if self.use_motion_capture:
+            self.node.current_pose = arr
+            self.node.last_pose_update_time = time.time()
 
 
     def handle_arming_service(self, request, response):

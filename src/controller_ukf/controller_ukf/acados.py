@@ -84,16 +84,16 @@ def generate_ocp_controller(dynamics=None):
     ny_e = 3 + 3 + 3 + 4 + 3        
 
     W = np.diag([
-        80.0, 80.0, 40.0,
-        2.0, 2.0, 2.0,
+        4.0, 4.0, 2.0,
+        0.2, 0.2, 0.2,
         0.2, 0.2, 0.2,
         2e-4, 2e-4, 2e-4, 2e-4,
         0.1, 0.1, 5.0, 0.1,  # Reduced control effort penalty
         0.5, 0.5, 5.0
     ])
     W_e = np.diag([
-        80.0, 80.0, 40.0,         # pos
-        2.0, 2.0, 2.0,        # vel
+        4.0, 4.0, 2.0,         # pos
+        0.2, 0.2, 0.2,        # vel
         0.2, 0.2, 0.2,         # omega
         2e-4, 2e-4, 2e-4, 2e-4,# u_state
         0.5, 0.5, 5.0          # attitude error
@@ -115,16 +115,16 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
     ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
-    ocp.solver_options.nlp_solver_max_iter = 40 
-    ocp.solver_options.qp_solver_iter_max = 150
-    ocp.solver_options.qp_solver_tol_stat = 1e-3
-    ocp.solver_options.qp_solver_tol_eq = 1e-3
-    ocp.solver_options.qp_solver_tol_ineq = 1e-3
-    ocp.solver_options.qp_solver_tol_comp = 1e-3
-    ocp.solver_options.nlp_solver_tol_stat = 1e-3
-    ocp.solver_options.nlp_solver_tol_eq = 1e-3
-    ocp.solver_options.nlp_solver_tol_ineq = 1e-3
-    ocp.solver_options.nlp_solver_tol_comp = 1e-3
+    ocp.solver_options.nlp_solver_max_iter = 100 
+    ocp.solver_options.qp_solver_iter_max = 300
+    ocp.solver_options.qp_solver_tol_stat = 1e-4
+    ocp.solver_options.qp_solver_tol_eq = 1e-4
+    ocp.solver_options.qp_solver_tol_ineq = 1e-4
+    ocp.solver_options.qp_solver_tol_comp = 1e-4
+    ocp.solver_options.nlp_solver_tol_stat = 1e-4
+    ocp.solver_options.nlp_solver_tol_eq = 1e-4
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-4
+    ocp.solver_options.nlp_solver_tol_comp = 1e-4
     ocp.solver_options.levenberg_marquardt = 1e-3
 
     # ---------- State constraints (unchanged from your setup) ----------
