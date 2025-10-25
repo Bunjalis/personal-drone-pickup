@@ -19,7 +19,8 @@ setup(
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
-            'main = controller_ukf.main:main'
+            'main = controller_ukf.main:main',
+            'delay_estimator_node = controller_ukf.delay_estimator_node:main'
         ],
     },
 )

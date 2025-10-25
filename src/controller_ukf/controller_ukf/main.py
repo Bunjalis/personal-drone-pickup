@@ -17,6 +17,9 @@ from utility_objects.data_logger import DataLogger
 from utility_objects.callback_manager import CallbackManager
 from interfaces.msg import MotionCaptureState, ELRSCommand, Telemetry
 from scipy.linalg import cholesky
+from interfaces.msg import ControlApplied
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from std_msgs.msg import Float32MultiArray, Int32
 
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
@@ -83,8 +86,11 @@ class Controller(Node):
 
         # Delay estimation
         self.delay_states = 1
-        self.delay_states_float = float(self.delay_states)
-        self.delay_estimation_timer = self.create_timer(1/10.0, self.delay_estimation_timer)
+        qos1 = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, history=HistoryPolicy.KEEP_LAST)
+        self.pub_ctrl_applied = self.create_publisher(ControlApplied, '/control_applied', qos1)
+        self.create_subscription(Int32, '/estimated_delay',
+                                lambda m: setattr(self, 'delay_states', int(m.data)),
+                                qos1)
 
 
         # Logging
@@ -113,54 +119,6 @@ class Controller(Node):
             self.last_pose_update_time = time.time() 
         
 
-    def delay_estimation_timer(self):
-        print(f"test")
-        '''
-        if len(self.observed_state_history) < 30 or len(self.control_history) < 30:
-            return
-
-        min_error = float('inf')
-        optimal_delay = self.delay_states
-        error_latencies = []
-
-        # Iterate over possible delay values to find the one that minimizes the position error
-        for delay in range(1, 12):  # Test delays from 1 to 10
-            total_position_error = 0
-            estimated_state = copy.deepcopy(self.observed_state_history[-30])  # Start with the oldest state in the last 30
-            delayed_control_history = self.control_history[-(30 + delay):-delay]  # Use delayed controls
-
-            for i, control in enumerate(delayed_control_history):
-                self.sim_integrator.set("x", np.concatenate((estimated_state, np.array(control[0:4]).flatten())))
-                self.sim_integrator.set("u", np.array(control[4:8]))
-                sim_p = np.concatenate([self.est_params, np.array([1.0, 0.0, 0.0, 0.0])])  # append q_ref (unused by dynamics)
-                self.sim_integrator.set("p", sim_p)
-                status_sim = self.sim_integrator.solve()
-                if status_sim != 0:
-                    raise Exception(f"Simulation integrator failed with status {status_sim}.")
-                x_next = self.sim_integrator.get("x")
-                estimated_state = x_next[:13]
-
-                # Accumulate the position error over all sample points
-                position_error = np.linalg.norm(estimated_state[:3] - self.observed_state_history[-(30 - i)][:3])
-                total_position_error += position_error
-
-            # Calculate the average position error for the current delay
-            avg_position_error = total_position_error / len(delayed_control_history)
-            error_latencies.append((delay, round(avg_position_error, 3)))  # Save delay and its corresponding rounded error
-
-            if avg_position_error < min_error:
-                min_error = avg_position_error
-                optimal_delay = delay
-
-        # Apply a low-pass filter to smooth the delay value
-        alpha = 0.05  # Reduced low-pass filter coefficient for slower updates
-        #self.delay_states_float = (1 - alpha) * self.delay_states_float + alpha * optimal_delay
-        #self.delay_states = round(self.delay_states_float)
-
-        #print(f"Updated delay_states to {self.delay_states} with minimum average position error {round(min_error, 3)}")
-        #print("Error latencies:", error_latencies)
-
-        '''
         
 
 
@@ -213,7 +171,7 @@ class Controller(Node):
                 estimated_state = x_next[:13]
 
             # Only correct the drones velocity, while keeping the position the same as the observed value
-            estimated_state[0:7] = self.current_pose[0:7]
+            #estimated_state[0:7] = self.current_pose[0:7]
             if len(self.control_history) == 0:
                 self.get_logger().warn("Control history is empty - cannot set state bounds accurately")
                 estimated_state_with_control = np.concatenate((estimated_state, np.array([0.0, 0.0, 0.0, 0.0]))) 
@@ -265,6 +223,14 @@ class Controller(Node):
                 #print("Armed - Waiting for TAKEOFF command")
             
             self.cb.cmd_publisher_.publish(msg)
+
+            cap = ControlApplied()
+            cap.stamp = self.get_clock().now().to_msg()
+            cap.pose = [float(x) for x in self.current_pose[:13]]
+            cap.u = [float(x) for x in u]
+            cap.u_rate = [float(x) for x in u_rate]
+            cap.est_params = [float(x) for x in self.est_params]
+            self.pub_ctrl_applied.publish(cap)
 
 
 

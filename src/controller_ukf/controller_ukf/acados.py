@@ -84,7 +84,7 @@ def generate_ocp_controller(dynamics=None):
     ny_e = 3 + 3 + 3 + 4 + 3        
 
     W = np.diag([
-        4.0, 4.0, 2.0,
+        4.0, 4.0, 4.0,
         0.2, 0.2, 0.2,
         0.2, 0.2, 0.2,
         2e-4, 2e-4, 2e-4, 2e-4,
@@ -92,7 +92,7 @@ def generate_ocp_controller(dynamics=None):
         0.5, 0.5, 5.0
     ])
     W_e = np.diag([
-        4.0, 4.0, 2.0,         # pos
+        4.0, 4.0, 4.0,         # pos
         0.2, 0.2, 0.2,        # vel
         0.2, 0.2, 0.2,         # omega
         2e-4, 2e-4, 2e-4, 2e-4,# u_state
