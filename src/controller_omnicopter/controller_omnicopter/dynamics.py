@@ -66,10 +66,8 @@ class QuadDynamics:
         self.J = np.array([0.025, 0.025, 0.025])
         self.max_rpm = 4631.0
 
-        self.motor_moment_directions = np.array([-1, 1, 1, -1, -1, 1, 1, -1])  # Direction of each motor's moment
-
         # Define motor positions as fixed values (will be scaled by motor_distance parameter in dynamics)
-        self.mot_pos_vec_base = np.array([[1, -1, 1],
+        self.mot_pos_vec_base = 0.17 * np.array([[1, -1, 1],
                                     [-1, -1, 1], 
                                     [1, -1, -1],
                                     [-1, -1, -1],

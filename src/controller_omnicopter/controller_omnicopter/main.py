@@ -160,6 +160,51 @@ class Controller(Node):
         
         return self.expand_state_to_29d(self.current_pose, actual_actuators, desired_actuators)
 
+
+
+    def motor_actuators_from_wrench(self,v_cmd):
+        """
+        Input:  v_cmd = [Fx,Fy,Fz, tx,ty,tz]
+        Output: actuators a[8] in [-1, 1], where thrust_i = thrust_c * (max_rpm * a_i)^2 (with sign).
+        """
+        # ---- constants (edit to your hardware) ----
+        P = 0.17 * np.array([[ 1,-1, 1],[-1,-1, 1],[ 1,-1,-1],[-1,-1,-1],
+                            [ 1, 1,-1],[-1, 1,-1],[ 1, 1, 1],[-1, 1, 1]], float)
+        N = np.array([[-0.211325,-0.788675,-0.57735 ],
+                    [ 0.788675,-0.211325, 0.57735 ],
+                    [ 0.211325, 0.788675,-0.57735 ],
+                    [-0.788675, 0.211325, 0.57735 ],
+                    [ 0.788675,-0.211325, 0.57735 ],
+                    [-0.211325,-0.788675,-0.57735 ],
+                    [-0.788675, 0.211325, 0.57735 ],
+                    [ 0.211325, 0.788675,-0.57735 ]], float)
+        s      = np.array([-1, 1, 1,-1,-1, 1, 1,-1], float)  # -1=CCW, +1=CW
+        kappa  = 0.05                                        # m; set 0.0 to ignore drag torque
+        thrust_c = 7.42678162e-07                            # N / (RPM^2)
+        max_rpm  = 4631.0
+
+        # ---- build B ----
+        B = np.zeros((6, 8))
+        for i in range(8):
+            Ni, ri = N[i], P[i]
+            B[0:3, i] = Ni
+            B[3:6, i] = np.cross(ri, Ni) + (kappa * s[i]) * Ni
+
+        # ---- left pseudoinverse and base thrusts ----
+        B_dag = B.T @ np.linalg.inv(B @ B.T)
+        f = B_dag @ np.asarray(v_cmd, float)   # rotor thrusts in N (can be +/-)
+
+        # ---- thrust -> actuator in [-1,1] ----
+        # a_i = sgn(f_i) * sqrt(|f_i| / (thrust_c * max_rpm^2))
+        denom = thrust_c * (max_rpm ** 2)
+        a = np.sign(f) * np.sqrt(np.maximum(0.0, np.abs(f)) / denom)
+
+        # saturate to [-1, 1]
+        a = np.clip(a, -1.0, 1.0)
+
+        return a  # length-8 array in [-1,1]
+
+
     def control_loop(self):
 
         if self.armed and self.pre_start_counter < self.pre_start_steps:
@@ -171,93 +216,15 @@ class Controller(Node):
 
         elif self.armed and self.current_pose is not None:
 
-            if self.step_counter + self.N * self.skip_steps > self.steps:
-                self.step_counter = 0
-                self.armed = False
-                msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=0.0, channel_3=0.0, channel_4=0.0, channel_5=0.0, channel_6=0.0, channel_7=0.0)
-                self.cmd_publisher_.publish(msg)
-                self.on_close()
-
-            # ---------- Build time-varying state references for the horizon ----------
-            # X_ref shape: (N+1, 29). Row j is the state ref at stage j. Row N is terminal.
-            X_ref = np.zeros((self.N + 1, 29), dtype=float)
-            for j in range(self.N):
-                sc = self.step_counter + j * self.skip_steps
-                traj_13d = self.traj[:, sc]  # Get 13D trajectory point
-                # Expand to 29D with hover actuator values as reference
-                X_ref[j, :] = self.expand_state_to_29d(traj_13d)
-            sn = self.step_counter + self.N * self.skip_steps
-            traj_13d_terminal = self.traj[:, sn]
-            X_ref[self.N, :] = self.expand_state_to_29d(traj_13d_terminal)
 
 
-            set_trajectory_reference_aligned(self.ocp, X_ref)
-
-            x0 = self.get_current_state_29d()  # Get 29D current state
-            x0[3:7] = _norm_quat_np(x0[3:7])  # ensure unit quaternion
-            
-            # UKF Adaptive Parameter Estimation (always enabled)
-            if self.step_counter > 0:  # Skip first step for initialization
-                # Use the control from the previous step for UKF prediction
-                prev_u_dot = self.last_control if self.last_control is not None else np.zeros(8)
-                
-                # Update actuator states in UKF before prediction
-                #if hasattr(self, 'last_actual_actuators') and self.last_actual_actuators is not None:
-                #    self.ukf.update_actuator_states(self.last_actual_actuators, self.last_desired_actuators)
-                
-                # Update UKF with current measurement and previous control
-                #estimated_params = self.ukf.predict_and_update(self.current_pose, prev_u_dot)
-                
-                # Update parameters used by MPC solver
-                #self.params = estimated_params.copy()
-                #set_adaptive_parameters(self.ocp, self.sim_integrator, self.params, self.N)
-                
-                #print(f"UKF estimated params: {[round(val, 4) for val in estimated_params]}")
-            elif self.step_counter == 0:
-                # Initialize UKF with current state on first step
-                # Provide actuator states if available, otherwise use defaults
-                if hasattr(self, 'last_actual_actuators') and self.last_actual_actuators is not None:
-                    actuator_states = np.concatenate([self.last_actual_actuators, self.last_desired_actuators])
-                    self.ukf.set_initial_state(self.current_pose, actuator_states)
-                else:
-                    self.ukf.set_initial_state(self.current_pose)
-            
-            # The key fix: Set both lower and upper bounds to the current state
-            # This constrains the first shooting node to the current measured/estimated state
-            self.ocp.set(0, "lbx", x0 - 0.025*x0)
-            self.ocp.set(0, "ubx", x0 + 0.025*x0)
-
-            if not self.initial_guess_set:
-                set_initial_guess(self.ocp, self.N)
-                self.initial_guess_set = True
-            else:
-                warm_start_from_previous_solution(self.ocp, self.N)
-
-            status = self.ocp.solve()
-            if status != 0:
-                raise Exception(f'acados returned status {status} after retry.')
-
-            u_dot_rates = self.ocp.get(0, "u")  # These are now rates of desired actuators (d(u_desired)/dt)
-            
-            # Store control for next UKF iteration
-            self.last_control = u_dot_rates.copy()
-            
-            # Get the states from the optimized solution
-            x_next = self.ocp.get(1, "x")  # Next optimized state 
-            actual_actuators = x_next[13:21].copy()  # Extract actual actuator states (force values)
-            desired_actuators = x_next[21:29].copy()  # Extract desired actuator states (force values)
-            
-            # Store for next iteration
-            self.last_actual_actuators = actual_actuators
-            self.last_desired_actuators = desired_actuators
 
 
-            motor_speeds = np.sqrt(np.abs(desired_actuators))
-            # Preserve sign of original actuator values
-            motor_speeds = np.sign(desired_actuators) * motor_speeds
-            
-            # Clamp motor speeds to [-1, 1] range for safety
-            motor_speeds = np.clip(motor_speeds, -1.0, 1.0)
+            v_cmd = np.array([0.1, 0.1, 9.81, 0.0, 0.0, 0.1])  # e.g., 10 N upward
+            motor_speeds = self.motor_actuators_from_wrench(v_cmd)
+            print("Motor speeds [rad/s]:\n", np.round(motor_speeds, 2))
+
+
 
             # Send the converted motor speeds to the motors
             msg = ELRSCommand(
@@ -274,45 +241,6 @@ class Controller(Node):
             self.cmd_publisher_.publish(msg)
             self.step_counter += 1
 
-            print(f"Step {self.step_counter}, Control (des_act): {[round(val, 4) for val in desired_actuators]}")
-            print(f"Step {self.step_counter}, Control (mot_spd): {[round(val, 4) for val in motor_speeds]}")
-
-            # Calculate prediction error from previous timestep (if available)
-            prediction_error = np.zeros(29)  # Initialize with zeros
-            position_error = quaternion_error = velocity_error = 0.0
-            angular_vel_error = actuator_error = desired_actuator_error = 0.0
-            
-            if self.last_predicted_state is not None:
-                # Compare last predicted state with current actual observed state
-                prediction_error = x0 - self.last_predicted_state
-                
-                # Calculate norms for different state components
-                position_error = np.linalg.norm(prediction_error[0:3])
-                quaternion_error = np.linalg.norm(prediction_error[3:7])
-                velocity_error = np.linalg.norm(prediction_error[7:10])
-                angular_vel_error = np.linalg.norm(prediction_error[10:13])
-                actuator_error = np.linalg.norm(prediction_error[13:21])
-                desired_actuator_error = np.linalg.norm(prediction_error[21:29])
-
-
-                print(x0[7:10])
-                print(self.last_predicted_state[7:10])
-                print(prediction_error[7:10])
-
-            # Run simulation integrator to predict next state for comparison in next iteration
-            self.sim_integrator.set("x", x0) 
-            self.sim_integrator.set("u", u_dot_rates) 
-            self.sim_integrator.set("p", self.params)
-            status_sim = self.sim_integrator.solve()
-            self.last_predicted_state = self.sim_integrator.get("x")  # Store for next iteration comparison
-
-            # Save data: step_counter, x0 (29D), u_dot_rates (8D), x_next (29D), errors (6) as separate columns
-            error_data = [position_error, quaternion_error, velocity_error, 
-                         angular_vel_error, actuator_error, desired_actuator_error]
-            row_data = [self.step_counter] + list(x0) + list(u_dot_rates) + list(x_next) + error_data
-            self.csv_writer.writerow(row_data)
-
-
 
 
 
@@ -321,14 +249,6 @@ class Controller(Node):
             msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=0.0, channel_3=0.0, channel_4=0.0, channel_5=0.0, channel_6=0.0, channel_7=0.0)
             self.cmd_publisher_.publish(msg)
             self.step_counter = 0
-
-
-
-
-
-
-
-
 
 
 
