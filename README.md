@@ -51,6 +51,8 @@ sudo pip3 install transforms3d
 sudo apt install ros-humble-tf-transformations
 sudo apt remove 'ros-humble-ros-gz-*'
 sudo apt install ros-humble-ros-gzharmonic-*
+
+pip install pandas
 ```
 
 ## Building
