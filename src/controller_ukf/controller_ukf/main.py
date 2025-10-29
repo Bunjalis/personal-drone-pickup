@@ -36,7 +36,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self,USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = circle_trajectory(DT)
+        self.traj, trajectory_name = hover_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
 
@@ -62,7 +62,7 @@ class Controller(Node):
 
         
         # UKF settings
-        self.est_params = np.array([42.0, 0.5, 0.12,100.0, 100.0, 0.5])
+        self.est_params = np.array([19.0, 0.0, 0.12,50.0, 300.0, 0.0])
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -85,7 +85,7 @@ class Controller(Node):
 
 
         # Delay estimation
-        self.delay_states = 1
+        self.delay_states = 6
         qos1 = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, history=HistoryPolicy.KEEP_LAST)
         self.pub_ctrl_applied = self.create_publisher(ControlApplied, '/control_applied', qos1)
         self.create_subscription(Int32, '/estimated_delay',
@@ -180,7 +180,7 @@ class Controller(Node):
 
 
             
-            relaxation_factor = 0.05 # 0.25 for orb slam 
+            relaxation_factor = 0.01 # 0.25 for orb slam 
             relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
             relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
             self.ocp.set(0, "lbx", relaxed_lbx)
@@ -216,7 +216,7 @@ class Controller(Node):
             if self.takeoff_requested:
                 msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
                 #print(f"r: {round(u[0], 3)}, p: {round(u[1], 3)}, t: {round((u[2]), 3)}, y: {round(u[3], 3)}")
-                print(f"EST. params - TR: {round(self.est_params[0],2)}, DC z: {round(self.est_params[1],3)}, Tau: {round(self.est_params[2],3)}, Centre deg: {round(self.est_params[3],1)}, Max deg: {round(self.est_params[4],1)}, expo: {round(self.est_params[5],3)}")
+                #print(f"EST. params - TR: {round(self.est_params[0],2)}, DC z: {round(self.est_params[1],3)}, Tau: {round(self.est_params[2],3)}, Centre deg: {round(self.est_params[3],1)}, Max deg: {round(self.est_params[4],1)}, expo: {round(self.est_params[5],3)}")
             else:
                 # Stay armed but don't send thrust commands until takeoff
                 msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
