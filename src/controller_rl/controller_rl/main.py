@@ -82,15 +82,47 @@ class Controller(Node):
 
 
         #RL Agent Loading
-        pkg = get_package_share_directory("controller_rl")
-
-        run_dir = os.path.join(pkg)
+        # Prefer loading the checkpoint and agent config from the package source directory (src/) when
+        # running from the workspace during development. Fall back to the installed package share
+        # directory if files are not present in src.
         ckpt_rel = "best_agent.pt"
         agent_yaml_rel = "agent.yaml"
 
+        # Attempt to find the package source directory inside the workspace. We try two strategies:
+        # 1) Walk upwards from the current working directory looking for '<root>/src/controller_rl/{files}'.
+        #    This handles the common case where you run the node from the workspace root.
+        # 2) Fall back to the directory adjacent to this file (useful when running from the source tree).
+        def find_src_paths():
+            # strategy A: walk up from cwd
+            cwd = os.getcwd()
+            cur = cwd
+            prev = None
+            while cur and cur != prev:
+                candidate = os.path.join(cur, 'src', 'controller_rl')
+                if os.path.exists(os.path.join(candidate, ckpt_rel)) and os.path.exists(os.path.join(candidate, agent_yaml_rel)):
+                    return candidate, os.path.join(candidate, ckpt_rel), os.path.join(candidate, agent_yaml_rel)
+                prev = cur
+                cur = os.path.dirname(cur)
 
-        ckpt_path = os.path.join(run_dir, ckpt_rel)
-        agent_yaml_path = os.path.join(run_dir, agent_yaml_rel)
+            # strategy B: check relative to this file (original heuristic)
+            src_run_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            if os.path.exists(os.path.join(src_run_dir, ckpt_rel)) and os.path.exists(os.path.join(src_run_dir, agent_yaml_rel)):
+                return src_run_dir, os.path.join(src_run_dir, ckpt_rel), os.path.join(src_run_dir, agent_yaml_rel)
+
+            return None, None, None
+
+        src_run_dir, ckpt_path_src, agent_yaml_path_src = find_src_paths()
+
+        if src_run_dir:
+            run_dir = src_run_dir
+            ckpt_path = ckpt_path_src
+            agent_yaml_path = agent_yaml_path_src
+            self.get_logger().info(f"Loading agent files from workspace src dir: {run_dir}")
+        else:
+            pkg = get_package_share_directory("controller_rl")
+            run_dir = os.path.join(pkg)
+            ckpt_path = os.path.join(run_dir, ckpt_rel)
+            agent_yaml_path = os.path.join(run_dir, agent_yaml_rel)
 
         if not os.path.exists(ckpt_path):
             raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
