@@ -13,7 +13,7 @@ from utility_objects.data_logger import DataLogger
 from utility_objects.callback_manager import CallbackManager
 from interfaces.msg import ELRSCommand
 from scipy.spatial.transform import Rotation as R
-from .wind_estimator import LSTM_wind_estimator
+from .wind_estimator import LSTM_wind_estimator, predict_cpu
 from skrl.utils.runner.torch import Runner
 import torch
 import gym as ogym
@@ -50,10 +50,10 @@ class _TinyGymEnv(ogym.Env):
 ## Frequency was 50 Hz in Betaflight, changed it here 
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
-FREQUENCY_HZ = 50.0
+FREQUENCY_HZ = 100.0
 DT = 1.0 / FREQUENCY_HZ
 
-LOGGING_NAME = 'controller_rl'
+LOGGING_NAME = 'controller_wind_rl'
 
 class Controller(Node):
     def __init__(self):
@@ -85,16 +85,57 @@ class Controller(Node):
         self.wind_estimate = deque()
 
 
-        #RL Agent Loading
-        pkg = get_package_share_directory("controller_rl")
-
-        run_dir = os.path.join(pkg)
+        # RL Agent Loading
+        # Prefer package source directory (src/) so we can load models during development.
+        # Search upwards from a couple of sensible starting points (cwd and this file's dir)
+        # for a directory that contains `src/controller_wind_rl` and use that when found.
         ckpt_rel = "ppo_model.pt"
-        agent_yaml_rel = "agent.yaml"
+        agent_yaml_rel = "skrl_ppo_cfg.yaml"
+        wind_model_rel = "wind_model.pth"
 
+        def find_src_pkg_dir(pkg_name: str):
+            # allow override from environment
+            env_key = f"{pkg_name.upper()}_SRC_DIR"
+            env_val = os.environ.get(env_key)
+            if env_val and os.path.isdir(env_val):
+                return os.path.abspath(env_val)
+
+            # candidates to start searching upwards
+            candidates = [os.getcwd(), os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))]
+            # second candidate attempts to move out of installed package build/install folders
+
+            for start in candidates:
+                cur = os.path.abspath(start)
+                while True:
+                    candidate = os.path.join(cur, 'src', pkg_name)
+                    if os.path.isdir(candidate):
+                        return os.path.abspath(candidate)
+                    parent = os.path.dirname(cur)
+                    if parent == cur:
+                        break
+                    cur = parent
+            return None
+
+        pkg_src_found = find_src_pkg_dir('controller_wind_rl')
+
+        if pkg_src_found:
+            run_dir = pkg_src_found
+        else:
+            # fallback to installed package share directory
+            try:
+                pkg_share = get_package_share_directory("controller_wind_rl")
+            except Exception as e:
+                raise RuntimeError("Could not find package 'controller_wind_rl' in install or source paths") from e
+            run_dir = pkg_share
 
         ckpt_path = os.path.join(run_dir, ckpt_rel)
         agent_yaml_path = os.path.join(run_dir, agent_yaml_rel)
+        wind_model_path = os.path.join(run_dir, wind_model_rel)
+
+        # keep explicit src paths for additional checks/logging
+        ckpt_path_src = os.path.join(pkg_src_found, ckpt_rel) if pkg_src_found else None
+        agent_yaml_path_src = os.path.join(pkg_src_found, agent_yaml_rel) if pkg_src_found else None
+        wind_model_path_src = os.path.join(pkg_src_found, wind_model_rel) if pkg_src_found else None
 
         if not os.path.exists(ckpt_path):
             raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
@@ -136,12 +177,27 @@ class Controller(Node):
         HIDDEN_DIM = 64
         INPUT_SIZE = 22
         self.model = LSTM_wind_estimator(hidden_dim=HIDDEN_DIM, input_size=INPUT_SIZE)
-        self.load_state_dict(torch.load("wind_model.pth", weights_only=True))
+        # load wind model weights if available (prefer src/ path)
+        try:
+            if os.path.exists(wind_model_path):
+                state = torch.load(wind_model_path, map_location="cpu")
+                self.model.load_state_dict(state)
+                self.get_logger().info(f"Loaded wind model from: {wind_model_path}")
+            elif os.path.exists(wind_model_path_src):
+                state = torch.load(wind_model_path_src, map_location="cpu")
+                self.model.load_state_dict(state)
+                self.get_logger().info(f"Loaded wind model from: {wind_model_path_src}")
+            else:
+                self.get_logger().warning(f"Wind model not found at {wind_model_path} or {wind_model_path_src}; starting with random weights")
+        except Exception as e:
+            self.get_logger().warning(f"Failed to load wind model: {e}")
 
 
 
 
     def control_loop(self):
+
+        start_time = time.time()
 
         if self.shutdown_requested:
             self.cb.request_shutdown()
@@ -152,11 +208,8 @@ class Controller(Node):
             self.cb.disarm(msg)
             return 
         
-        if self.armed and not self.takeoff_requested and self.current_pose is not None:
-            msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
-            self.cb.cmd_publisher_.publish(msg)
+        if self.armed and self.current_pose is not None:
 
-        elif self.armed and self.takeoff_requested and self.current_pose is not None:
 
             if self.step_counter > self.steps:
                 msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
@@ -175,7 +228,7 @@ class Controller(Node):
 
             # Desired relative position in body frame
 
-            setpoint = self.traj[:, self.step_counter][0:3]
+            setpoint = [0.0, 0.0, 1.1]
             pos_err_world = setpoint - p
             pos_err_body = Rwb.T @ pos_err_world
 
@@ -194,16 +247,16 @@ class Controller(Node):
             
             if len(self.observation_history) >= 180: 
                 ## Then you pass in wind estimates
-                wind = wind_estimator.predict_cpu(self.observation_history)
+                wind = predict_cpu(self.observation_history, self.model)
                 ret_wind = (np.sum(np.array(self.wind_estimate)) + np.array(wind))/(len(self.wind_estimate) + 1)
             else:
                 ## Replace here with the perfect wind knowledge
-                wind = np.array([0,0,0])
+                ret_wind = np.array([0,0,0])
 
             LEN_AVERAGE = 50
             if len(self.wind_estimate) >= LEN_AVERAGE:
-                self.wind_estimate.popleft(0)
-            self.wind_estimate.append(wind)
+                self.wind_estimate.popleft()
+            self.wind_estimate.append(ret_wind)
 
             # Observation layout: [v_b(3), w_b(3), quat wxyz(4), pos_err_b(3), heading(2), prev_actions(4)] = 19
             obs = np.concatenate(
@@ -211,10 +264,12 @@ class Controller(Node):
             )
 
             self._obs = np.round(obs, 3).astype(np.float32)
+
+            print(f"self._obs: {self._obs}")
             obs_t = torch.from_numpy(self._obs).to(self._agent_device, dtype=torch.float32).unsqueeze(0)
 
             if len(self.observation_history) >= 180:
-                self.observation_history.popleft(0)
+                self.observation_history.popleft()
             self.observation_history.append(obs)
 
             ####################################################################
@@ -228,10 +283,21 @@ class Controller(Node):
                 info = outputs[-1] if isinstance(outputs, (tuple, list)) else {}
                 unit_action = info.get("mean_actions", outputs[0]).squeeze(0).detach().cpu().numpy().astype(np.float32)
 
-            self._prev_actions = unit_action.copy()
-            u = [float(unit_action[1]), float(unit_action[2]), float(unit_action[0]), float(unit_action[3])]
-            msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
+            
+
+            if (self.takeoff_requested):
+                self._prev_actions = unit_action.copy()
+                u = [float(unit_action[1]), float(unit_action[2]), float(unit_action[0]), float(unit_action[3])]
+                msg = ELRSCommand(armed=True, channel_0=round(u[1], 3), channel_1=round(u[2], 3), channel_2=round(u[0], 3), channel_3=round(u[3], 3))
+            else:
+                u = [0.0, 0.0, -1.0, 0.0]
+                self._prev_actions = [0.0, 0.0, 0.0, 0.0]
+                msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
+            
             self.cb.cmd_publisher_.publish(msg)
+
+
+            print(f"Step: {self.step_counter}/{self.steps} | Cmd: {u}")
 
             log_row = [
                 self.step_counter,
@@ -251,7 +317,7 @@ class Controller(Node):
             self.cb.cmd_publisher_.publish(msg)
             self.step_counter = 0
 
-
+        print (f"Control loop time: {time.time() - start_time:.4f} seconds")
 
     def signal_handler(self, sig, frame):
         print("Interrupt received, shutting down...")

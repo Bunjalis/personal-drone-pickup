@@ -26,7 +26,7 @@ class BetaflightInterfaceNode(Node):
         self.set_point = None
         self.current_pose = None
 
-        self.kp = 5.0
+        self.kp = 0.5
         self.ki = 0.0
         self.kd = 0.0
         

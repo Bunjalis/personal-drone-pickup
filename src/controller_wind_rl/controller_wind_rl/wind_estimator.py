@@ -244,14 +244,16 @@ def predict(observations, model, device):
         return outputs.squeeze(0)
     return outputs
 
-def predict_cpu(observations, model, device):
-    observations = np.array(observations)
-    observations = np.expand_dims(observations, axis=0)
+def predict_cpu(observations, model):
+    observations = torch.tensor(observations)
+
+    observations = observations.unsqueeze(0)
+
     # Shape of np array is now 1,180,22
 
     out = model(observations)
 
-    return np.squeeze(out)
+    return out.squeeze(0)
 
 def eval_wind_optimized():
     """

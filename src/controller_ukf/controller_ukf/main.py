@@ -23,7 +23,7 @@ from std_msgs.msg import Float32MultiArray, Int32
 
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
-USE_MOTION_CAPTURE = True  # Set to False to use ORB-SLAM data instead
+USE_MOTION_CAPTURE = False  # Set to False to use ORB-SLAM data instead
 FREQUENCY_HZ = 30.0
 DT = 1.0 / FREQUENCY_HZ
 
@@ -36,7 +36,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self,USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = figure8_zsine_trajectory(DT)
+        self.traj, trajectory_name = hover_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
 

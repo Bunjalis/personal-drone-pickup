@@ -209,6 +209,9 @@ class Controller(Node):
             msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
             self.cb.cmd_publisher_.publish(msg)
 
+
+            print(f"Step: {self.step_counter}/{self.steps} | Cmd: {u}")
+
             log_row = [
                 self.step_counter,
                 time.time(),
