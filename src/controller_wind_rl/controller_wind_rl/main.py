@@ -13,13 +13,13 @@ from utility_objects.data_logger import DataLogger
 from utility_objects.callback_manager import CallbackManager
 from interfaces.msg import ELRSCommand
 from scipy.spatial.transform import Rotation as R
-
+from .wind_estimator import LSTM_wind_estimator
 from skrl.utils.runner.torch import Runner
 import torch
 import gym as ogym
 import yaml
 from ament_index_python.packages import get_package_share_directory
-from pathlib import Path
+from collections import deque
 
 # ---------------- Tiny finite-bounds classic-gym env ----------------
 class _TinyGymEnv(ogym.Env):
@@ -47,9 +47,10 @@ class _TinyGymEnv(ogym.Env):
     
 
 
+## Frequency was 50 Hz in Betaflight, changed it here 
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
-FREQUENCY_HZ = 100.0
+FREQUENCY_HZ = 50.0
 DT = 1.0 / FREQUENCY_HZ
 
 LOGGING_NAME = 'controller_rl'
@@ -62,7 +63,7 @@ class Controller(Node):
         self.last_pose_update_time = time.time()
         self.cb = CallbackManager(self)
 
-        self.traj, trajectory_name = z_sin_trajectory(DT)
+        self.traj, trajectory_name = xyz_sine_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
 
@@ -80,39 +81,27 @@ class Controller(Node):
             'pose_x', 'pose_y', 'pose_z', 'pose_qw', 'pose_qx', 'pose_qy', 'pose_qz',
         ]
         self.data_logger = DataLogger(LOGGING_NAME, trajectory_name, log_headers)
+        self.observation_history = deque()
+        self.wind_estimate = deque()
 
 
         #RL Agent Loading
-        ckpt_rel = "best_agent.pt"
+        pkg = get_package_share_directory("controller_rl")
+
+        run_dir = os.path.join(pkg)
+        ckpt_rel = "ppo_model.pt"
         agent_yaml_rel = "agent.yaml"
 
-        # Prefer local src copy of the package (useful when running from repo)
-        src_pkg_dir = Path(__file__).resolve().parents[1]  # src/controller_rl
-        candidates = [
-            src_pkg_dir,
-            src_pkg_dir / "run",
-            Path.cwd(),
-            Path(get_package_share_directory("controller_rl")),  # fallback to installed package
-        ]
 
-        ckpt_path = None
-        agent_yaml_path = None
-        used_candidate = None
-        for d in candidates:
-            c = Path(d) / ckpt_rel
-            a = Path(d) / agent_yaml_rel
-            if c.exists() and a.exists():
-                ckpt_path = str(c)
-                agent_yaml_path = str(a)
-                used_candidate = str(d)
-                break
+        ckpt_path = os.path.join(run_dir, ckpt_rel)
+        agent_yaml_path = os.path.join(run_dir, agent_yaml_rel)
 
-        if ckpt_path is None or agent_yaml_path is None:
-            raise FileNotFoundError(
-                f"Couldn't find '{ckpt_rel}' and '{agent_yaml_rel}' in any of: {[str(x) for x in candidates]}"
-            )
+        if not os.path.exists(ckpt_path):
+            raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+        if not os.path.exists(agent_yaml_path):
+            raise FileNotFoundError(f"Agent YAML not found: {agent_yaml_path}")
 
-        self.get_logger().info(f"Loading skrl agent from (candidate: {used_candidate}):\n- ckpt: {ckpt_path}\n- cfg : {agent_yaml_path}")
+        self.get_logger().info(f"Loading skrl agent from:\n- ckpt: {ckpt_path}\n- cfg : {agent_yaml_path}")
 
 
         ckpt = torch.load(ckpt_path, map_location="cpu")
@@ -142,6 +131,12 @@ class Controller(Node):
 
         self._prev_actions = np.zeros(4, dtype=np.float32)  # keep in unit space unless you trained differently
         self.get_logger().info("SKRLController initialised.")
+
+
+        HIDDEN_DIM = 64
+        INPUT_SIZE = 22
+        self.model = LSTM_wind_estimator(hidden_dim=HIDDEN_DIM, input_size=INPUT_SIZE)
+        self.load_state_dict(torch.load("wind_model.pth", weights_only=True))
 
 
 
@@ -191,13 +186,42 @@ class Controller(Node):
             yaw_err = np.arctan2(np.sin(curr_yaw - desired_yaw), np.cos(curr_yaw - desired_yaw))
             heading_error = np.array([np.sin(yaw_err), np.cos(yaw_err)], dtype=np.float32)
 
+            ####################################################################
+            #                                                                  #
+            #                 CHANGED HERE: Added Wind Estimator               #
+            #                                                                  #
+            ####################################################################
+            
+            if len(self.observation_history) >= 180: 
+                ## Then you pass in wind estimates
+                wind = wind_estimator.predict_cpu(self.observation_history)
+                ret_wind = (np.sum(np.array(self.wind_estimate)) + np.array(wind))/(len(self.wind_estimate) + 1)
+            else:
+                ## Replace here with the perfect wind knowledge
+                wind = np.array([0,0,0])
+
+            LEN_AVERAGE = 50
+            if len(self.wind_estimate) >= LEN_AVERAGE:
+                self.wind_estimate.popleft(0)
+            self.wind_estimate.append(wind)
+
             # Observation layout: [v_b(3), w_b(3), quat wxyz(4), pos_err_b(3), heading(2), prev_actions(4)] = 19
             obs = np.concatenate(
-                [v_body, w_body, wxyz, pos_err_body, heading_error, self._prev_actions], dtype=np.float32
+                [v_body, w_body, wxyz, pos_err_body, heading_error, self._prev_actions, ret_wind], dtype=np.float32
             )
 
             self._obs = np.round(obs, 3).astype(np.float32)
             obs_t = torch.from_numpy(self._obs).to(self._agent_device, dtype=torch.float32).unsqueeze(0)
+
+            if len(self.observation_history) >= 180:
+                self.observation_history.popleft(0)
+            self.observation_history.append(obs)
+
+            ####################################################################
+            #                                                                  #
+            #                 CHANGED HERE: Added Wind Estimator               #
+            #                                                                  #
+            ####################################################################
 
             with torch.inference_mode():
                 outputs = self._runner.agent.act(obs_t, timestep=0, timesteps=0)
@@ -243,7 +267,7 @@ class Controller(Node):
         self.data_logger.close()
 
 
-def main(args=None): 
+def main(args=None):
     rclpy.init(args=args)
     controller = Controller()
     signal.signal(signal.SIGINT, controller.signal_handler)
