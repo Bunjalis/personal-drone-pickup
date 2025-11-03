@@ -23,8 +23,8 @@ from std_msgs.msg import Float32MultiArray, Int32
 
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
-USE_MOTION_CAPTURE = False  # Set to False to use ORB-SLAM data instead
-FREQUENCY_HZ = 30.0
+USE_MOTION_CAPTURE = True  # Set to False to use ORB-SLAM data instead
+FREQUENCY_HZ = 15.0
 DT = 1.0 / FREQUENCY_HZ
 
 LOGGING_NAME = 'controller_ukf'
@@ -36,7 +36,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self,USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = hover_trajectory(DT)
+        self.traj, trajectory_name = z_sin_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
 
@@ -57,12 +57,12 @@ class Controller(Node):
 
 
         # ORB-Slam interface 
-        self.orb_slam_pose = None
+        self.orb_slam_pose = [0,0,0,1,0,0,0,0,0,0,0,0,0]
         self.orb_slam_state_subscription_ = self.create_subscription(MotionCaptureState, '/orb_slam_state', self.orb_slam_state_callback, 10)
 
         
         # UKF settings
-        self.est_params = np.array([42.0, 0.5, 0.12,100.0, 100.0, 0.0])
+        self.est_params = np.array([20.0, 0.2, 0.12,50.0, 300.0, 0.0])
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -85,7 +85,7 @@ class Controller(Node):
 
 
         # Delay estimation
-        self.delay_states = 6
+        self.delay_states = 1
         qos1 = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, history=HistoryPolicy.KEEP_LAST)
         self.pub_ctrl_applied = self.create_publisher(ControlApplied, '/control_applied', qos1)
         self.create_subscription(Int32, '/estimated_delay',
@@ -99,10 +99,16 @@ class Controller(Node):
             'u0','u1','u2','u3','u0_rate', 'u1_rate', 'u2_rate', 'u3_rate',
             'pose_x', 'pose_y', 'pose_z', 'pose_qw', 'pose_qx', 'pose_qy', 'pose_qz',
             'pose_vx', 'pose_vy', 'pose_vz','pose_avx', 'pose_avy', 'pose_avz',
+            'est_pose_x', 'est_pose_y', 'est_pose_z', 'est_pose_qw', 'est_pose_qx', 'est_pose_qy', 'est_pose_qz',
+            'est_pose_vx', 'est_pose_vy', 'est_pose_vz','est_pose_avx', 'est_pose_avy', 'est_pose_avz',
             'traj_x_ref', 'traj_y_ref', 'traj_z_ref', 'traj_qw_ref', 'traj_qx_ref', 'traj_qy_ref', 'traj_qz_ref',
             'est_param_thrust_ratio', 'est_param_drag_coeff_z', 'est_param_tau_rate', 'est_param_centre_rate_deg', 'est_param_max_rate_deg', 'est_param_rate_expo',
             'MPC_setup_time', 'MPC_solve_time', 'Visualisation_time', 'UKF_update_time',
         ]
+
+        if not USE_MOTION_CAPTURE:
+            log_headers += ['mot_cap_x', 'mot_cap_y', 'mot_cap_z', 'mot_cap_qw', 'mot_cap_qx', 'mot_cap_qy', 'mot_cap_qz',
+                            'mot_cap_vx', 'mot_cap_vy', 'mot_cap_vz','mot_cap_avx', 'mot_cap_avy', 'mot_cap_avz']
         self.data_logger = DataLogger(LOGGING_NAME, trajectory_name, log_headers)
 
         self.observed_state_history = []       
@@ -180,7 +186,7 @@ class Controller(Node):
 
 
             
-            relaxation_factor = 0.01 # 0.25 for orb slam 
+            relaxation_factor = 0.025 # 0.25 for orb slam 
             relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
             relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
             self.ocp.set(0, "lbx", relaxed_lbx)
@@ -209,15 +215,26 @@ class Controller(Node):
             mpc_solve_time = time.time()
 
 
+            u = x[-4:]
+            u_rate = self.ocp.get(0, "u")
+
+
 
 
             ### SEND COMMANDS
             # Only execute trajectory if takeoff has been requested
             if self.takeoff_requested:
+
+                #u = x[-4:]
+                #u_rate = self.ocp.get(0, "u")
+
                 msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
                 #print(f"r: {round(u[0], 3)}, p: {round(u[1], 3)}, t: {round((u[2]), 3)}, y: {round(u[3], 3)}")
                 #print(f"EST. params - TR: {round(self.est_params[0],2)}, DC z: {round(self.est_params[1],3)}, Tau: {round(self.est_params[2],3)}, Centre deg: {round(self.est_params[3],1)}, Max deg: {round(self.est_params[4],1)}, expo: {round(self.est_params[5],3)}")
             else:
+
+                #u = [0,0,0,0]
+                #u_rate =  [0,0,0,0]
                 # Stay armed but don't send thrust commands until takeoff
                 msg = ELRSCommand(armed=True, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
                 #print("Armed - Waiting for TAKEOFF command")
@@ -309,12 +326,25 @@ class Controller(Node):
                 self.step_counter,
                 time.time(),
                 float(u[0]), float(u[1]), float(u[2]), float(u[3]), float(u_rate[0]), float(u_rate[1]), float(u_rate[2]), float(u_rate[3]),
-                float(self.current_pose[0]), float(self.current_pose[1]), float(self.current_pose[2]),  float(self.current_pose[3]), float(self.current_pose[4]), float(self.current_pose[5]), float(self.current_pose[6]),
-                float(self.current_pose[7]), float(self.current_pose[8]), float(self.current_pose[9]),  float(self.current_pose[10]), float(self.current_pose[11]), float(self.current_pose[12]),
+                float(self.orb_slam_pose[0]), float(self.orb_slam_pose[1]), float(self.orb_slam_pose[2]),  float(self.orb_slam_pose[3]), float(self.orb_slam_pose[4]), float(self.orb_slam_pose[5]), float(self.orb_slam_pose[6]),
+                float(self.orb_slam_pose[7]), float(self.orb_slam_pose[8]), float(self.orb_slam_pose[9]),  float(self.orb_slam_pose[10]), float(self.orb_slam_pose[11]), float(self.orb_slam_pose[12]),
+                float(estimated_state[0]), float(estimated_state[1]), float(estimated_state[2]),  float(estimated_state[3]), float(estimated_state[4]), float(estimated_state[5]), float(estimated_state[6]),
+                float(estimated_state[7]), float(estimated_state[8]), float(estimated_state[9]),  float(estimated_state[10]), float(estimated_state[11]), float(estimated_state[12]),
                 float(self.traj[0, self.step_counter]), float(self.traj[1, self.step_counter]), float(self.traj[2, self.step_counter]),  float(self.traj[3, self.step_counter]), float(self.traj[4, self.step_counter]), float(self.traj[5, self.step_counter]), float(self.traj[6, self.step_counter]),
                 float(self.est_params[0]), float(self.est_params[1]), float(self.est_params[2]), float(self.est_params[3]), float(self.est_params[4]), float(self.est_params[5]),
                 round(mpc_setup_time - start_time, 4), round(mpc_solve_time - mpc_setup_time, 4), round(send_command_and_visualisation - mpc_solve_time, 4), round(end_ukf_time - send_command_and_visualisation, 4),
             ]
+
+            if not USE_MOTION_CAPTURE :
+
+                if self.cb.motion_capture_pose is not None:
+                    log_row += [ float(self.cb.motion_capture_pose[0]), float(self.cb.motion_capture_pose[1]), float(self.cb.motion_capture_pose[2]),  float(self.cb.motion_capture_pose[3]), float(self.cb.motion_capture_pose[4]), float(self.cb.motion_capture_pose[5]), float(self.cb.motion_capture_pose[6]),
+                                float(self.cb.motion_capture_pose[7]), float(self.cb.motion_capture_pose[8]), float(self.cb.motion_capture_pose[9]),  float(self.cb.motion_capture_pose[10]), float(self.cb.motion_capture_pose[11]), float(self.cb.motion_capture_pose[12])]
+            
+                else:
+                    log_row += [ 0.0, 0.0, 0.0,  0.0, 0.0, 0.0, 0.0,
+                                0.0, 0.0, 0.0,  0.0, 0.0, 0.0]
+            
             self.data_logger.append_row(log_row)
 
             # Only increment step counter if takeoff was requested

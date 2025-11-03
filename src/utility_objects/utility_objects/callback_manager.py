@@ -24,14 +24,17 @@ class CallbackManager:
         self.command_subscription_ = self.node.create_subscription(String, 'drone_command', self.command_callback, 5)
         self.arming_state_publisher_ = self.node.create_publisher(Bool, 'drone_arming_state_feedback', 5)
 
+        self.motion_capture_pose = None
         self.use_motion_capture = USE_MOTION_CAPTURE
 
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
         arr = np.round(np.array([p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z]), 3)
+
+        self.motion_capture_pose = arr
         if self.use_motion_capture:
-            self.node.current_pose = arr
+            self.node.current_pose = self.motion_capture_pose
             self.node.last_pose_update_time = time.time()
 
 

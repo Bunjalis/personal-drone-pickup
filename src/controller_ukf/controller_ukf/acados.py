@@ -129,9 +129,10 @@ def generate_ocp_controller(dynamics=None):
 
     # ---------- State constraints (unchanged from your setup) ----------
     max_rate = 0.2
+    max_vz = 0.5  # z-velocity limit in m/s
     ocp.constraints.lbx = np.array([0.05, -max_rate, -max_rate, -max_rate])
     ocp.constraints.ubx = np.array([0.6,  max_rate,  max_rate,  max_rate])
-    ocp.constraints.idxbx = np.array([15, 13, 14, 16]) 
+    ocp.constraints.idxbx = np.array([15, 13, 14, 16])  # 9 is the z-velocity state index 
 
     # Input bounds
 

@@ -138,14 +138,14 @@ def z_sin_trajectory(dt):
     take_off_traj, _ = takeoff_trajectory(dt)
 
     # Phase 1: Hover for 20 seconds
-    steps_hover = 20 * 30  # 20 seconds of hover at 30 Hz
+    steps_hover = 2 * 30  # 20 seconds of hover at 30 Hz
     time_space_hover = np.linspace(0, steps_hover * dt, steps_hover)
     x_traj_hover = np.zeros_like(time_space_hover)
     y_traj_hover = np.zeros_like(time_space_hover)
     z_traj_hover = 1.5 * np.ones_like(time_space_hover)  # Constant hover at 1.5m
     
     # Phase 2: Variable frequency sinusoidal motion for 40 seconds
-    steps_sin = 40 * 30  # 40 seconds of sinusoidal motion at 30 Hz
+    steps_sin = 20 * 30  # 40 seconds of sinusoidal motion at 30 Hz
     time_space_sin = np.linspace(0, steps_sin * dt, steps_sin)
     
     # Frequency increases linearly from 1.0 to 3.0 Hz over 40 seconds
