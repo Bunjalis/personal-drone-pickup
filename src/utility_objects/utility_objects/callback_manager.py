@@ -24,7 +24,7 @@ class CallbackManager:
         self.command_subscription_ = self.node.create_subscription(String, 'drone_command', self.command_callback, 5)
         self.arming_state_publisher_ = self.node.create_publisher(Bool, 'drone_arming_state_feedback', 5)
 
-        self.motion_capture_pose = None
+        self.motion_capture_pose = [0,0,0,1,0,0,0,0,0,0,0,0,0]  # x,y,z,qw,qx,qy,qz,vx,vy,vz,avx,avy,avz
         self.use_motion_capture = USE_MOTION_CAPTURE
 
 
