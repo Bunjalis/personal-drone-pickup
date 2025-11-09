@@ -27,7 +27,7 @@ class Controller(Node):
         self.last_pose_update_time = time.time()
         self.cb = CallbackManager(self)
 
-        self.traj, trajectory_name = xyz_sine_trajectory(DT)
+        self.traj, trajectory_name = hover_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
 
@@ -47,7 +47,7 @@ class Controller(Node):
         ]
         self.data_logger = DataLogger(LOGGING_NAME, trajectory_name, log_headers)
 
-        self.M = 1.0
+        self.M = 0.6
         self.g = 9.81
 
 
@@ -76,6 +76,7 @@ class Controller(Node):
                 return
 
             xd, yd, zd = self.traj[0:3, self.step_counter]
+
             yawd = 0.0
             x, y, z = self.current_pose[0:3]
             r, p, yaw = self.quaternion_to_euler(*self.current_pose[3:7])

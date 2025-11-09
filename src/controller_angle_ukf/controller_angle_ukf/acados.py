@@ -29,7 +29,7 @@ def quat_mul(q1, q2):
 # --------------------------------
 # Public API: build OCP & simulator
 # --------------------------------
-def generate_ocp_controller(dynamics=None):
+def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     if dynamics is None:
         quad_dynamics = QuadDynamics()
     else:
@@ -59,8 +59,8 @@ def generate_ocp_controller(dynamics=None):
 
     ocp = AcadosOcp()
     ocp.model = model
-    ocp.solver_options.N_horizon = 20
-    ocp.solver_options.tf = 2.0
+    ocp.solver_options.N_horizon = N_horizon
+    ocp.solver_options.tf = N_horizon * skip_steps * dt
 
     nu = 4
     nx = 17
@@ -89,7 +89,7 @@ def generate_ocp_controller(dynamics=None):
     ny_e = 3 + 3 + 3 + 4 + 3
 
     W = np.diag([
-        4.0, 4.0, 4.0,         # pos
+        8.0, 8.0, 8.0,         # pos
         0.2, 0.2, 0.2,         # vel
         0.2, 0.2, 0.2,         # omega
         2e-4, 2e-4, 2e-4, 2e-4,# u_state (integrator smoothness)
@@ -97,7 +97,7 @@ def generate_ocp_controller(dynamics=None):
         0.5, 0.5, 5.0          # attitude error
     ])
     W_e = np.diag([
-        4.0, 4.0, 4.0,         # pos
+        8.0, 8.0, 8.0,         # pos
         0.2, 0.2, 0.2,         # vel
         0.2, 0.2, 0.2,         # omega
         2e-4, 2e-4, 2e-4, 2e-4,# u_state
@@ -131,20 +131,20 @@ def generate_ocp_controller(dynamics=None):
     ocp.solver_options.nlp_solver_type = 'SQP_RTI'
     ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
-    ocp.solver_options.nlp_solver_max_iter = 100
-    ocp.solver_options.qp_solver_iter_max = 300
-    ocp.solver_options.qp_solver_tol_stat = 1e-4
-    ocp.solver_options.qp_solver_tol_eq = 1e-4
-    ocp.solver_options.qp_solver_tol_ineq = 1e-4
-    ocp.solver_options.qp_solver_tol_comp = 1e-4
-    ocp.solver_options.nlp_solver_tol_stat = 1e-4
-    ocp.solver_options.nlp_solver_tol_eq = 1e-4
-    ocp.solver_options.nlp_solver_tol_ineq = 1e-4
-    ocp.solver_options.nlp_solver_tol_comp = 1e-4
-    ocp.solver_options.levenberg_marquardt = 1e-3
+    ocp.solver_options.nlp_solver_max_iter = 200
+    ocp.solver_options.qp_solver_iter_max = 600
+    ocp.solver_options.qp_solver_tol_stat = 1e-2
+    ocp.solver_options.qp_solver_tol_eq = 1e-2
+    ocp.solver_options.qp_solver_tol_ineq = 1e-2
+    ocp.solver_options.qp_solver_tol_comp = 1e-2
+    ocp.solver_options.nlp_solver_tol_stat = 1e-3
+    ocp.solver_options.nlp_solver_tol_eq = 1e-3
+    ocp.solver_options.nlp_solver_tol_ineq = 1e-3
+    ocp.solver_options.nlp_solver_tol_comp = 1e-3
+    ocp.solver_options.levenberg_marquardt = 1.0
 
     # ---------- State constraints (unchanged) ----------
-    max_rate = 0.2
+    max_rate = 1.0
     max_vz = 0.5
     ocp.constraints.lbx = np.array([0.05, -max_rate, -max_rate, -max_rate])
     ocp.constraints.ubx = np.array([0.6,   max_rate,  max_rate,  max_rate])
@@ -161,7 +161,7 @@ def generate_ocp_controller(dynamics=None):
     # --- Simulator config (1/30 s step) ---
     sim = AcadosSim()
     sim.model = ocp.model
-    sim.solver_options.T = 1.0 / 30.0
+    sim.solver_options.T = dt
     # same parameter vector as ocp.parameter_values but with potentially different taus for quick sim testing
     sim.parameter_values = np.array([
         38.0, 0.5, 0.12, 100.0, 100.0, 0.5, 55.0, 0.15, 1.0, 0.0, 0.0, 0.0
@@ -175,7 +175,7 @@ def generate_ocp_controller(dynamics=None):
 # Warm start convenience
 # ------------------------
 def set_initial_guess(ocp_solver, N_horizon=20):
-    u_init = np.array([0.0, 0.0, -1.0, 0.0], dtype=float)
+    u_init = np.array([0.0, 0.0, 0.0, 0.0], dtype=float)
     for i in range(N_horizon):
         ocp_solver.set(i, "u", u_init)
 

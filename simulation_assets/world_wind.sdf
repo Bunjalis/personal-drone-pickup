@@ -183,7 +183,7 @@
     <magnitude>
       <time_for_rise>0.2</time_for_rise>
       <sin>
-        <amplitude_percent>0.05</amplitude_percent>
+        <amplitude_percent>0.0</amplitude_percent>
         <period>8.0</period>
       </sin>
       <noise><type>gaussian</type><mean>0.0</mean><stddev>0.0</stddev></noise>

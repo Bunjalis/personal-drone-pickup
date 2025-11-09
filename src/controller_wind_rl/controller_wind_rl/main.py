@@ -2,6 +2,7 @@ import rclpy
 import signal
 import sys
 import os
+import matplotlib.pyplot as plt
 import numpy as np
 import math
 from rclpy.node import Node
@@ -172,6 +173,19 @@ class Controller(Node):
 
         self._prev_actions = np.zeros(4, dtype=np.float32)  # keep in unit space unless you trained differently
         self.get_logger().info("SKRLController initialised.")
+        
+        self.data_history =  {
+            "pos_err_x": [],
+            "pos_err_y": [],
+            "pos_err_z": [],
+            "throttle": [],
+            "wind_x": [], 
+            "wind_y": [],
+            "wind_z": [],
+            "roll": [],
+            "pitch": [], 
+            "yaw": [],
+        }
 
 
         HIDDEN_DIM = 64
@@ -192,7 +206,35 @@ class Controller(Node):
         except Exception as e:
             self.get_logger().warning(f"Failed to load wind model: {e}")
 
-
+    def log(self):
+        print("Saving data")
+        fig, obs_axes = plt.subplots(2, 2, figsize=(14, 12))
+        obs_axes = obs_axes.flatten()
+        obs_axes[0].plot(self.data_history["pos_err_x"], label="pos_err_x")
+        obs_axes[0].plot(self.data_history["pos_err_y"], label="pos_err_y")
+        obs_axes[0].plot(self.data_history["pos_err_z"], label="pos_err_z")
+        obs_axes[0].set_title("positional error")
+        obs_axes[0].legend()
+        obs_axes[0].set_xlabel("timesteps")
+        obs_axes[0].set_ylabel("distance(m)")
+        
+        obs_axes[1].plot(self.data_history["roll"], label="roll")
+        obs_axes[1].plot(self.data_history["pitch"], label="pitch")
+        obs_axes[1].plot(self.data_history["yaw"], label="yaw")
+        obs_axes[1].set_title("Angular rates")
+        obs_axes[1].legend()
+        obs_axes[1].set_xlabel("timesteps")
+        obs_axes[1].set_ylabel("angular rate (rad/s)")
+        
+        obs_axes[2].plot(self.data_history["throttle"], label="throttle")
+        obs_axes[2].set_title("Throttle")
+        obs_axes[2].set_xlabel("timesteps")
+        obs_axes[2].set_ylabel("throttle")
+        print(os.getcwd())
+        fig.savefig(os.path.join(os.getcwd(), "src", "controller_wind_rl", "data_logger", f"data {time.time()}.png"))
+        PATH = os.path.join(os.getcwd(), "src", "controller_wind_rl", "data_logger", f"data {time.time()}")
+        print(f"saved to {PATH}")
+        plt.close(fig)
 
 
     def control_loop(self):
@@ -200,6 +242,7 @@ class Controller(Node):
         start_time = time.time()
 
         if self.shutdown_requested:
+            self.log()
             self.cb.request_shutdown()
             return
 
@@ -215,6 +258,7 @@ class Controller(Node):
                 msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
                 self.cb.disarm(msg)
                 self.cb.request_shutdown()
+                self.log()
                 return
             
             p = self.current_pose[0:3]
@@ -247,11 +291,12 @@ class Controller(Node):
             
             if len(self.observation_history) >= 180: 
                 ## Then you pass in wind estimates
-                wind = predict_cpu(self.observation_history, self.model)
-                ret_wind = (np.sum(np.array(self.wind_estimate)) + np.array(wind))/(len(self.wind_estimate) + 1)
+                # wind = predict_cpu(self.observation_history, self.model)
+                # ret_wind = (np.sum(np.array(self.wind_estimate)) + np.array(wind))/(len(self.wind_estimate) + 1)
+                ret_wind = torch.tensor([0.0, 0.0, 0.0], dtype=torch.float32)
             else:
                 ## Replace here with the perfect wind knowledge
-                ret_wind = np.array([0,0,0])
+                ret_wind = torch.tensor([0.0,0.0, 0.0], dtype=torch.float32)
 
             LEN_AVERAGE = 50
             if len(self.wind_estimate) >= LEN_AVERAGE:
@@ -262,7 +307,7 @@ class Controller(Node):
             obs = np.concatenate(
                 [v_body, w_body, wxyz, pos_err_body, heading_error, self._prev_actions, ret_wind], dtype=np.float32
             )
-
+            
             self._obs = np.round(obs, 3).astype(np.float32)
 
             print(f"self._obs: {self._obs}")
@@ -283,12 +328,20 @@ class Controller(Node):
                 info = outputs[-1] if isinstance(outputs, (tuple, list)) else {}
                 unit_action = info.get("mean_actions", outputs[0]).squeeze(0).detach().cpu().numpy().astype(np.float32)
 
-            
+            ## How to visualise wind generated in world_wind.sdf?
+            print("Logging data")
+            self.data_history["pos_err_x"].append(pos_err_body[0])
+            self.data_history["pos_err_y"].append(pos_err_body[1])
+            self.data_history["pos_err_z"].append(pos_err_body[2])
+            self.data_history["throttle"].append(unit_action[0])
+            self.data_history["roll"].append(unit_action[1])
+            self.data_history["pitch"].append(unit_action[2])
+            self.data_history["yaw"].append(unit_action[3])
 
             if (self.takeoff_requested):
                 self._prev_actions = unit_action.copy()
                 u = [float(unit_action[1]), float(unit_action[2]), float(unit_action[0]), float(unit_action[3])]
-                msg = ELRSCommand(armed=True, channel_0=round(u[1], 3), channel_1=round(u[2], 3), channel_2=round(u[0], 3), channel_3=round(u[3], 3))
+                msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round(u[2], 3), channel_3=round(u[3], 3))
             else:
                 u = [0.0, 0.0, -1.0, 0.0]
                 self._prev_actions = [0.0, 0.0, 0.0, 0.0]
@@ -317,7 +370,7 @@ class Controller(Node):
             self.cb.cmd_publisher_.publish(msg)
             self.step_counter = 0
 
-        print (f"Control loop time: {time.time() - start_time:.4f} seconds")
+        # print (f"Control loop time: {time.time() - start_time:.4f} seconds")
 
     def signal_handler(self, sig, frame):
         print("Interrupt received, shutting down...")
@@ -339,6 +392,7 @@ def main(args=None):
     signal.signal(signal.SIGINT, controller.signal_handler)
     
     try:
+        print("hello")
         rclpy.spin(controller)
     except KeyboardInterrupt:
         print("Keyboard interrupt received")

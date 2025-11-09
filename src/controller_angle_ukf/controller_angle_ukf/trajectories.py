@@ -325,7 +325,7 @@ def circle_trajectory(dt):
     
     # Circle parameters
     radius = 1.0  # 1 meter
-    period = 8  # seconds per rotation
+    period = 10  # seconds per rotation
     omega = 2 * np.pi / period  # angular velocity (rad/s)
     
     # Get the final position from takeoff (should be 0, 0, 1.0)

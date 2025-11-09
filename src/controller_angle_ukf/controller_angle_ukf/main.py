@@ -40,7 +40,7 @@ from std_msgs.msg import Float32MultiArray, Int32
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
 USE_MOTION_CAPTURE = True      # Set to False to use ORB-SLAM data instead
-FREQUENCY_HZ = 30.0
+FREQUENCY_HZ = 20
 DT = 1.0 / FREQUENCY_HZ
 
 LOGGING_NAME = 'controller_angle_ukf'
@@ -52,7 +52,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self, USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = xyz_sine_trajectory(DT)
+        self.traj, trajectory_name = hover_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(
             self.traj, pose_subsample=15, show_velocity=False, velocity_scale=0.3, color_by_time=True
@@ -68,9 +68,9 @@ class Controller(Node):
 
         # MPC settings
         self.N = 20
-        self.skip_steps = 3
+        self.skip_steps = 4
         self.first_solve = True
-        self.ocp, self.sim_integrator = generate_ocp_controller()
+        self.ocp, self.sim_integrator = generate_ocp_controller(dt=DT, N_horizon=self.N, skip_steps=self.skip_steps)
 
         # ORB-Slam interface
         self.orb_slam_pose = [0,0,0,1,0,0,0,0,0,0,0,0,0]
@@ -83,7 +83,7 @@ class Controller(Node):
         # ---------------------------
         # est_params order (8):
         # [kT, dragZ, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, angle_max_deg, tau_angle]
-        self.est_params = np.array([38.0, 0.2, 0.12, 50.0, 300.0, 0.5, 55.0, 0.15], dtype=float)
+        self.est_params = np.array([25.0, 0.2, 0.12, 100.0, 100.0, 0.5, 55.0, 0.15], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -96,15 +96,16 @@ class Controller(Node):
             *self.est_params  # 8 params
         ], dtype=float)
 
+
         # Covariances sized to 21x21
         self.P = np.diag([
             0.1, 0.1, 0.1,
             0.1, 0.1, 0.1, 0.1,
             0.1, 0.1, 0.1,
             0.1, 0.1, 0.1,
-            0.1, 0.1, 0.1,  # kT, dragZ, tau_rate
-            0.1, 0.1, 0.1,  # centre, max, expo
-            0.1, 0.1        # angle_max_deg, tau_angle
+            0.1, 0.001, 0.001,  # kT, dragZ, tau_rate
+            0.001, 0.001, 0.001,  # centre, max, expo
+            0.001, 0.001        # angle_max_deg, tau_angle
         ]).astype(float)
 
         self.Q = np.diag([
@@ -114,13 +115,15 @@ class Controller(Node):
             1e-3, 1e-3, 1e-3,           # v
             1e-3, 1e-3, 1e-3,           # w
             # params (slower drift)
-            1e-4, 1e-4, 1e-4,           # kT, dragZ, tau_rate
+            1e-4, 1e-2, 1e-4,           # kT, dragZ, tau_rate
             1e-3, 1e-3, 1e-4,           # centre, max, expo
             1e-4, 1e-4                  # angle_max_deg, tau_angle
         ]).astype(float)
 
         # Measurement: 13 (p,q,v,w)
-        self.R = np.diag([0.05]*13).astype(float)
+        self.R = np.diag([0.1]*13).astype(float)
+
+        # Measurement: 13 (p,q,v,w)
 
         # Delay estimation
         self.delay_states = 2
@@ -221,9 +224,10 @@ class Controller(Node):
             else:
                 estimated_state_with_control = np.concatenate((estimated_state, np.array(self.control_history[-1][0:4])))
 
-            relaxation_factor = 0.025
-            relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
-            relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
+            relaxation_factor = 0.05
+            relaxation = np.abs(estimated_state_with_control * relaxation_factor) + 1e-6
+            relaxed_lbx = estimated_state_with_control - relaxation
+            relaxed_ubx = estimated_state_with_control + relaxation
             self.ocp.set(0, "lbx", relaxed_lbx)
             self.ocp.set(0, "ubx", relaxed_ubx)
 
@@ -231,8 +235,8 @@ class Controller(Node):
             if self.first_solve:
                 set_initial_guess(self.ocp, self.N)
                 self.first_solve = False
-            else:
-                warm_start_from_previous_solution(self.ocp, self.N)
+            # else:
+            #     warm_start_from_previous_solution(self.ocp, self.N)
 
             mpc_setup_time = time.time()
 
@@ -315,18 +319,19 @@ class Controller(Node):
                 self.x_est[14] = np.clip(self.x_est[14], 0.01, 1.0)
                 # tau_rate
                 self.x_est[15] = np.clip(self.x_est[15], 0.04, 0.3)
-                # centre/max/exp (yaw BF curve)
-                self.x_est[16] = np.clip(self.x_est[16], 0.0, 1000.0)
-                self.x_est[17] = np.clip(self.x_est[17], 0.0, 1000.0)
-                # keep expo within [0,1] typical; if you prefer fixed, clamp to 0.5 as before
-                self.x_est[18] = np.clip(self.x_est[18], 0.0, 1.0)
+                # centre_rate_deg (TIGHTENED: was 0..1000)
+                self.x_est[16] = np.clip(self.x_est[16], 50.0, 150.0)
+                # max_rate_deg (TIGHTENED: was 0..1000)
+                self.x_est[17] = np.clip(self.x_est[17], 100.0, 400.0)
+                # rate_expo (keep within reasonable range)
+                self.x_est[18] = np.clip(self.x_est[18], 0.1, 1.0)
 
                 # ensure max >= centre
                 if self.x_est[17] <= self.x_est[16]:
-                    self.x_est[17] = self.x_est[16]
+                    self.x_est[17] = self.x_est[16] + 10.0
 
-                # angle_max_deg
-                self.x_est[19] = np.clip(self.x_est[19], 20.0, 85.0)
+                # angle_max_deg (TIGHTENED: was 20..85)
+                self.x_est[19] = np.clip(self.x_est[19], 40.0, 70.0)
                 # tau_angle
                 self.x_est[20] = np.clip(self.x_est[20], 0.06, 0.3)
 
@@ -337,6 +342,8 @@ class Controller(Node):
                     self.x_est[19], self.x_est[20]
                 ], dtype=float)
 
+
+            print("Estimated params:", self.est_params)
             end_ukf_time = time.time()
 
             # Logging
