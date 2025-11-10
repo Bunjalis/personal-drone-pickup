@@ -227,7 +227,7 @@
     <include>
       <name>Lake House</name>
       <uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Lake House</uri>
-      <pose>7 0 -6.5 0 0 0</pose>
+      <pose>9 0 -6.5 0 0 0</pose>
     </include>
 
 

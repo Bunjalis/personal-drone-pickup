@@ -27,7 +27,7 @@ class BetaflightInterfaceNode(Node):
         self.last_time = None
 
         # --- inner RATE PID (deg/s tracking of p,q,r) ---
-        self.kp = 0.5
+        self.kp = 1.0
         self.ki = 0.0
         self.kd = 0.0
         self.integral_error = np.zeros(3, dtype=float)
@@ -35,7 +35,7 @@ class BetaflightInterfaceNode(Node):
 
         # --- outer ANGLE PI (deg tracking of roll, pitch) → desired rate (deg/s) ---
         self.declare_parameter('angle_max_deg', 55.0)   # Betaflight default is ~55°
-        self.declare_parameter('angle_kp', 8.0)         # deg/s per deg of error
+        self.declare_parameter('angle_kp', 4.0)         # deg/s per deg of error
         self.declare_parameter('angle_ki', 0.5)         # deg/s per deg·s (small bias cancel)
 
         self.angle_max_deg = float(self.get_parameter('angle_max_deg').value)

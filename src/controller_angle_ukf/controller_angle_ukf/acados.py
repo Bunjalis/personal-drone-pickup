@@ -89,19 +89,19 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     ny_e = 3 + 3 + 3 + 4 + 3
 
     W = np.diag([
-        8.0, 8.0, 8.0,         # pos
-        0.2, 0.2, 0.2,         # vel
-        0.2, 0.2, 0.2,         # omega
-        2e-4, 2e-4, 2e-4, 2e-4,# u_state (integrator smoothness)
-        0.1, 0.1, 5.0, 0.1,    # u_dot penalty
-        0.5, 0.5, 5.0          # attitude error
+        5.0, 5.0, 5.0,         # pos
+        1.0, 1.0, 1.0,         # vel
+        1.0, 1.0, 1.0,         # omega
+        2.0, 2.0, 2e-4, 2.0,# u_state (integrator smoothness)
+        5.0, 5.0, 5.0, 5.0,    # u_dot penalty
+        1.0, 1.0, 1.0          # attitude error
     ])
     W_e = np.diag([
-        8.0, 8.0, 8.0,         # pos
-        0.2, 0.2, 0.2,         # vel
-        0.2, 0.2, 0.2,         # omega
-        2e-4, 2e-4, 2e-4, 2e-4,# u_state
-        0.5, 0.5, 5.0          # attitude error
+        5.0, 5.0, 5.0,         # pos
+        1.0, 1.0, 1.0,         # vel
+        1.0, 1.0, 1.0,         # omega
+        2.0, 2.0, 2e-4, 2.0,   # u_state
+        1.0, 1.0, 1.0          # attitude error
     ])
     ocp.cost.W = W
     ocp.cost.W_e = W_e
@@ -133,15 +133,15 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
     ocp.solver_options.nlp_solver_max_iter = 200
     ocp.solver_options.qp_solver_iter_max = 600
-    ocp.solver_options.qp_solver_tol_stat = 1e-2
-    ocp.solver_options.qp_solver_tol_eq = 1e-2
-    ocp.solver_options.qp_solver_tol_ineq = 1e-2
-    ocp.solver_options.qp_solver_tol_comp = 1e-2
+    ocp.solver_options.qp_solver_tol_stat = 1e-3
+    ocp.solver_options.qp_solver_tol_eq = 1e-3
+    ocp.solver_options.qp_solver_tol_ineq = 1e-3
+    ocp.solver_options.qp_solver_tol_comp = 1e-3
     ocp.solver_options.nlp_solver_tol_stat = 1e-3
     ocp.solver_options.nlp_solver_tol_eq = 1e-3
     ocp.solver_options.nlp_solver_tol_ineq = 1e-3
     ocp.solver_options.nlp_solver_tol_comp = 1e-3
-    ocp.solver_options.levenberg_marquardt = 1.0
+    ocp.solver_options.levenberg_marquardt = 1e-2
 
     # ---------- State constraints (unchanged) ----------
     max_rate = 1.0
@@ -151,8 +151,8 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     ocp.constraints.idxbx = np.array([15, 13, 14, 16])  # throttle state & p,q,r (check ordering if you changed mixer)
 
     # ---------- Input rate bounds (u = u_dot) ----------
-    ocp.constraints.lbu = np.array([-0.5, -0.5, -0.5, -0.5])
-    ocp.constraints.ubu = np.array([ 0.5,  0.5,  0.5,  0.5])
+    ocp.constraints.lbu = np.array([-0.2, -0.2, -0.5, -0.2])
+    ocp.constraints.ubu = np.array([ 0.2,  0.2,  0.5,  0.2])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

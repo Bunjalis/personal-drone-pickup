@@ -93,7 +93,7 @@
     "problem_class": "SIM",
     "shared_lib_ext": ".so",
     "solver_options": {
-        "Tsim": 0.05,
+        "Tsim": 0.06666666666666667,
         "collocation_type": "GAUSS_LEGENDRE",
         "ext_fun_compile_flags": "-O2",
         "ext_fun_expand": false,

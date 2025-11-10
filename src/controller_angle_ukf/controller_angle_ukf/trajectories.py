@@ -203,9 +203,9 @@ def xyz_sine_trajectory(dt):
 
     steps = 20 * 30  # 10 seconds of hover at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
-    x_traj = 0.0 + 1.0 * np.sin(1.0 * np.pi * time_space / 5.0) #np.zeros_like(time_space)
-    y_traj = 0.0 + 1.0 * np.sin(0.5 * np.pi * time_space / 5.0) #np.zeros_like(time_space) # 0.0 + 0.5 * np.sin(1.0 * np.pi * time_space / 5.0)
-    z_traj = 1.5 + 0.5 * np.sin(2.0 * np.pi * time_space / 5.0)#1.2 * np.ones_like(time_space) #1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)    #
+    x_traj = 0.0 + 1.0 * np.sin(0.5 * np.pi * time_space / 5.0) #np.zeros_like(time_space)
+    y_traj = 0.0 + 1.0 * np.sin(0.25 * np.pi * time_space / 5.0) #np.zeros_like(time_space) # 0.0 + 0.5 * np.sin(1.0 * np.pi * time_space / 5.0)
+    z_traj = 1.0 + 0.5 * np.sin(0.5 * np.pi * time_space / 5.0)#1.2 * np.ones_like(time_space) #1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)    #
 
     roll_traj = np.zeros_like(time_space)
     pitch_traj = np.zeros_like(time_space)
@@ -338,7 +338,7 @@ def circle_trajectory(dt):
     y_traj_transition = np.linspace(takeoff_end_y, 0.0, steps_transition)     # Move to y=0
     z_traj_transition = np.linspace(takeoff_end_z, 1.0, steps_transition)     # Move to circle altitude
 
-    steps = 30 * 30  # 40 seconds at 30 Hz
+    steps = 10 * 30  # 40 seconds at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
 
     x_traj = radius * np.cos(omega * time_space)
