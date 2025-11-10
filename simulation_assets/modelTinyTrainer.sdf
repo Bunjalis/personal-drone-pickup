@@ -5,7 +5,7 @@
             <pose frame="">0 0 0 0 0 0</pose>
             <inertial>
                 <pose frame="">0.0 0 0 0 -0 0</pose>
-                <mass>0.18</mass>
+                <mass>0.25</mass>
                 <inertia>
                     <ixx>0.0004124292645</ixx>
                     <ixy>0</ixy>
@@ -33,7 +33,49 @@
                 </geometry>
             </visual>
 
+          <sensor name="imu_sensor" type="imu">
+                <always_on>true</always_on>
+                <update_rate>1000</update_rate>
+                <pose>0 0 0 0 0 0</pose>
+                <imu>
+                    <angular_velocity>
+                        <x>true</x>
+                        <y>true</y>
+                        <z>true</z>
+                    </angular_velocity>
+                    <linear_acceleration>
+                        <x>true</x>
+                        <y>true</y>
+                        <z>true</z>
+                    </linear_acceleration>
+                </imu>
+            </sensor>
+
+<sensor name="camera_sensor" type="camera">
+  <always_on>true</always_on>
+  <update_rate>40</update_rate>
+  <pose>0.06 0 0 0 -0.0 0</pose>
+  <camera>
+    <image>
+      <width>640</width>
+      <height>480</height>
+      <format>R8G8B8</format>
+    </image>
+
+    <lens>
+      <type>pinhole</type>
+      <intrinsics>
+        <fx>245.18081</fx>
+        <fy>328.95366</fy>
+        <cx>327.82185</cx>
+        <cy>240.97510</cy>
+        <s>0</s>
+      </intrinsics>
+    </lens>
+  </camera>
+</sensor>
         </link>
+
 
 
         <link name="X3/rotor_0">

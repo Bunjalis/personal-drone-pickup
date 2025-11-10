@@ -126,7 +126,7 @@ class Controller(Node):
         # Measurement: 13 (p,q,v,w)
 
         # Delay estimation
-        self.delay_states = 1
+        self.delay_states = 3
         qos1 = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, history=HistoryPolicy.KEEP_LAST)
         self.pub_ctrl_applied = self.create_publisher(ControlApplied, '/control_applied', qos1)
         self.create_subscription(Int32, '/estimated_delay',
