@@ -52,7 +52,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self, USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = circle_trajectory(DT)
+        self.traj, trajectory_name = hover_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(
             self.traj, pose_subsample=15, show_velocity=False, velocity_scale=0.3, color_by_time=True
@@ -83,7 +83,7 @@ class Controller(Node):
         # ---------------------------
         # est_params order (8):
         # [kT, dragZ, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, angle_max_deg, tau_angle]
-        self.est_params = np.array([35.0, 0.2, 0.12, 100.0, 100.0, 0.5, 55.0, 0.08], dtype=float)
+        self.est_params = np.array([25.0, 0.2, 0.12, 100.0, 100.0, 0.5, 55.0, 0.12], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -199,10 +199,10 @@ class Controller(Node):
             # ---- Delay-compensated state roll-forward using sim_integrator ----
             estimated_state = copy.deepcopy(self.current_pose[:13])
 
-            if len(self.control_history) <= 0:
-                delayed_control_history = [estimated_state]
+            if len(self.control_history) <= 0 or self.delay_states == 0:
+                delayed_control_history = []
             else:
-                delayed_control_history = self.control_history[-self.delay_states:-1]
+                delayed_control_history = self.control_history[-self.delay_states:]
 
             for i, val in enumerate(delayed_control_history):
                 # integrator state = [p(3), q(4), v(3), w(3), u(4)]
@@ -336,7 +336,7 @@ class Controller(Node):
                 # dragZ
                 self.x_est[14] = np.clip(self.x_est[14], 0.01, 0.5)
                 # tau_rate
-                self.x_est[15] = np.clip(self.x_est[15], 0.07, 0.3)
+                self.x_est[15] = np.clip(self.x_est[15], 0.07, 0.5)
                 # centre_rate_deg (TIGHTENED: was 0..1000)
                 self.x_est[16] = np.clip(self.x_est[16], 50.0, 150.0)
                 # max_rate_deg (TIGHTENED: was 0..1000)
@@ -351,7 +351,7 @@ class Controller(Node):
                 # angle_max_deg (TIGHTENED: was 20..85)
                 self.x_est[19] = np.clip(self.x_est[19], 40.0, 70.0)
                 # tau_angle
-                self.x_est[20] = np.clip(self.x_est[20], 0.07, 0.3)
+                self.x_est[20] = np.clip(self.x_est[20], 0.07, 0.5)
 
                 # Update estimated parameters vector (8)
                 self.est_params = np.array([
