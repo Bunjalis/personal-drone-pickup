@@ -86,7 +86,7 @@ class Controller(Node):
         
         # est_params order (7):
         # [kT, dragZ, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, tau_angle]
-        self.est_params = np.array([42.0, 0.2, 0.12, 100.0, 100.0, 0.5, 0.16], dtype=float)
+        self.est_params = np.array([28.0, 0.2, 0.12, 100.0, 100.0, 0.5, 0.16], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -129,7 +129,7 @@ class Controller(Node):
         # Measurement: 13 (p,q,v,w)
 
         # Delay estimation
-        self.delay_states = 3
+        self.delay_states = 2
         qos1 = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, history=HistoryPolicy.KEEP_LAST)
         self.pub_ctrl_applied = self.create_publisher(ControlApplied, '/control_applied', qos1)
         self.create_subscription(Int32, '/estimated_delay',
@@ -270,14 +270,15 @@ class Controller(Node):
             lbx = estimated_state_with_control.copy()
             ubx = estimated_state_with_control.copy()
 
-            relaxation_factor = 0.000001 # 0.25 for orb slam
+            relaxation_factor = 0.025 # 0.25 for orb slam
 
-            # Indices for pose (p), linear velocity (v), and angular velocity (w)
+            # Indices for pose (p), quaternion (q), linear velocity (v), and angular velocity (w)
             pos_indices = [0, 1, 2]
+            quat_indices = [3, 4, 5, 6]
             vel_indices = [7, 8, 9]
             ang_vel_indices = [10, 11, 12]
             
-            indices_to_relax = pos_indices + vel_indices + ang_vel_indices
+            indices_to_relax = pos_indices + quat_indices + vel_indices + ang_vel_indices
 
             for i in indices_to_relax:
                 val = estimated_state_with_control[i]

@@ -8,6 +8,7 @@ from scipy.spatial.transform import Rotation
 csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/xyz_mot_with_orb.csv"
 #csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/hover_inside_house.csv"
 #csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/zsin_inside_house.csv"
+csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/hover_with_new_angle.csv"
 
 # Read CSV
 df = pd.read_csv(csv_path)
