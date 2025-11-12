@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Read the CSV file
-df = pd.read_csv('logs/controller_ukf/circle_20251023_143523/log.csv')
+df = pd.read_csv('/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/hover_inside_house.csv')
 
 # Replace these with your actual column names if different
 axis_columns = ['MPC_setup_time', 'MPC_solve_time', 'Visualisation_time', 'UKF_update_time']

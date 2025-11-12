@@ -52,7 +52,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self, USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = z_sin_trajectory(DT)
+        self.traj, trajectory_name = hover_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(
             self.traj, pose_subsample=15, show_velocity=False, velocity_scale=0.3, color_by_time=True
@@ -79,49 +79,52 @@ class Controller(Node):
         )
 
         # ---------------------------
-        # UKF settings (UPDATED)
+        # UKF settings (UPDATED - Option 2: Partial measurement with yaw only)
         # ---------------------------
-        # est_params order (8):
-        # [kT, dragZ, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, angle_max_deg, tau_angle]
-        self.est_params = np.array([25.0, 0.2, 0.12, 100.0, 100.0, 0.5, 55.0, 0.12], dtype=float)
+        # Fixed constant: angle_max_deg (from Betaflight config)
+        self.angle_max_deg = 55.0
+        
+        # est_params order (7):
+        # [kT, dragZ, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, tau_angle]
+        self.est_params = np.array([42.0, 0.2, 0.12, 100.0, 100.0, 0.5, 0.16], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
-        # State x_est: [p(3), q(4), v(3), w(3), params(8)] = 21
+        # State x_est: [p(3), q(4), v(3), w(3), params(7)] = 20
         self.x_est = np.array([
             0.0, 0.0, 0.0,
             1.0, 0.0, 0.0, 0.0,
             0.0, 0.0, 0.0,
             0.0, 0.0, 0.0,
-            *self.est_params  # 8 params
+            *self.est_params  # 7 params
         ], dtype=float)
 
 
-        # Covariances sized to 21x21
+        # Covariances sized to 20x20
         self.P = np.diag([
-            0.1, 0.1, 0.1,
-            0.1, 0.1, 0.1, 0.1,
-            0.1, 0.1, 0.1,
-            0.1, 0.1, 0.1,
-            0.1, 0.001, 0.001,  # kT, dragZ, tau_rate
-            0.01, 0.01, 0.01,  # centre, max, expo
-            0.01, 0.001        # angle_max_deg, tau_angle
+            0.1, 0.1, 0.1,              # position (observable)
+            0.5, 0.5, 0.5, 0.1,         # quaternion (pitch/roll less observable, yaw more observable)
+            0.1, 0.1, 0.1,              # velocity (observable)
+            0.1, 0.1, 0.1,              # angular velocity (observable)
+            0.1, 0.001, 0.001,          # kT, dragZ, tau_rate
+            0.01, 0.01, 0.01,           # centre, max, expo
+            0.001                        # tau_angle
         ]).astype(float)
 
         self.Q = np.diag([
-            # process noise for measured states
+            # process noise for states
             1e-4, 1e-4, 1e-4,           # p
-            1e-5, 1e-5, 1e-5, 1e-5,     # q
+            1e-4, 1e-4, 1e-4, 1e-5,     # q (increased for pitch/roll since less observable)
             1e-3, 1e-3, 1e-3,           # v
             1e-3, 1e-3, 1e-3,           # w
             # params (slower drift)
             1e-3, 1e-5, 1e-5,           # kT, dragZ, tau_rate
             1e-3, 1e-3, 1e-3,           # centre, max, expo
-            1e-3, 1e-5                  # angle_max_deg, tau_angle
+            1e-5                         # tau_angle
         ]).astype(float)
 
-        # Measurement: 13 (p,q,v,w)
-        self.R = np.diag([0.05]*13).astype(float)
+        # Measurement: 10 (p(3), yaw(1), v(3), w(3))
+        self.R = np.diag([0.05]*10).astype(float)
 
         # Measurement: 13 (p,q,v,w)
 
@@ -147,10 +150,15 @@ class Controller(Node):
             'est_pose_x', 'est_pose_y', 'est_pose_z', 'est_pose_qw', 'est_pose_qx', 'est_pose_qy', 'est_pose_qz',
             'est_pose_vx', 'est_pose_vy', 'est_pose_vz','est_pose_avx', 'est_pose_avy', 'est_pose_avz',
 
+
+            'ukf_pose_x', 'ukf_pose_y', 'ukf_pose_z', 'ukf_pose_qw', 'ukf_pose_qx', 'ukf_pose_qy', 'ukf_pose_qz',
+            'ukf_pose_vx', 'ukf_pose_vy', 'ukf_pose_vz', 'ukf_pose_avx', 'ukf_pose_avy', 'ukf_pose_avz',
+
+
             'traj_x_ref', 'traj_y_ref', 'traj_z_ref', 'traj_qw_ref', 'traj_qx_ref', 'traj_qy_ref', 'traj_qz_ref',
             'est_param_thrust_ratio', 'est_param_drag_coeff_z', 'est_param_tau_rate',
             'est_param_centre_rate_deg', 'est_param_max_rate_deg', 'est_param_rate_expo',
-            'est_param_angle_max_deg', 'est_param_tau_angle',
+            'fixed_angle_max_deg', 'est_param_tau_angle',  # angle_max_deg is now fixed, not estimated
             'MPC_setup_time', 'MPC_solve_time', 'Visualisation_time', 'UKF_update_time',
         ]
 
@@ -190,14 +198,44 @@ class Controller(Node):
 
             start_time = time.time()
 
-            # Update OCP parameters with current estimates (8 params)
-            update_ocp_parameters(self.ocp, self.est_params, self.N)
+            # Update OCP parameters with current estimates (7 params + 1 fixed)
+            # Combine estimated params with fixed angle_max_deg
+            full_params = np.concatenate([self.est_params[:6], [self.angle_max_deg], [self.est_params[6]]])
+            update_ocp_parameters(self.ocp, full_params, self.N)
             set_trajectory_reference_aligned(
-                self.ocp, self.traj, self.N, self.step_counter, self.skip_steps, self.est_params
+                self.ocp, self.traj, self.N, self.step_counter, self.skip_steps, full_params
             )
 
             # ---- Delay-compensated state roll-forward using sim_integrator ----
+            # Hybrid quaternion: Use UKF's pitch/roll + measured yaw
             estimated_state = copy.deepcopy(self.current_pose[:13])
+            
+            # Extract yaw from current_pose (measured)
+            qw_meas, qx_meas, qy_meas, qz_meas = self.current_pose[3:7]
+            yaw_measured = np.arctan2(2*(qw_meas*qz_meas + qx_meas*qy_meas), 1 - 2*(qy_meas**2 + qz_meas**2))
+            
+            # Extract pitch/roll from UKF estimate (model-based)
+            qw_ukf, qx_ukf, qy_ukf, qz_ukf = self.x_est[3:7]
+            # Convert UKF quaternion to Euler
+            roll_ukf = np.arctan2(2*(qw_ukf*qx_ukf + qy_ukf*qz_ukf), 1 - 2*(qx_ukf**2 + qy_ukf**2))
+            pitch_ukf = np.arcsin(np.clip(2*(qw_ukf*qy_ukf - qz_ukf*qx_ukf), -1.0, 1.0))
+            
+            # Reconstruct quaternion from UKF's roll/pitch + measured yaw
+            cy = np.cos(yaw_measured * 0.5)
+            sy = np.sin(yaw_measured * 0.5)
+            cp = np.cos(pitch_ukf * 0.5)
+            sp = np.sin(pitch_ukf * 0.5)
+            cr = np.cos(roll_ukf * 0.5)
+            sr = np.sin(roll_ukf * 0.5)
+            
+            hybrid_qw = cr * cp * cy + sr * sp * sy
+            hybrid_qx = sr * cp * cy - cr * sp * sy
+            hybrid_qy = cr * sp * cy + sr * cp * sy
+            hybrid_qz = cr * cp * sy - sr * sp * cy
+            
+            # Normalize
+            quat_norm = np.sqrt(hybrid_qw**2 + hybrid_qx**2 + hybrid_qy**2 + hybrid_qz**2)
+            estimated_state[3:7] = np.array([hybrid_qw, hybrid_qx, hybrid_qy, hybrid_qz]) / quat_norm
 
             if len(self.control_history) <= 0 or self.delay_states == 0:
                 delayed_control_history = []
@@ -209,7 +247,9 @@ class Controller(Node):
                 self.sim_integrator.set("x", np.concatenate((estimated_state, np.array(val[0:4]).flatten())))
                 self.sim_integrator.set("u", np.array(val[4:8]))
                 # params = 8 dyn + 4 qref (qref unused in dynamics)
-                sim_p = np.concatenate([self.est_params, np.array([1.0, 0.0, 0.0, 0.0])])
+                # Combine estimated params (7) with fixed angle_max_deg
+                full_params = np.concatenate([self.est_params[:6], [self.angle_max_deg], [self.est_params[6]]])
+                sim_p = np.concatenate([full_params, np.array([1.0, 0.0, 0.0, 0.0])])
                 self.sim_integrator.set("p", sim_p)
                 status_sim = self.sim_integrator.solve()
                 if status_sim != 0:
@@ -314,8 +354,18 @@ class Controller(Node):
                     dz = sigma_meas[i] - z_pred
                     P_xz += wc[i] * np.outer(dx, dz)
 
+                # Extract measurement: [p(3), yaw(1), v(3), w(3)] from ORB-SLAM
+                # Extract yaw from ORB-SLAM quaternion
+                qw, qx, qy, qz = self.current_pose[3:7]
+                yaw_measured = np.arctan2(2*(qw*qz + qx*qy), 1 - 2*(qy**2 + qz**2))
+                z_measured = np.concatenate([
+                    self.current_pose[0:3],    # position
+                    [yaw_measured],             # yaw only
+                    self.current_pose[7:13]    # velocity + angular velocity
+                ])
+
                 K = P_xz @ np.linalg.inv(P_zz)
-                self.x_est = x_pred + K @ ((self.current_pose[:13]) - z_pred)
+                self.x_est = x_pred + K @ (z_measured - z_pred)
                 self.P = P_pred - K @ P_zz @ K.T
                 self.P = 0.5 * (self.P + self.P.T)  # symmetry
 
@@ -330,34 +380,32 @@ class Controller(Node):
                 if quat_norm > 0:
                     self.x_est[3:7] = self.x_est[3:7] / quat_norm
 
-                # -------- Parameter clamping (UPDATED) --------
+                # -------- Parameter clamping (UPDATED - 7 params) --------
                 # kT
                 self.x_est[13] = np.clip(self.x_est[13], 18.0, 60.0)
                 # dragZ
                 self.x_est[14] = np.clip(self.x_est[14], 0.01, 0.5)
                 # tau_rate
                 self.x_est[15] = np.clip(self.x_est[15], 0.07, 0.5)
-                # centre_rate_deg (TIGHTENED: was 0..1000)
+                # centre_rate_deg
                 self.x_est[16] = np.clip(self.x_est[16], 50.0, 150.0)
-                # max_rate_deg (TIGHTENED: was 0..1000)
+                # max_rate_deg
                 self.x_est[17] = np.clip(self.x_est[17], 100.0, 400.0)
-                # rate_expo (keep within reasonable range)
+                # rate_expo
                 self.x_est[18] = np.clip(self.x_est[18], 0.1, 1.0)
 
                 # ensure max >= centre
                 if self.x_est[17] <= self.x_est[16]:
                     self.x_est[17] = self.x_est[16] + 10.0
 
-                # angle_max_deg (TIGHTENED: was 20..85)
-                self.x_est[19] = np.clip(self.x_est[19], 40.0, 70.0)
-                # tau_angle
-                self.x_est[20] = np.clip(self.x_est[20], 0.07, 0.5)
+                # tau_angle (now last parameter at index 19)
+                self.x_est[19] = np.clip(self.x_est[19], 0.07, 0.5)
 
-                # Update estimated parameters vector (8)
+                # Update estimated parameters vector (7)
                 self.est_params = np.array([
                     self.x_est[13], self.x_est[14], self.x_est[15],
                     self.x_est[16], self.x_est[17], self.x_est[18],
-                    self.x_est[19], self.x_est[20]
+                    self.x_est[19]
                 ], dtype=float)
 
 
@@ -385,12 +433,20 @@ class Controller(Node):
                 float(estimated_state[7]), float(estimated_state[8]), float(estimated_state[9]),
                 float(estimated_state[10]), float(estimated_state[11]), float(estimated_state[12]),
 
+
+
+                float(self.x_est[0]), float(self.x_est[1]), float(self.x_est[2]),
+                float(self.x_est[3]), float(self.x_est[4]), float(self.x_est[5]), float(self.x_est[6]),
+                float(self.x_est[7]), float(self.x_est[8]), float(self.x_est[9]),
+                float(self.x_est[10]), float(self.x_est[11]), float(self.x_est[12]),
+
+
                 float(self.traj[0, self.step_counter]), float(self.traj[1, self.step_counter]), float(self.traj[2, self.step_counter]),
                 float(self.traj[3, self.step_counter]), float(self.traj[4, self.step_counter]), float(self.traj[5, self.step_counter]), float(self.traj[6, self.step_counter]),
-                # params (8)
+                # params (7 estimated + 1 fixed)
                 float(self.est_params[0]), float(self.est_params[1]), float(self.est_params[2]),
                 float(self.est_params[3]), float(self.est_params[4]), float(self.est_params[5]),
-                float(self.est_params[6]), float(self.est_params[7]),
+                float(self.angle_max_deg), float(self.est_params[6]),  # angle_max_deg is fixed, tau_angle is estimated
                 round(mpc_setup_time - start_time, 4),
                 round(mpc_solve_time - mpc_setup_time, 4),
                 round(send_command_and_visualisation - mpc_solve_time, 4),
@@ -421,16 +477,17 @@ class Controller(Node):
     def fx(self, x, u, u_rate):
         """
         Sigma-point propagation via the same CasADi integrator:
-        - State vector: [p(3), q(4), v(3), w(3), params(8)]
+        - State vector: [p(3), q(4), v(3), w(3), params(7)]
         - Simulator state: [p, q, v, w, u]  (no params)
         - Simulator parameters: [dyn(8), q_ref(4)]
         """
         # unpack
         pos, quat, vel, ang_vel = x[:3], x[3:7], x[7:10], x[10:13]
-        # params (8)
-        thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, angle_max_deg, tau_angle = x[13:21]
+        # params (7) - angle_max_deg is fixed
+        thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, tau_angle = x[13:20]
         state = np.concatenate((pos, quat, vel, ang_vel, u))
-        param = np.array([thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, angle_max_deg, tau_angle], dtype=float)
+        # Reconstruct full 8-param vector with fixed angle_max_deg
+        param = np.array([thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, self.angle_max_deg, tau_angle], dtype=float)
 
         # set into integrator
         self.sim_integrator.set("x", state)
@@ -440,11 +497,24 @@ class Controller(Node):
         self.sim_integrator.solve()
 
         x_next = self.sim_integrator.get("x")
-        # return next [p,q,v,w] plus unchanged params
-        return np.concatenate((x_next[:13], param))
+        # return next [p,q,v,w] plus unchanged params (7)
+        return np.concatenate((x_next[:13], x[13:20]))
 
     def hx(self, x):
-        return x[0:13]
+        """
+        Measurement model: Extract [p(3), yaw(1), v(3), w(3)] = 10 measurements
+        Ignores pitch and roll from quaternion.
+        """
+        # Extract yaw from quaternion
+        qw, qx, qy, qz = x[3], x[4], x[5], x[6]
+        yaw = np.arctan2(2*(qw*qz + qx*qy), 1 - 2*(qy**2 + qz**2))
+        
+        return np.concatenate([
+            x[0:3],      # position
+            [yaw],       # yaw only
+            x[7:10],     # velocity
+            x[10:13]     # angular velocity
+        ])
 
     def generate_sigma_points(self, x, P, alpha, beta, kappa):
         n = len(x)
