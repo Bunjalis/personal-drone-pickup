@@ -28,6 +28,9 @@ class QuadDynamics:
         # NEW for angle mode:
         self.angle_max_deg  = cs.MX.sym('angle_max_deg', 1)     # stick→angle map
         self.tau_angle      = cs.MX.sym('tau_angle', 1)         # first-order angle loop time constant
+        # FC mounting angle offsets (unknown disturbances to be estimated):
+        self.fc_roll_offset_deg  = cs.MX.sym('fc_roll_offset_deg', 1)   # FC roll mounting error
+        self.fc_pitch_offset_deg = cs.MX.sym('fc_pitch_offset_deg', 1)  # FC pitch mounting error
 
         # Parameter vector (append new ones to keep prior order stable)
         self.p_param = cs.vertcat(
@@ -37,8 +40,10 @@ class QuadDynamics:
             self.centre_rate_deg,
             self.max_rate_deg,
             self.rate_expo,
-            self.angle_max_deg,   # NEW (index +6)
-            self.tau_angle        # NEW (index +7)
+            self.angle_max_deg,      # (index 6)
+            self.tau_angle,          # (index 7)
+            self.fc_roll_offset_deg, # (index 8) - NEW
+            self.fc_pitch_offset_deg # (index 9) - NEW
         )
 
         self.g = 9.81
@@ -133,18 +138,27 @@ class QuadDynamics:
         """
         Angle mode (roll/pitch): sticks map to angle setpoints.
           φ_sp = angle_max * u0,  θ_sp = angle_max * u1    (rad)
+        FC mounting offsets are added to simulate/compensate for non-level FC mounting.
         First-order outer angle loop:  φ̇_des = (φ_sp - φ)/tau_angle,  θ̇_des = (θ_sp - θ)/tau_angle
         Yaw stays rate-mode via Betaflight curve → ψ̇_des (rad/s).
         Desired Euler-rate vector → desired body rates via kinematic map.
-        Then first-order actuator on body rates:  ṙ = (1/tau_rate) * (r_cmd - r)
+        Then first-order actuator on body rates:  ṙ = (1/tau_rate) * (r_cmd - r)
         """
         # angles from quaternion
         roll, pitch, yaw = self.quat_to_euler(self.q)
 
         # stick→angle (rad)
         angle_max_rad = (self.angle_max_deg * cs.pi) / 180.0
-        phi_sp   = angle_max_rad * self.u[0]
-        theta_sp = angle_max_rad * self.u[1]
+        phi_sp_base   = angle_max_rad * self.u[0]
+        theta_sp_base = angle_max_rad * self.u[1]
+        
+        # Apply FC mounting offset disturbance (convert deg to rad)
+        # Note: In MPC, we use NEGATIVE offset to compensate for FC mounting error
+        # If FC is tilted +1° pitch (nose down), we command -1° to level it out
+        fc_roll_offset_rad  = -(self.fc_roll_offset_deg * cs.pi) / 180.0
+        fc_pitch_offset_rad = -(self.fc_pitch_offset_deg * cs.pi) / 180.0
+        phi_sp   = phi_sp_base   + fc_roll_offset_rad
+        theta_sp = theta_sp_base + fc_pitch_offset_rad
 
         # desired Euler angle rates (rad/s) – first-order towards the setpoint
         phi_dot_des   = (phi_sp   - roll)  / self.tau_angle

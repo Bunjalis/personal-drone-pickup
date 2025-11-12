@@ -52,7 +52,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self, USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = hover_trajectory(DT)
+        self.traj, trajectory_name = z_sin_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(
             self.traj, pose_subsample=15, show_velocity=False, velocity_scale=0.3, color_by_time=True
@@ -81,34 +81,38 @@ class Controller(Node):
         # ---------------------------
         # UKF settings (UPDATED - Option 2: Partial measurement with yaw only)
         # ---------------------------
-        # Fixed constant: angle_max_deg (from Betaflight config)
+        # Fixed constants
         self.angle_max_deg = 55.0
+        self.centre_rate_deg = 100.0   # Fixed BF rates curve params (for yaw)
+        self.max_rate_deg = 100.0
+        self.rate_expo = 0.5
+        self.tau_angle = 0.16  # Fixed angle loop time constant
+        self.tau_rate = 0.12   # Fixed yaw rate loop time constant
         
-        # est_params order (7):
-        # [kT, dragZ, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, tau_angle]
-        self.est_params = np.array([28.0, 0.2, 0.12, 100.0, 100.0, 0.5, 0.16], dtype=float)
+        # est_params order (4):
+        # [kT, dragZ, fc_roll_offset_deg, fc_pitch_offset_deg]
+        self.est_params = np.array([42.0, 0.2, 0.0, 0.0], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
-        # State x_est: [p(3), q(4), v(3), w(3), params(7)] = 20
+        # State x_est: [p(3), q(4), v(3), w(3), params(4)] = 17
         self.x_est = np.array([
             0.0, 0.0, 0.0,
             1.0, 0.0, 0.0, 0.0,
             0.0, 0.0, 0.0,
             0.0, 0.0, 0.0,
-            *self.est_params  # 7 params
+            *self.est_params  # 4 params
         ], dtype=float)
 
 
-        # Covariances sized to 20x20
+        # Covariances sized to 17x17
         self.P = np.diag([
             0.1, 0.1, 0.1,              # position (observable)
-            0.5, 0.5, 0.5, 0.1,         # quaternion (pitch/roll less observable, yaw more observable)
+            0.1, 0.1, 0.1, 0.1,         # quaternion (pitch/roll less observable, yaw more observable)
             0.1, 0.1, 0.1,              # velocity (observable)
             0.1, 0.1, 0.1,              # angular velocity (observable)
-            0.1, 0.001, 0.001,          # kT, dragZ, tau_rate
-            0.01, 0.01, 0.01,           # centre, max, expo
-            0.001                        # tau_angle
+            0.1, 0.001,                 # kT, dragZ
+            0.1, 0.1                    # fc_roll_offset_deg, fc_pitch_offset_deg (observable through position drift)
         ]).astype(float)
 
         self.Q = np.diag([
@@ -118,9 +122,8 @@ class Controller(Node):
             1e-3, 1e-3, 1e-3,           # v
             1e-3, 1e-3, 1e-3,           # w
             # params (slower drift)
-            1e-3, 1e-5, 1e-5,           # kT, dragZ, tau_rate
-            1e-3, 1e-3, 1e-3,           # centre, max, expo
-            1e-5                         # tau_angle
+            1e-3, 1e-5,                 # kT, dragZ
+            1e-4, 1e-4                  # fc_roll_offset_deg, fc_pitch_offset_deg (can change slowly)
         ]).astype(float)
 
         # Measurement: 10 (p(3), yaw(1), v(3), w(3))
@@ -129,7 +132,7 @@ class Controller(Node):
         # Measurement: 13 (p,q,v,w)
 
         # Delay estimation
-        self.delay_states = 2
+        self.delay_states = 1
         qos1 = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, history=HistoryPolicy.KEEP_LAST)
         self.pub_ctrl_applied = self.create_publisher(ControlApplied, '/control_applied', qos1)
         self.create_subscription(Int32, '/estimated_delay',
@@ -157,8 +160,9 @@ class Controller(Node):
 
             'traj_x_ref', 'traj_y_ref', 'traj_z_ref', 'traj_qw_ref', 'traj_qx_ref', 'traj_qy_ref', 'traj_qz_ref',
             'est_param_thrust_ratio', 'est_param_drag_coeff_z', 'est_param_tau_rate',
-            'est_param_centre_rate_deg', 'est_param_max_rate_deg', 'est_param_rate_expo',
-            'fixed_angle_max_deg', 'est_param_tau_angle',  # angle_max_deg is now fixed, not estimated
+            'fixed_centre_rate_deg', 'fixed_max_rate_deg', 'fixed_rate_expo',  # Now fixed, not estimated
+            'fixed_angle_max_deg', 'est_param_tau_angle',
+            'est_param_fc_roll_offset_deg', 'est_param_fc_pitch_offset_deg',  # NEW: FC mounting offsets
             'MPC_setup_time', 'MPC_solve_time', 'Visualisation_time', 'UKF_update_time',
         ]
 
@@ -198,9 +202,17 @@ class Controller(Node):
 
             start_time = time.time()
 
-            # Update OCP parameters with current estimates (7 params + 1 fixed)
-            # Combine estimated params with fixed angle_max_deg
-            full_params = np.concatenate([self.est_params[:6], [self.angle_max_deg], [self.est_params[6]]])
+            # Update OCP parameters with current estimates (4 params + 6 fixed)
+            # Combine estimated params with fixed values
+            # Full params: [kT, dragZ, tau_rate, centre, max, expo, angle_max, tau_angle, fc_roll, fc_pitch]
+            full_params = np.concatenate([
+                self.est_params[:2],  # kT, dragZ
+                [self.tau_rate],       # fixed tau_rate
+                [self.centre_rate_deg, self.max_rate_deg, self.rate_expo],  # fixed rates
+                [self.angle_max_deg],  # fixed angle_max
+                [self.tau_angle],      # fixed tau_angle
+                self.est_params[2:4]   # fc_roll_offset, fc_pitch_offset
+            ])
             update_ocp_parameters(self.ocp, full_params, self.N)
             set_trajectory_reference_aligned(
                 self.ocp, self.traj, self.N, self.step_counter, self.skip_steps, full_params
@@ -209,6 +221,7 @@ class Controller(Node):
             # ---- Delay-compensated state roll-forward using sim_integrator ----
             # Hybrid quaternion: Use UKF's pitch/roll + measured yaw
             estimated_state = copy.deepcopy(self.current_pose[:13])
+            estimated_state[3:7] = self.x_est[3:7]  # start with UKF quaternion
             
             # Extract yaw from current_pose (measured)
             qw_meas, qx_meas, qy_meas, qz_meas = self.current_pose[3:7]
@@ -246,9 +259,16 @@ class Controller(Node):
                 # integrator state = [p(3), q(4), v(3), w(3), u(4)]
                 self.sim_integrator.set("x", np.concatenate((estimated_state, np.array(val[0:4]).flatten())))
                 self.sim_integrator.set("u", np.array(val[4:8]))
-                # params = 8 dyn + 4 qref (qref unused in dynamics)
-                # Combine estimated params (7) with fixed angle_max_deg
-                full_params = np.concatenate([self.est_params[:6], [self.angle_max_deg], [self.est_params[6]]])
+                # params = 10 dyn + 4 qref (qref unused in dynamics)
+                # Combine estimated params (4) with fixed values (6)
+                full_params = np.concatenate([
+                    self.est_params[:2],  # kT, dragZ
+                    [self.tau_rate],       # fixed tau_rate
+                    [self.centre_rate_deg, self.max_rate_deg, self.rate_expo],  # fixed rates
+                    [self.angle_max_deg],  # fixed angle_max
+                    [self.tau_angle],      # fixed tau_angle
+                    self.est_params[2:4]   # fc_roll_offset, fc_pitch_offset
+                ])
                 sim_p = np.concatenate([full_params, np.array([1.0, 0.0, 0.0, 0.0])])
                 self.sim_integrator.set("p", sim_p)
                 status_sim = self.sim_integrator.solve()
@@ -266,27 +286,11 @@ class Controller(Node):
             else:
                 estimated_state_with_control = np.concatenate((estimated_state, np.array(self.control_history[-1][0:4])))
 
-            # Set tight bounds for the initial state, but relax parts of it
-            lbx = estimated_state_with_control.copy()
-            ubx = estimated_state_with_control.copy()
 
-            relaxation_factor = 0.025 # 0.25 for orb slam
-
-            # Indices for pose (p), quaternion (q), linear velocity (v), and angular velocity (w)
-            pos_indices = [0, 1, 2]
-            quat_indices = [3, 4, 5, 6]
-            vel_indices = [7, 8, 9]
-            ang_vel_indices = [10, 11, 12]
-            
-            indices_to_relax = pos_indices + quat_indices + vel_indices + ang_vel_indices
-
-            for i in indices_to_relax:
-                val = estimated_state_with_control[i]
-                # Avoid issues with near-zero values creating a zero-width bound
-                delta = abs(val * relaxation_factor) if abs(val) > 1e-6 else relaxation_factor
-                lbx[i] = val - delta
-                ubx[i] = val + delta
-
+            init_mpc_state = estimated_state_with_control.copy()
+            relaxation_factor = 0.01
+            lbx = init_mpc_state - relaxation_factor * init_mpc_state
+            ubx = init_mpc_state + relaxation_factor * init_mpc_state
             self.ocp.set(0, "lbx", lbx)
             self.ocp.set(0, "ubx", ubx)
 
@@ -381,32 +385,20 @@ class Controller(Node):
                 if quat_norm > 0:
                     self.x_est[3:7] = self.x_est[3:7] / quat_norm
 
-                # -------- Parameter clamping (UPDATED - 7 params) --------
+                # -------- Parameter clamping (4 params) --------
                 # kT
                 self.x_est[13] = np.clip(self.x_est[13], 18.0, 60.0)
                 # dragZ
                 self.x_est[14] = np.clip(self.x_est[14], 0.01, 0.5)
-                # tau_rate
-                self.x_est[15] = np.clip(self.x_est[15], 0.07, 0.5)
-                # centre_rate_deg
-                self.x_est[16] = np.clip(self.x_est[16], 50.0, 150.0)
-                # max_rate_deg
-                self.x_est[17] = np.clip(self.x_est[17], 100.0, 400.0)
-                # rate_expo
-                self.x_est[18] = np.clip(self.x_est[18], 0.1, 1.0)
+                # fc_roll_offset_deg (index 15)
+                self.x_est[15] = np.clip(self.x_est[15], -5.0, 5.0)
+                # fc_pitch_offset_deg (index 16)
+                self.x_est[16] = np.clip(self.x_est[16], -5.0, 5.0)
 
-                # ensure max >= centre
-                if self.x_est[17] <= self.x_est[16]:
-                    self.x_est[17] = self.x_est[16] + 10.0
-
-                # tau_angle (now last parameter at index 19)
-                self.x_est[19] = np.clip(self.x_est[19], 0.07, 0.5)
-
-                # Update estimated parameters vector (7)
+                # Update estimated parameters vector (4)
                 self.est_params = np.array([
-                    self.x_est[13], self.x_est[14], self.x_est[15],
-                    self.x_est[16], self.x_est[17], self.x_est[18],
-                    self.x_est[19]
+                    self.x_est[13], self.x_est[14],
+                    self.x_est[15], self.x_est[16]
                 ], dtype=float)
 
 
@@ -444,10 +436,12 @@ class Controller(Node):
 
                 float(self.traj[0, self.step_counter]), float(self.traj[1, self.step_counter]), float(self.traj[2, self.step_counter]),
                 float(self.traj[3, self.step_counter]), float(self.traj[4, self.step_counter]), float(self.traj[5, self.step_counter]), float(self.traj[6, self.step_counter]),
-                # params (7 estimated + 1 fixed)
-                float(self.est_params[0]), float(self.est_params[1]), float(self.est_params[2]),
-                float(self.est_params[3]), float(self.est_params[4]), float(self.est_params[5]),
-                float(self.angle_max_deg), float(self.est_params[6]),  # angle_max_deg is fixed, tau_angle is estimated
+                # params (4 estimated + 6 fixed)
+                float(self.est_params[0]), float(self.est_params[1]),  # kT, dragZ
+                float(self.tau_rate),  # fixed tau_rate
+                float(self.centre_rate_deg), float(self.max_rate_deg), float(self.rate_expo),    # fixed rates
+                float(self.angle_max_deg), float(self.tau_angle),  # fixed angle_max, fixed tau_angle
+                float(self.est_params[2]), float(self.est_params[3]),  # fc_roll_offset, fc_pitch_offset
                 round(mpc_setup_time - start_time, 4),
                 round(mpc_solve_time - mpc_setup_time, 4),
                 round(send_command_and_visualisation - mpc_solve_time, 4),
@@ -478,17 +472,24 @@ class Controller(Node):
     def fx(self, x, u, u_rate):
         """
         Sigma-point propagation via the same CasADi integrator:
-        - State vector: [p(3), q(4), v(3), w(3), params(7)]
+        - State vector: [p(3), q(4), v(3), w(3), params(4)]
         - Simulator state: [p, q, v, w, u]  (no params)
-        - Simulator parameters: [dyn(8), q_ref(4)]
+        - Simulator parameters: [dyn(10), q_ref(4)]
         """
         # unpack
         pos, quat, vel, ang_vel = x[:3], x[3:7], x[7:10], x[10:13]
-        # params (7) - angle_max_deg is fixed
-        thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, tau_angle = x[13:20]
+        # params (4 estimated)
+        thrust_ratio, drag_coeff_z, fc_roll_offset_deg, fc_pitch_offset_deg = x[13:17]
         state = np.concatenate((pos, quat, vel, ang_vel, u))
-        # Reconstruct full 8-param vector with fixed angle_max_deg
-        param = np.array([thrust_ratio, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, self.angle_max_deg, tau_angle], dtype=float)
+        # Reconstruct full 10-param vector with fixed values
+        param = np.array([
+            thrust_ratio, drag_coeff_z,
+            self.tau_rate,       # fixed
+            self.centre_rate_deg, self.max_rate_deg, self.rate_expo,  # fixed
+            self.angle_max_deg,  # fixed
+            self.tau_angle,      # fixed
+            fc_roll_offset_deg, fc_pitch_offset_deg
+        ], dtype=float)
 
         # set into integrator
         self.sim_integrator.set("x", state)
@@ -498,8 +499,8 @@ class Controller(Node):
         self.sim_integrator.solve()
 
         x_next = self.sim_integrator.get("x")
-        # return next [p,q,v,w] plus unchanged params (7)
-        return np.concatenate((x_next[:13], x[13:20]))
+        # return next [p,q,v,w] plus unchanged params (4)
+        return np.concatenate((x_next[:13], x[13:17]))
 
     def hx(self, x):
         """

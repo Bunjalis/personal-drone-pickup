@@ -42,15 +42,16 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     model.x = quad_dynamics.x                 # 17 x 1
     model.u = quad_dynamics.u_dot            # control is u_dot (4 x 1)
 
-    # ---- parameters: 8 dyn + 4 q_ref (total 12) ----
+    # ---- parameters: 10 dyn + 4 q_ref (total 14) ----
     # dyn order must match QuadDynamics.p_param:
-    # [kT, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, angle_max_deg, tau_angle]
-    p_dyn = quad_dynamics.p_param             # length 8
+    # [kT, drag_coeff_z, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, 
+    #  angle_max_deg, tau_angle, fc_roll_offset_deg, fc_pitch_offset_deg]
+    p_dyn = quad_dynamics.p_param             # length 10
     p_qref = ca.MX.sym('p_qref', 4)           # [qw, qx, qy, qz]
-    model.p = ca.vertcat(p_dyn, p_qref)       # length 12
+    model.p = ca.vertcat(p_dyn, p_qref)       # length 14
 
-    # feed first 8 params to dynamics
-    model.f_expl_expr = dynamics_expr(model.x, model.u, model.p[:8])
+    # feed first 10 params to dynamics
+    model.f_expl_expr = dynamics_expr(model.x, model.u, model.p[:10])
 
     xdot = ca.MX.sym('xdot', model.x.size()[0])
     f_impl_expr = model.f_expl_expr - xdot
@@ -70,7 +71,7 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     x = model.x
     u = model.u
     q = x[q_idx:q_idx+4]
-    q_ref = model.p[8:12]   # <-- shifted: after 8 dyn params
+    q_ref = model.p[10:14]   # <-- shifted: after 10 dyn params
 
     q_err = quat_mul(q_ref, quat_conj(q))
     e_att = 2 * q_err[1:4]  # vector part; sign-invariant attitude error
@@ -113,8 +114,9 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     x0 = np.zeros(nx)
     ocp.constraints.x0 = x0
 
-    # -------- Default parameters: 8 dyn + 4 q_ref --------
-    # kT, dragZ, tau_rate, centre_deg, max_deg, expo, angle_max_deg, tau_angle, q_ref(4)
+    # -------- Default parameters: 10 dyn + 4 q_ref --------
+    # kT, dragZ, tau_rate, centre_deg, max_deg, expo, angle_max_deg, tau_angle, 
+    # fc_roll_offset_deg, fc_pitch_offset_deg, q_ref(4)
     ocp.parameter_values = np.array([
         38.0,   # kT
         0.5,    # drag_coeff_z
@@ -124,6 +126,8 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
         0.5,    # rate_expo (yaw BF curve)
         55.0,   # angle_max_deg (Angle mode)
         0.15,   # tau_angle (Angle outer loop)
+        0.0,    # fc_roll_offset_deg (FC mounting error - to be estimated)
+        0.0,    # fc_pitch_offset_deg (FC mounting error - to be estimated)
         1.0, 0.0, 0.0, 0.0  # q_ref
     ])
 
@@ -164,7 +168,7 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     sim.solver_options.T = dt
     # same parameter vector as ocp.parameter_values but with potentially different taus for quick sim testing
     sim.parameter_values = np.array([
-        38.0, 0.5, 0.12, 100.0, 100.0, 0.5, 55.0, 0.15, 1.0, 0.0, 0.0, 0.0
+        38.0, 0.5, 0.12, 100.0, 100.0, 0.5, 55.0, 0.15, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0
     ])
     sim_solver = AcadosSimSolver(sim)
 
@@ -216,14 +220,15 @@ def update_ocp_parameters(ocp_solver, est_params, N_horizon):
     """
     Update the dynamic parameters for all stages in the OCP solver.
 
-    est_params must be length-8 in the order:
-    [kT, dragZ, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, angle_max_deg, tau_angle]
+    est_params must be length-10 in the order:
+    [kT, dragZ, tau_rate, centre_rate_deg, max_rate_deg, rate_expo, 
+     angle_max_deg, tau_angle, fc_roll_offset_deg, fc_pitch_offset_deg]
     """
-    dyn_par = np.array(est_params, dtype=float)  # len 8
+    dyn_par = np.array(est_params, dtype=float)  # len 10
     default_qref = np.array([1.0, 0.0, 0.0, 0.0], dtype=float)
 
     for j in range(N_horizon):
-        full_params = np.concatenate([dyn_par, default_qref])  # len 12
+        full_params = np.concatenate([dyn_par, default_qref])  # len 14
         ocp_solver.set(j, "p", full_params)
 
     ocp_solver.set(N_horizon, "p", np.concatenate([dyn_par, default_qref]))
@@ -232,7 +237,7 @@ def update_ocp_parameters(ocp_solver, est_params, N_horizon):
 def set_trajectory_reference_aligned(ocp_solver, traj_states: np.ndarray, N_horizon: int, step_counter: int, skip_steps: int, est_params=None):
     """
     Sets yref and parameters per stage, with sign-continuous quaternion references.
-    est_params is the length-8 dynamic parameter vector (same order as above).
+    est_params is the length-10 dynamic parameter vector (same order as above).
     """
     horizon_indices = [step_counter + j * skip_steps for j in range(N_horizon)]
     terminal_index = step_counter + N_horizon * skip_steps
@@ -252,7 +257,7 @@ def set_trajectory_reference_aligned(ocp_solver, traj_states: np.ndarray, N_hori
         yref[13:17] = [0.0, 0.0, 0.0, 0.0]      # u_state refs (keep near zero)
         ocp_solver.set(j, "yref", yref)
 
-        # 2) parameters: [dyn(8), q_ref(4)]
+        # 2) parameters: [dyn(10), q_ref(4)]
         qref = qs_cont[j]
         ocp_solver.set(j, "p", np.concatenate([dyn_par, qref]))
 

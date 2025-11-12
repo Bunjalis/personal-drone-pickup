@@ -45,6 +45,12 @@ class BetaflightInterfaceNode(Node):
         self.angle_int = np.zeros(2, dtype=float)       # roll,pitch integrator
         self.angle_int_limit = 200.0                    # anti-windup clamp on produced rate (deg/s equivalent)
 
+        # --- FC mounting angle disturbance (simulates FC not perfectly level) ---
+        self.declare_parameter('fc_roll_offset_deg', 0.25)   # FC roll mounting error (deg)
+        self.declare_parameter('fc_pitch_offset_deg', -0.25)  # FC pitch mounting error (deg)
+        self.fc_roll_offset_deg = float(self.get_parameter('fc_roll_offset_deg').value)
+        self.fc_pitch_offset_deg = float(self.get_parameter('fc_pitch_offset_deg').value)
+
         # --- Betaflight rates params (we keep for YAW; roll/pitch now angle-mode) ---
         self.declare_parameter('rates_d_val', 70.0)
         self.declare_parameter('rates_f_val', 670.0)
@@ -116,7 +122,8 @@ class BetaflightInterfaceNode(Node):
         if self.set_point is not None:
             # ---- OUTER ANGLE PI (roll/pitch) → desired rate (deg/s) ----
             # set_point_angle_deg contains desired [roll, pitch] in deg set in controller_commands_callback
-            angle_sp_deg = self.last_angle_sp_deg  # [roll_sp, pitch_sp]
+            # Apply FC mounting angle disturbance (simulates FC not being perfectly level)
+            angle_sp_deg = self.last_angle_sp_deg + np.array([self.fc_roll_offset_deg, self.fc_pitch_offset_deg], dtype=float)
             angle_err = angle_sp_deg - np.array([roll_deg, pitch_deg], dtype=float)
 
             # integrate with clamp

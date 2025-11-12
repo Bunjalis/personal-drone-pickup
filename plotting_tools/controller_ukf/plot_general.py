@@ -4,11 +4,12 @@ import os
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/hover_with_orb.csv"
-csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/xyz_mot_with_orb.csv"
-#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/hover_inside_house.csv"
-#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/zsin_inside_house.csv"
-csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/hover_with_new_angle.csv"
+#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/hover_with_orb.csv"
+csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/xyz_mot_with_orb.csv"
+#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/hover_inside_house.csv"
+#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/zsin_inside_house.csv"
+#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/hover_with_new_angle.csv"
+#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/z_sin_20251112_222037/log.csv"
 
 # Read CSV
 df = pd.read_csv(csv_path)
@@ -20,6 +21,9 @@ def quat_to_rpy(qw, qx, qy, qz):
     r = Rotation.from_quat(quats)
     rpy_rad = r.as_euler('xyz')  # roll, pitch, yaw in radians
     return np.degrees(rpy_rad)  # convert to degrees
+
+# Check if UKF data exists
+has_ukf = all(col in df.columns for col in ['ukf_pose_qw', 'ukf_pose_qx', 'ukf_pose_qy', 'ukf_pose_qz'])
 
 # Extract RPY from quaternions
 mot_rpy = np.array([quat_to_rpy(row['mot_pose_qw'], row['mot_pose_qx'], row['mot_pose_qy'], row['mot_pose_qz']) 
@@ -39,6 +43,13 @@ df['est_yaw'] = est_rpy[:, 2]
 df['orb_roll'] = orb_rpy[:, 0]
 df['orb_pitch'] = orb_rpy[:, 1]
 df['orb_yaw'] = orb_rpy[:, 2]
+
+if has_ukf:
+    ukf_rpy = np.array([quat_to_rpy(row['ukf_pose_qw'], row['ukf_pose_qx'], row['ukf_pose_qy'], row['ukf_pose_qz']) 
+                         for _, row in df.iterrows()])
+    df['ukf_roll'] = ukf_rpy[:, 0]
+    df['ukf_pitch'] = ukf_rpy[:, 1]
+    df['ukf_yaw'] = ukf_rpy[:, 2]
 
 # Extract angular velocities (already in CSV as mot_pose_av* and est_pose_av*)
 # These are the angular velocities around x, y, z axes
@@ -69,6 +80,8 @@ fig, axes = plt.subplots(12, 1, sharex=True, figsize=(12, 20))
 # Axis 0: x position
 axes[0].plot(time_s, df["mot_pose_x"], label="mot_pose_x", color="tab:blue", linewidth=1)
 axes[0].plot(time_s, df["orb_pose_x"], label="orb_pose_x", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[0].plot(time_s, df["ukf_pose_x"], label="ukf_pose_x", color="tab:red", linewidth=1, linestyle="-.")
 if "est_pose_x" in df.columns:
     axes[0].plot(time_s, df["est_pose_x"], label="est_pose_x", color="tab:purple", linewidth=1, linestyle="--")
 axes[0].set_ylabel("x (m)")
@@ -78,6 +91,8 @@ axes[0].grid(True)
 # Axis 1: y position
 axes[1].plot(time_s, df["mot_pose_y"], label="mot_pose_y", color="tab:blue", linewidth=1)
 axes[1].plot(time_s, df["orb_pose_y"], label="orb_pose_y", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[1].plot(time_s, df["ukf_pose_y"], label="ukf_pose_y", color="tab:red", linewidth=1, linestyle="-.")
 if "est_pose_y" in df.columns:
     axes[1].plot(time_s, df["est_pose_y"], label="est_pose_y", color="tab:purple", linewidth=1, linestyle="--")
 axes[1].set_ylabel("y (m)")
@@ -87,6 +102,8 @@ axes[1].grid(True)
 # Axis 2: z position
 axes[2].plot(time_s, df["mot_pose_z"], label="mot_pose_z", color="tab:blue", linewidth=1)
 axes[2].plot(time_s, df["orb_pose_z"], label="orb_pose_z", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[2].plot(time_s, df["ukf_pose_z"], label="ukf_pose_z", color="tab:red", linewidth=1, linestyle="-.")
 if "est_pose_z" in df.columns:
     axes[2].plot(time_s, df["est_pose_z"], label="est_pose_z", color="tab:purple", linewidth=1, linestyle="--")
 axes[2].set_ylabel("z (m)")
@@ -96,6 +113,8 @@ axes[2].grid(True)
 # Axis 3: x velocity
 axes[3].plot(time_s, df["mot_pose_vx"], label="mot_pose_vx", color="tab:blue", linewidth=1)
 axes[3].plot(time_s, df["orb_pose_vx"], label="orb_pose_vx", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[3].plot(time_s, df["ukf_pose_vx"], label="ukf_pose_vx", color="tab:red", linewidth=1, linestyle="-.")
 axes[3].plot(time_s, df["est_pose_vx"], label="est_pose_vx", color="tab:purple", linewidth=1, linestyle="--")
 axes[3].set_ylabel("vx (m/s)")
 axes[3].legend(loc="best")
@@ -104,6 +123,8 @@ axes[3].grid(True)
 # Axis 4: y velocity
 axes[4].plot(time_s, df["mot_pose_vy"], label="mot_pose_vy", color="tab:blue", linewidth=1)
 axes[4].plot(time_s, df["orb_pose_vy"], label="orb_pose_vy", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[4].plot(time_s, df["ukf_pose_vy"], label="ukf_pose_vy", color="tab:red", linewidth=1, linestyle="-.")
 axes[4].plot(time_s, df["est_pose_vy"], label="est_pose_vy", color="tab:purple", linewidth=1, linestyle="--")
 axes[4].set_ylabel("vy (m/s)")
 axes[4].legend(loc="best")
@@ -112,14 +133,18 @@ axes[4].grid(True)
 # Axis 5: z velocity
 axes[5].plot(time_s, df["mot_pose_vz"], label="mot_pose_vz", color="tab:blue", linewidth=1)
 axes[5].plot(time_s, df["orb_pose_vz"], label="orb_pose_vz", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[5].plot(time_s, df["ukf_pose_vz"], label="ukf_pose_vz", color="tab:red", linewidth=1, linestyle="-.")
 axes[5].plot(time_s, df["est_pose_vz"], label="est_pose_vz", color="tab:purple", linewidth=1, linestyle="--")
 axes[5].set_ylabel("vz (m/s)")
 axes[5].legend(loc="best")
 axes[5].grid(True)
 
 # Axis 6: Roll
-axes[6].plot(time_s, df["mot_roll"], label="mot_roll", color="tab:red", linewidth=1)
+axes[6].plot(time_s, df["mot_roll"], label="mot_roll", color="tab:blue", linewidth=1)
 axes[6].plot(time_s, df["orb_roll"], label="orb_roll", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[6].plot(time_s, df["ukf_roll"], label="ukf_roll", color="tab:red", linewidth=1, linestyle="-.")
 axes[6].plot(time_s, df["est_roll"], label="est_roll", color="tab:orange", linewidth=1, linestyle="--")
 if "u1" in df.columns:
     # Assuming u1 is normalized roll command, scale by 55 degrees
@@ -129,8 +154,10 @@ axes[6].legend(loc="best")
 axes[6].grid(True)
 
 # Axis 7: Pitch
-axes[7].plot(time_s, df["mot_pitch"], label="mot_pitch", color="tab:red", linewidth=1)
+axes[7].plot(time_s, df["mot_pitch"], label="mot_pitch", color="tab:blue", linewidth=1)
 axes[7].plot(time_s, df["orb_pitch"], label="orb_pitch", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[7].plot(time_s, df["ukf_pitch"], label="ukf_pitch", color="tab:red", linewidth=1, linestyle="-.")
 axes[7].plot(time_s, df["est_pitch"], label="est_pitch", color="tab:orange", linewidth=1, linestyle="--")
 if "u2" in df.columns:
     # Assuming u2 is normalized pitch command, scale by 55 degrees
@@ -140,8 +167,10 @@ axes[7].legend(loc="best")
 axes[7].grid(True)
 
 # Axis 8: Yaw
-axes[8].plot(time_s, df["mot_yaw"], label="mot_yaw", color="tab:red", linewidth=1)
+axes[8].plot(time_s, df["mot_yaw"], label="mot_yaw", color="tab:blue", linewidth=1)
 axes[8].plot(time_s, df["orb_yaw"], label="orb_yaw", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[8].plot(time_s, df["ukf_yaw"], label="ukf_yaw", color="tab:red", linewidth=1, linestyle="-.")
 axes[8].plot(time_s, df["est_yaw"], label="est_yaw", color="tab:orange", linewidth=1, linestyle="--")
 axes[8].set_ylabel("yaw (deg)")
 axes[8].legend(loc="best")
@@ -150,6 +179,8 @@ axes[8].grid(True)
 # Axis 9: Angular velocity around x (roll rate)
 axes[9].plot(time_s, df["mot_pose_avx"], label="mot_pose_avx", color="tab:blue", linewidth=1)
 axes[9].plot(time_s, df["orb_pose_avx"], label="orb_pose_avx", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[9].plot(time_s, df["ukf_pose_avx"], label="ukf_pose_avx", color="tab:red", linewidth=1, linestyle="-.")
 axes[9].plot(time_s, df["est_pose_avx"], label="est_pose_avx", color="tab:purple", linewidth=1, linestyle="--")
 axes[9].set_ylabel("avx (rad/s)")
 axes[9].legend(loc="best")
@@ -158,14 +189,18 @@ axes[9].grid(True)
 # Axis 10: Angular velocity around y (pitch rate)
 axes[10].plot(time_s, df["mot_pose_avy"], label="mot_pose_avy", color="tab:blue", linewidth=1)
 axes[10].plot(time_s, df["orb_pose_avy"], label="orb_pose_avy", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[10].plot(time_s, df["ukf_pose_avy"], label="ukf_pose_avy", color="tab:red", linewidth=1, linestyle="-.")
 axes[10].plot(time_s, df["est_pose_avy"], label="est_pose_avy", color="tab:purple", linewidth=1, linestyle="--")
 axes[10].set_ylabel("avy (rad/s)")
 axes[10].legend(loc="best")
 axes[10].grid(True)
 
 # Axis 11: Angular velocity around z (yaw rate)
-axes[11].plot(time_s, df["mot_pose_avz"], label="mot_pose_avz", color="tab:cyan", linewidth=1)
+axes[11].plot(time_s, df["mot_pose_avz"], label="mot_pose_avz", color="tab:blue", linewidth=1)
 axes[11].plot(time_s, df["orb_pose_avz"], label="orb_pose_avz", color="tab:green", linewidth=1, linestyle=":")
+if has_ukf:
+    axes[11].plot(time_s, df["ukf_pose_avz"], label="ukf_pose_avz", color="tab:red", linewidth=1, linestyle="-.")
 axes[11].plot(time_s, df["est_pose_avz"], label="est_pose_avz", color="tab:brown", linewidth=1, linestyle="--")
 axes[11].set_xlabel("time (s) (relative)")
 axes[11].set_ylabel("avz (rad/s)")
