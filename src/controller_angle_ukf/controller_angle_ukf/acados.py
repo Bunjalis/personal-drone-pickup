@@ -89,7 +89,7 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     ny_e = 3 + 3 + 3 + 4 + 3
 
     W = np.diag([
-        8.0, 8.0, 8.0,         # pos
+        4.0, 4.0, 4.0,         # pos
         1.0, 1.0, 1.0,         # vel
         1.0, 1.0, 1.0,         # omega
         2.0, 2.0, 2e-4, 2.0,# u_state (integrator smoothness)
@@ -97,7 +97,7 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
         1.0, 1.0, 1.0          # attitude error
     ])
     W_e = np.diag([
-        8.0, 8.0, 8.0,         # pos
+        4.0, 4.0, 4.0,         # pos
         1.0, 1.0, 1.0,         # vel
         1.0, 1.0, 1.0,         # omega
         2.0, 2.0, 2e-4, 2.0,   # u_state
