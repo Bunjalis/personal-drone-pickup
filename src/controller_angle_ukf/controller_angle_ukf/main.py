@@ -52,7 +52,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self, USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = hover_trajectory(DT)
+        self.traj, trajectory_name = z_sin_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(
             self.traj, pose_subsample=15, show_velocity=False, velocity_scale=0.3, color_by_time=True
@@ -230,7 +230,7 @@ class Controller(Node):
             lbx = estimated_state_with_control.copy()
             ubx = estimated_state_with_control.copy()
 
-            relaxation_factor = 0.00000001 # 0.25 for orb slam
+            relaxation_factor = 0.000001 # 0.25 for orb slam
 
             # Indices for pose (p), linear velocity (v), and angular velocity (w)
             pos_indices = [0, 1, 2]

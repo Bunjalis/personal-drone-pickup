@@ -142,7 +142,7 @@ def z_sin_trajectory(dt):
     time_space_hover = np.linspace(0, steps_hover * dt, steps_hover)
     x_traj_hover = np.zeros_like(time_space_hover)
     y_traj_hover = np.zeros_like(time_space_hover)
-    z_traj_hover = 1.5 * np.ones_like(time_space_hover)  # Constant hover at 1.5m
+    z_traj_hover = 1.0 * np.ones_like(time_space_hover)  # Constant hover at 1.5m
     
     # Phase 2: Variable frequency sinusoidal motion for 40 seconds
     steps_sin = 20 * 30  # 40 seconds of sinusoidal motion at 30 Hz
@@ -150,7 +150,7 @@ def z_sin_trajectory(dt):
     
     # Frequency increases linearly from 1.0 to 3.0 Hz over 40 seconds
     freq_start = 0.1  # Hz
-    freq_end = 0.5    # Hz
+    freq_end = 0.1    # Hz
     frequencies = np.linspace(freq_start, freq_end, steps_sin)
     
     # Calculate the instantaneous phase by integrating frequency
@@ -159,7 +159,7 @@ def z_sin_trajectory(dt):
     
     x_traj_sin = np.zeros_like(time_space_sin)
     y_traj_sin = np.zeros_like(time_space_sin)
-    z_traj_sin = 1.5 + 1.0 * np.sin(phase)  # 1m amplitude around 1.5m center
+    z_traj_sin = 1.0 + 0.5 * np.sin(phase)  # 1m amplitude around 1.5m center
     
     # Combine both phases
     x_traj = np.concatenate((x_traj_hover, x_traj_sin))
