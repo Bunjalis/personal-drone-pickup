@@ -4,7 +4,8 @@ import os
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/hover_20251111_164103/log.csv"
+csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/hover_with_orb.csv"
+#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/LogsToKeep/xyz_mot_with_orb.csv"
 
 # Read CSV
 df = pd.read_csv(csv_path)
@@ -117,6 +118,9 @@ axes[5].grid(True)
 axes[6].plot(time_s, df["mot_roll"], label="mot_roll", color="tab:red", linewidth=1)
 axes[6].plot(time_s, df["orb_roll"], label="orb_roll", color="tab:green", linewidth=1, linestyle=":")
 axes[6].plot(time_s, df["est_roll"], label="est_roll", color="tab:orange", linewidth=1, linestyle="--")
+if "u1" in df.columns:
+    # Assuming u1 is normalized roll command, scale by 55 degrees
+    axes[6].plot(time_s, df["u0"] * 55.0, label="u1_roll_des", color="tab:pink", linewidth=1, linestyle="-.")
 axes[6].set_ylabel("roll (deg)")
 axes[6].legend(loc="best")
 axes[6].grid(True)
@@ -125,6 +129,9 @@ axes[6].grid(True)
 axes[7].plot(time_s, df["mot_pitch"], label="mot_pitch", color="tab:red", linewidth=1)
 axes[7].plot(time_s, df["orb_pitch"], label="orb_pitch", color="tab:green", linewidth=1, linestyle=":")
 axes[7].plot(time_s, df["est_pitch"], label="est_pitch", color="tab:orange", linewidth=1, linestyle="--")
+if "u2" in df.columns:
+    # Assuming u2 is normalized pitch command, scale by 55 degrees
+    axes[7].plot(time_s, df["u1"] * 55.0, label="u2_pitch_des", color="tab:pink", linewidth=1, linestyle="-.")
 axes[7].set_ylabel("pitch (deg)")
 axes[7].legend(loc="best")
 axes[7].grid(True)
