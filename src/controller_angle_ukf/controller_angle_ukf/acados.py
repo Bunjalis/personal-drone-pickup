@@ -90,18 +90,18 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     ny_e = 3 + 3 + 3 + 4 + 3
 
     W = np.diag([
-        4.0, 4.0, 4.0,         # pos
+        3.0, 3.0, 5.0,         # pos
         1.0, 1.0, 1.0,         # vel
         1.0, 1.0, 1.0,         # omega
         2.0, 2.0, 2e-4, 2.0,# u_state (integrator smoothness)
-        5.0, 5.0, 5.0, 5.0,    # u_dot penalty
+        8.0, 8.0, 5.0, 8.0,    # u_dot penalty
         1.0, 1.0, 1.0          # attitude error
     ])
     W_e = np.diag([
-        4.0, 4.0, 4.0,         # pos
+        3.0, 3.0, 3.0,         # pos
         1.0, 1.0, 1.0,         # vel
         1.0, 1.0, 1.0,         # omega
-        2.0, 2.0, 2e-4, 2.0,   # u_state
+        8.0, 8.0, 2e-4, 8.0,   # u_state
         1.0, 1.0, 1.0          # attitude error
     ])
     ocp.cost.W = W
@@ -148,15 +148,15 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     ocp.solver_options.levenberg_marquardt = 1e-2
 
     # ---------- State constraints (unchanged) ----------
-    max_rate = 1.0
+    max_rate = 0.2
     max_vz = 0.5
     ocp.constraints.lbx = np.array([0.05, -max_rate, -max_rate, -max_rate])
     ocp.constraints.ubx = np.array([0.6,   max_rate,  max_rate,  max_rate])
     ocp.constraints.idxbx = np.array([15, 13, 14, 16])  # throttle state & p,q,r (check ordering if you changed mixer)
 
     # ---------- Input rate bounds (u = u_dot) ----------
-    ocp.constraints.lbu = np.array([-0.3, -0.3, -0.5, -0.3])
-    ocp.constraints.ubu = np.array([ 0.3,  0.3,  0.5,  0.3])
+    ocp.constraints.lbu = np.array([-0.25, -0.25, -0.5, -0.25])
+    ocp.constraints.ubu = np.array([ 0.25,  0.25,  0.5,  0.25])
     ocp.constraints.idxbu = np.arange(nu)
 
     # Create OCP solver

@@ -9,7 +9,9 @@ csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angl
 #csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/hover_inside_house.csv"
 #csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/zsin_inside_house.csv"
 #csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/hover_with_new_angle.csv"
-#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/z_sin_20251112_222037/log.csv"
+csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/hover_20251113_113607/log.csv"
+csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/hover_20251113_113425/log.csv"
+csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/z_sin_20251113_161213/log.csv"
 
 # Read CSV
 df = pd.read_csv(csv_path)
@@ -75,7 +77,7 @@ df["mot_pose_z"] = df["mot_pose_z"] - 0.1
 
 # Create figure with 12 stacked axes sharing X
 # 1: x position, 2: y position, 3: z position, 4: vx velocity, 5: vy velocity, 6: vz velocity, 7: roll, 8: pitch, 9: yaw, 10: avx, 11: avy, 12: avz
-fig, axes = plt.subplots(12, 1, sharex=True, figsize=(12, 20))
+fig, axes = plt.subplots(9, 1, sharex=True, figsize=(12, 20))
 
 # Axis 0: x position
 axes[0].plot(time_s, df["mot_pose_x"], label="mot_pose_x", color="tab:blue", linewidth=1)
@@ -177,6 +179,7 @@ axes[8].legend(loc="best")
 axes[8].grid(True)
 
 # Axis 9: Angular velocity around x (roll rate)
+'''
 axes[9].plot(time_s, df["mot_pose_avx"], label="mot_pose_avx", color="tab:blue", linewidth=1)
 axes[9].plot(time_s, df["orb_pose_avx"], label="orb_pose_avx", color="tab:green", linewidth=1, linestyle=":")
 if has_ukf:
@@ -205,7 +208,7 @@ axes[11].plot(time_s, df["est_pose_avz"], label="est_pose_avz", color="tab:brown
 axes[11].set_xlabel("time (s) (relative)")
 axes[11].set_ylabel("avz (rad/s)")
 axes[11].legend(loc="best")
-axes[11].grid(True)
+axes[11].grid(True)'''
 
 plt.tight_layout()
 

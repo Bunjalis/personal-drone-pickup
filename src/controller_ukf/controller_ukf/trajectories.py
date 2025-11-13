@@ -96,11 +96,11 @@ def land_trajectory(dt, init_pose):
 def hover_trajectory(dt):
     take_off_traj, _ = takeoff_trajectory(dt)
 
-    steps = 5 * 30  # 10 seconds of hover at 30 Hz
+    steps = 30 * 30  # 10 seconds of hover at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
     x_traj = np.zeros_like(time_space) #np.zeros_like(time_space)
     y_traj = np.zeros_like(time_space) #np.zeros_like(time_space) # 0.0 + 0.5 * np.sin(1.0 * np.pi * time_space / 5.0)
-    z_traj = 1.0 * np.ones_like(time_space)#1.2 * np.ones_like(time_space) #1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)    #
+    z_traj = 1.2 * np.ones_like(time_space)#1.2 * np.ones_like(time_space) #1.5 + 0.5 * np.sin(1.5 * np.pi * time_space / 5.0)    #
 
     roll_traj = np.zeros_like(time_space)
     pitch_traj = np.zeros_like(time_space)
@@ -325,7 +325,7 @@ def circle_trajectory(dt):
     
     # Circle parameters
     radius = 1.0  # 1 meter
-    period = 8  # seconds per rotation
+    period = 10  # seconds per rotation
     omega = 2 * np.pi / period  # angular velocity (rad/s)
     
     # Get the final position from takeoff (should be 0, 0, 1.0)
@@ -336,14 +336,14 @@ def circle_trajectory(dt):
     # Transition trajectory from takeoff end to circle start
     x_traj_transition = np.linspace(takeoff_end_x, radius, steps_transition)  # Move to circle start
     y_traj_transition = np.linspace(takeoff_end_y, 0.0, steps_transition)     # Move to y=0
-    z_traj_transition = np.linspace(takeoff_end_z, 1.0, steps_transition)     # Move to circle altitude
+    z_traj_transition = np.linspace(takeoff_end_z, 1.8, steps_transition)     # Move to circle altitude
 
     steps = 30 * 30  # 40 seconds at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
 
     x_traj = radius * np.cos(omega * time_space)
     y_traj = radius * np.sin(omega * time_space)
-    z_traj = 1.0 * np.ones_like(time_space)  # constant altitude
+    z_traj = 1.8* np.ones_like(time_space)  # constant altitude
 
     # Combine transition and circle time spaces for trajectory calculations
     time_space_combined = np.concatenate((time_space_transition, time_space))

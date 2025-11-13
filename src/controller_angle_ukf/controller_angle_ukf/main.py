@@ -39,7 +39,7 @@ from std_msgs.msg import Float32MultiArray, Int32
 
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
-USE_MOTION_CAPTURE = False      # Set to False to use ORB-SLAM data instead
+USE_MOTION_CAPTURE = True      # Set to False to use ORB-SLAM data instead
 FREQUENCY_HZ = 15
 DT = 1.0 / FREQUENCY_HZ
 
@@ -52,7 +52,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self, USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = z_sin_trajectory(DT)
+        self.traj, trajectory_name = circle_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(
             self.traj, pose_subsample=15, show_velocity=False, velocity_scale=0.3, color_by_time=True
@@ -86,12 +86,12 @@ class Controller(Node):
         self.centre_rate_deg = 100.0   # Fixed BF rates curve params (for yaw)
         self.max_rate_deg = 100.0
         self.rate_expo = 0.5
-        self.tau_angle = 0.16  # Fixed angle loop time constant
-        self.tau_rate = 0.12   # Fixed yaw rate loop time constant
+        self.tau_angle = 0.2  # Fixed angle loop time constant
+        self.tau_rate = 0.2   # Fixed yaw rate loop time constant
         
         # est_params order (4):
         # [kT, dragZ, fc_roll_offset_deg, fc_pitch_offset_deg]
-        self.est_params = np.array([42.0, 0.2, 0.0, 0.0], dtype=float)
+        self.est_params = np.array([24.0, 0.1, 0.0, 0.0], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -113,7 +113,7 @@ class Controller(Node):
             0.1, 0.1, 0.1,              # angular velocity (observable)
             0.1, 0.001,                 # kT, dragZ
             0.1, 0.1                    # fc_roll_offset_deg, fc_pitch_offset_deg (observable through position drift)
-        ]).astype(float)
+        ]).astype(float)   
 
         self.Q = np.diag([
             # process noise for states
@@ -123,7 +123,7 @@ class Controller(Node):
             1e-3, 1e-3, 1e-3,           # w
             # params (slower drift)
             1e-3, 1e-5,                 # kT, dragZ
-            1e-4, 1e-4                  # fc_roll_offset_deg, fc_pitch_offset_deg (can change slowly)
+            1e-5, 1e-5                  # fc_roll_offset_deg, fc_pitch_offset_deg (can change slowly)
         ]).astype(float)
 
         # Measurement: 10 (p(3), yaw(1), v(3), w(3))
@@ -223,32 +223,7 @@ class Controller(Node):
             estimated_state = copy.deepcopy(self.current_pose[:13])
             estimated_state[3:7] = self.x_est[3:7]  # start with UKF quaternion
             
-            # Extract yaw from current_pose (measured)
-            qw_meas, qx_meas, qy_meas, qz_meas = self.current_pose[3:7]
-            yaw_measured = np.arctan2(2*(qw_meas*qz_meas + qx_meas*qy_meas), 1 - 2*(qy_meas**2 + qz_meas**2))
             
-            # Extract pitch/roll from UKF estimate (model-based)
-            qw_ukf, qx_ukf, qy_ukf, qz_ukf = self.x_est[3:7]
-            # Convert UKF quaternion to Euler
-            roll_ukf = np.arctan2(2*(qw_ukf*qx_ukf + qy_ukf*qz_ukf), 1 - 2*(qx_ukf**2 + qy_ukf**2))
-            pitch_ukf = np.arcsin(np.clip(2*(qw_ukf*qy_ukf - qz_ukf*qx_ukf), -1.0, 1.0))
-            
-            # Reconstruct quaternion from UKF's roll/pitch + measured yaw
-            cy = np.cos(yaw_measured * 0.5)
-            sy = np.sin(yaw_measured * 0.5)
-            cp = np.cos(pitch_ukf * 0.5)
-            sp = np.sin(pitch_ukf * 0.5)
-            cr = np.cos(roll_ukf * 0.5)
-            sr = np.sin(roll_ukf * 0.5)
-            
-            hybrid_qw = cr * cp * cy + sr * sp * sy
-            hybrid_qx = sr * cp * cy - cr * sp * sy
-            hybrid_qy = cr * sp * cy + sr * cp * sy
-            hybrid_qz = cr * cp * sy - sr * sp * cy
-            
-            # Normalize
-            quat_norm = np.sqrt(hybrid_qw**2 + hybrid_qx**2 + hybrid_qy**2 + hybrid_qz**2)
-            estimated_state[3:7] = np.array([hybrid_qw, hybrid_qx, hybrid_qy, hybrid_qz]) / quat_norm
 
             if len(self.control_history) <= 0 or self.delay_states == 0:
                 delayed_control_history = []
@@ -279,6 +254,34 @@ class Controller(Node):
 
 
 
+            # Extract yaw from current_pose (measured)
+            qw_meas, qx_meas, qy_meas, qz_meas = estimated_state[3:7]
+            yaw_measured = np.arctan2(2*(qw_meas*qz_meas + qx_meas*qy_meas), 1 - 2*(qy_meas**2 + qz_meas**2))
+            
+            # Extract pitch/roll from UKF estimate (model-based)
+            qw_ukf, qx_ukf, qy_ukf, qz_ukf = self.x_est[3:7]
+            # Convert UKF quaternion to Euler
+            roll_ukf = np.arctan2(2*(qw_ukf*qx_ukf + qy_ukf*qz_ukf), 1 - 2*(qx_ukf**2 + qy_ukf**2))
+            pitch_ukf = np.arcsin(np.clip(2*(qw_ukf*qy_ukf - qz_ukf*qx_ukf), -1.0, 1.0))
+            
+            # Reconstruct quaternion from UKF's roll/pitch + measured yaw
+            cy = np.cos(yaw_measured * 0.5)
+            sy = np.sin(yaw_measured * 0.5)
+            cp = np.cos(pitch_ukf * 0.5)
+            sp = np.sin(pitch_ukf * 0.5)
+            cr = np.cos(roll_ukf * 0.5)
+            sr = np.sin(roll_ukf * 0.5)
+            
+            hybrid_qw = cr * cp * cy + sr * sp * sy
+            hybrid_qx = sr * cp * cy - cr * sp * sy
+            hybrid_qy = cr * sp * cy + sr * cp * sy
+            hybrid_qz = cr * cp * sy - sr * sp * cy
+            
+            # Normalize
+            quat_norm = np.sqrt(hybrid_qw**2 + hybrid_qx**2 + hybrid_qy**2 + hybrid_qz**2)
+            estimated_state[3:7] = np.array([hybrid_qw, hybrid_qx, hybrid_qy, hybrid_qz]) / quat_norm
+
+
             # Tight initial-state box (softened)
             if len(self.control_history) == 0:
                 self.get_logger().warn("Control history is empty - cannot set state bounds accurately")
@@ -288,7 +291,7 @@ class Controller(Node):
 
 
             init_mpc_state = estimated_state_with_control.copy()
-            relaxation_factor = 0.01
+            relaxation_factor = 0.00001
             lbx = init_mpc_state - relaxation_factor * init_mpc_state
             ubx = init_mpc_state + relaxation_factor * init_mpc_state
             self.ocp.set(0, "lbx", lbx)

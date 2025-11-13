@@ -24,7 +24,7 @@ from std_msgs.msg import Float32MultiArray, Int32
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
 USE_MOTION_CAPTURE = True  # Set to False to use ORB-SLAM data instead
-FREQUENCY_HZ = 15.0
+FREQUENCY_HZ = 30.0
 DT = 1.0 / FREQUENCY_HZ
 
 LOGGING_NAME = 'controller_ukf'
@@ -36,7 +36,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self,USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = z_sin_trajectory(DT)
+        self.traj, trajectory_name = circle_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
 
@@ -62,7 +62,7 @@ class Controller(Node):
 
         
         # UKF settings
-        self.est_params = np.array([20.0, 0.2, 0.12,50.0, 300.0, 0.0])
+        self.est_params = np.array([28.0, 0.2, 0.12,100.0, 100.0, 0.0])
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -80,7 +80,7 @@ class Controller(Node):
                           1e-5, 1e-5, 1e-5, 1e-5,
                           1e-3, 1e-3, 1e-3,
                           1e-3, 1e-3, 1e-3,
-                          1e-4, 1e-4, 1e-4, 1, 1, 0.1])
+                          1e-4, 1e-5, 1e-5, 1, 1, 0.1])
         self.R = np.diag([0.05]*13)
 
 
@@ -186,7 +186,7 @@ class Controller(Node):
 
 
             
-            relaxation_factor = 0.025 # 0.25 for orb slam 
+            relaxation_factor = 0.01 # 0.25 for orb slam 
             relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
             relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
             self.ocp.set(0, "lbx", relaxed_lbx)
@@ -229,8 +229,8 @@ class Controller(Node):
                 #u_rate = self.ocp.get(0, "u")
 
                 msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
-                #print(f"r: {round(u[0], 3)}, p: {round(u[1], 3)}, t: {round((u[2]), 3)}, y: {round(u[3], 3)}")
-                #print(f"EST. params - TR: {round(self.est_params[0],2)}, DC z: {round(self.est_params[1],3)}, Tau: {round(self.est_params[2],3)}, Centre deg: {round(self.est_params[3],1)}, Max deg: {round(self.est_params[4],1)}, expo: {round(self.est_params[5],3)}")
+                print(f"r: {round(u[0], 3)}, p: {round(u[1], 3)}, t: {round((u[2]), 3)}, y: {round(u[3], 3)}")
+                print(f"EST. params - TR: {round(self.est_params[0],2)}, DC z: {round(self.est_params[1],3)}, Tau: {round(self.est_params[2],3)}, Centre deg: {round(self.est_params[3],1)}, Max deg: {round(self.est_params[4],1)}, expo: {round(self.est_params[5],3)}")
             else:
 
                 #u = [0,0,0,0]
@@ -308,7 +308,7 @@ class Controller(Node):
                 ### Constrain parameters to physically reasonable bounds
                 self.x_est[13] = np.clip(self.x_est[13], 20.0, 60.0)
                 self.x_est[14] = np.clip(self.x_est[14], 0.01, 1.0)
-                self.x_est[15] = np.clip(self.x_est[15], 0.04, 0.3)
+                self.x_est[15] = np.clip(self.x_est[15], 0.07, 0.3)
                 self.x_est[16] = np.clip(self.x_est[16], 0.0, 1000.0)
                 self.x_est[17] = np.clip(self.x_est[17], 0.0, 1000.0)
                 self.x_est[18] = np.clip(self.x_est[18], 0.5, 0.5)
