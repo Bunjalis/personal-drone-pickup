@@ -86,12 +86,12 @@ class Controller(Node):
         self.centre_rate_deg = 100.0   # Fixed BF rates curve params (for yaw)
         self.max_rate_deg = 100.0
         self.rate_expo = 0.5
-        self.tau_angle = 0.2  # Fixed angle loop time constant
-        self.tau_rate = 0.2   # Fixed yaw rate loop time constant
+        self.tau_angle = 0.08 # Fixed angle loop time constant
+        self.tau_rate = 0.08   # Fixed yaw rate loop time constant
         
         # est_params order (4):
         # [kT, dragZ, fc_roll_offset_deg, fc_pitch_offset_deg]
-        self.est_params = np.array([24.0, 0.1, 0.0, 0.0], dtype=float)
+        self.est_params = np.array([42.0, 0.1, 0.0, 0.0], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 

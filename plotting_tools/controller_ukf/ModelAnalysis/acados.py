@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.linalg
 from acados_template import AcadosOcp, AcadosOcpSolver, AcadosModel
-from .dynamics import QuadDynamics
+from ....src.controller_angle_ukf.controller_angle_ukf.dynamics import QuadDynamics
 import casadi as ca
 from acados_template import AcadosSim, AcadosSimSolver
 
@@ -92,7 +92,7 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     W = np.diag([
         3.0, 3.0, 5.0,         # pos
         1.0, 1.0, 1.0,         # vel
-        0.00001, 0.00001, 1.0,         # omega
+        1.0, 1.0, 1.0,         # omega
         2.0, 2.0, 2e-4, 2.0,# u_state (integrator smoothness)
         8.0, 8.0, 5.0, 8.0,    # u_dot penalty
         1.0, 1.0, 1.0          # attitude error
@@ -100,7 +100,7 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     W_e = np.diag([
         3.0, 3.0, 3.0,         # pos
         1.0, 1.0, 1.0,         # vel
-        0.00001, 0.00001, 1.0,         # omega
+        1.0, 1.0, 1.0,         # omega
         8.0, 8.0, 2e-4, 8.0,   # u_state
         1.0, 1.0, 1.0          # attitude error
     ])
