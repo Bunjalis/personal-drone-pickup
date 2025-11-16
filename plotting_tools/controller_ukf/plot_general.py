@@ -10,7 +10,7 @@ csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angl
 #csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/zsin_inside_house.csv"
 #csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/hover_with_new_angle.csv"
 csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/hover_20251113_113607/log.csv"
-#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/z_sin_20251113_165059/log.csv"
+csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/z_sin_20251113_165236/log.csv"
 
 # Read CSV
 df = pd.read_csv(csv_path)

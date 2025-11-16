@@ -39,7 +39,7 @@ from std_msgs.msg import Float32MultiArray, Int32
 
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
-USE_MOTION_CAPTURE = True      # Set to False to use ORB-SLAM data instead
+USE_MOTION_CAPTURE = False      # Set to False to use ORB-SLAM data instead
 FREQUENCY_HZ = 15
 DT = 1.0 / FREQUENCY_HZ
 
@@ -176,7 +176,7 @@ class Controller(Node):
     def orb_slam_state_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
         self.orb_slam_pose = np.round(np.array([
-            p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z
+            p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, 0.0, 0.0, av.z
         ]), 3)
         if not USE_MOTION_CAPTURE:
             self.current_pose = self.orb_slam_pose
