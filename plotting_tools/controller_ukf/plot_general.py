@@ -4,13 +4,8 @@ import os
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/hover_with_orb.csv"
-csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/xyz_mot_with_orb.csv"
-#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/hover_inside_house.csv"
-#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/zsin_inside_house.csv"
-#csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/0LogsToKeep/hover_with_new_angle.csv"
-csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/hover_20251113_113607/log.csv"
-csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/z_sin_20251113_165236/log.csv"
+
+csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/z_sin_20251117_155423/log.csv"
 
 # Read CSV
 df = pd.read_csv(csv_path)
@@ -52,6 +47,16 @@ if has_ukf:
     df['ukf_pitch'] = ukf_rpy[:, 1]
     df['ukf_yaw'] = ukf_rpy[:, 2]
 
+# Check if trajectory reference data exists and convert quaternions to RPY
+has_traj_ref = all(col in df.columns for col in ['traj_x_ref', 'traj_y_ref', 'traj_z_ref', 
+                                                   'traj_qw_ref', 'traj_qx_ref', 'traj_qy_ref', 'traj_qz_ref'])
+if has_traj_ref:
+    traj_rpy = np.array([quat_to_rpy(row['traj_qw_ref'], row['traj_qx_ref'], row['traj_qy_ref'], row['traj_qz_ref']) 
+                         for _, row in df.iterrows()])
+    df['traj_roll_ref'] = traj_rpy[:, 0]
+    df['traj_pitch_ref'] = traj_rpy[:, 1]
+    df['traj_yaw_ref'] = traj_rpy[:, 2]
+
 # Extract angular velocities (already in CSV as mot_pose_av* and est_pose_av*)
 # These are the angular velocities around x, y, z axes
 
@@ -85,6 +90,8 @@ if has_ukf:
     axes[0, 0].plot(time_s, df["ukf_pose_x"], label="ukf_pose_x", color="tab:red", linewidth=1, linestyle="-.")
 if "est_pose_x" in df.columns:
     axes[0, 0].plot(time_s, df["est_pose_x"], label="est_pose_x", color="tab:purple", linewidth=1, linestyle="--")
+if has_traj_ref:
+    axes[0, 0].plot(time_s, df["traj_x_ref"], label="traj_x_ref", color="black", linewidth=1.5, linestyle="-")
 axes[0, 0].set_ylabel("x (m)")
 axes[0, 0].legend(loc="best")
 axes[0, 0].grid(True)
@@ -105,6 +112,8 @@ if has_ukf:
     axes[1, 0].plot(time_s, df["ukf_pose_y"], label="ukf_pose_y", color="tab:red", linewidth=1, linestyle="-.")
 if "est_pose_y" in df.columns:
     axes[1, 0].plot(time_s, df["est_pose_y"], label="est_pose_y", color="tab:purple", linewidth=1, linestyle="--")
+if has_traj_ref:
+    axes[1, 0].plot(time_s, df["traj_y_ref"], label="traj_y_ref", color="black", linewidth=1.5, linestyle="-")
 axes[1, 0].set_ylabel("y (m)")
 axes[1, 0].legend(loc="best")
 axes[1, 0].grid(True)
@@ -123,6 +132,8 @@ if has_ukf:
     axes[2, 0].plot(time_s, df["ukf_pose_z"], label="ukf_pose_z", color="tab:red", linewidth=1, linestyle="-.")
 if "est_pose_z" in df.columns:
     axes[2, 0].plot(time_s, df["est_pose_z"], label="est_pose_z", color="tab:purple", linewidth=1, linestyle="--")
+if has_traj_ref:
+    axes[2, 0].plot(time_s, df["traj_z_ref"], label="traj_z_ref", color="black", linewidth=1.5, linestyle="-")
 axes[2, 0].set_ylabel("z (m)")
 axes[2, 0].legend(loc="best")
 axes[2, 0].grid(True)
@@ -191,6 +202,8 @@ axes[6, 0].plot(time_s, df["orb_roll"], label="orb_roll", color="tab:green", lin
 if has_ukf:
     axes[6, 0].plot(time_s, df["ukf_roll"], label="ukf_roll", color="tab:red", linewidth=1, linestyle="-.")
 axes[6, 0].plot(time_s, df["est_roll"], label="est_roll", color="tab:orange", linewidth=1, linestyle="--")
+if has_traj_ref:
+    axes[6, 0].plot(time_s, df["traj_roll_ref"], label="traj_roll_ref", color="black", linewidth=1.5, linestyle="-")
 if "u1" in df.columns:
     # Assuming u1 is normalized roll command, scale by 55 degrees
     axes[6, 0].plot(time_s, df["u0"] * 55.0, label="u1_roll_des", color="tab:pink", linewidth=1, linestyle="-.")
@@ -211,6 +224,8 @@ axes[7, 0].plot(time_s, df["orb_pitch"], label="orb_pitch", color="tab:green", l
 if has_ukf:
     axes[7, 0].plot(time_s, df["ukf_pitch"], label="ukf_pitch", color="tab:red", linewidth=1, linestyle="-.")
 axes[7, 0].plot(time_s, df["est_pitch"], label="est_pitch", color="tab:orange", linewidth=1, linestyle="--")
+if has_traj_ref:
+    axes[7, 0].plot(time_s, df["traj_pitch_ref"], label="traj_pitch_ref", color="black", linewidth=1.5, linestyle="-")
 if "u2" in df.columns:
     # Assuming u2 is normalized pitch command, scale by 55 degrees
     axes[7, 0].plot(time_s, df["u1"] * 55.0, label="u2_pitch_des", color="tab:pink", linewidth=1, linestyle="-.")
@@ -231,6 +246,8 @@ axes[8, 0].plot(time_s, df["orb_yaw"], label="orb_yaw", color="tab:green", linew
 if has_ukf:
     axes[8, 0].plot(time_s, df["ukf_yaw"], label="ukf_yaw", color="tab:red", linewidth=1, linestyle="-.")
 axes[8, 0].plot(time_s, df["est_yaw"], label="est_yaw", color="tab:orange", linewidth=1, linestyle="--")
+if has_traj_ref:
+    axes[8, 0].plot(time_s, df["traj_yaw_ref"], label="traj_yaw_ref", color="black", linewidth=1.5, linestyle="-")
 axes[8, 0].set_ylabel("yaw (deg)")
 axes[8, 0].legend(loc="best")
 axes[8, 0].grid(True)

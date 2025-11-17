@@ -91,7 +91,7 @@ class Controller(Node):
         
         # est_params order (4):
         # [kT, dragZ, fc_roll_offset_deg, fc_pitch_offset_deg]
-        self.est_params = np.array([42.0, 0.1, 0.0, 0.0], dtype=float)
+        self.est_params = np.array([24.0, 0.1, 0.0, 0.0], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -132,7 +132,7 @@ class Controller(Node):
         # Measurement: 13 (p,q,v,w)
 
         # Delay estimation
-        self.delay_states = 1
+        self.delay_states = 3
         qos1 = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, history=HistoryPolicy.KEEP_LAST)
         self.pub_ctrl_applied = self.create_publisher(ControlApplied, '/control_applied', qos1)
         self.create_subscription(Int32, '/estimated_delay',
@@ -291,7 +291,7 @@ class Controller(Node):
 
 
             init_mpc_state = estimated_state_with_control.copy()
-            relaxation_factor = 0.00001
+            relaxation_factor = 0.05
             lbx = init_mpc_state - relaxation_factor * init_mpc_state
             ubx = init_mpc_state + relaxation_factor * init_mpc_state
             self.ocp.set(0, "lbx", lbx)
@@ -394,9 +394,9 @@ class Controller(Node):
                 # dragZ
                 self.x_est[14] = np.clip(self.x_est[14], 0.01, 0.5)
                 # fc_roll_offset_deg (index 15)
-                self.x_est[15] = np.clip(self.x_est[15], -5.0, 5.0)
+                self.x_est[15] = np.clip(self.x_est[15], -3.0, 3.0)
                 # fc_pitch_offset_deg (index 16)
-                self.x_est[16] = np.clip(self.x_est[16], -5.0, 5.0)
+                self.x_est[16] = np.clip(self.x_est[16], -3.0, 3.0)
 
                 # Update estimated parameters vector (4)
                 self.est_params = np.array([
