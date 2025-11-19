@@ -5,7 +5,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 
-csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/z_sin_20251117_155423/log.csv"
+csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/hover_20251119_172953/log.csv"
 
 # Read CSV
 df = pd.read_csv(csv_path)
@@ -79,9 +79,9 @@ time_s = df["timestamp"] - t0
 # Offset mot_pose_z by -0.1 m
 df["mot_pose_z"] = df["mot_pose_z"] - 0.1
 
-# Create figure with 12 rows and 2 columns (left: comparison, right: error)
-# 1: x position, 2: y position, 3: z position, 4: vx velocity, 5: vy velocity, 6: vz velocity, 7: roll, 8: pitch, 9: yaw, 10: avx, 11: avy, 12: avz
-fig, axes = plt.subplots(12, 2, sharex=True, figsize=(20, 20))
+# Create figure with 13 rows and 2 columns (left: comparison, right: error)
+# 1: x position, 2: y position, 3: z position, 4: vx velocity, 5: vy velocity, 6: vz velocity, 7: roll, 8: pitch, 9: yaw, 10: avx, 11: avy, 12: avz, 13: estimated params
+fig, axes = plt.subplots(13, 2, sharex=True, figsize=(20, 22))
 
 # Axis 0: x position
 axes[0, 0].plot(time_s, df["mot_pose_x"], label="mot_pose_x", color="tab:blue", linewidth=1)
@@ -300,18 +300,29 @@ axes[11, 0].plot(time_s, df["orb_pose_avz"], label="orb_pose_avz", color="tab:gr
 if has_ukf:
     axes[11, 0].plot(time_s, df["ukf_pose_avz"], label="ukf_pose_avz", color="tab:red", linewidth=1, linestyle="-.")
 axes[11, 0].plot(time_s, df["est_pose_avz"], label="est_pose_avz", color="tab:brown", linewidth=1, linestyle="--")
-axes[11, 0].set_xlabel("time (s) (relative)")
 axes[11, 0].set_ylabel("avz (rad/s)")
 axes[11, 0].legend(loc="best")
 axes[11, 0].grid(True)
 
 # Axis 11 right: Angular velocity z error
 axes[11, 1].plot(time_s, df["mot_pose_avz"] - df["est_pose_avz"], label="avz error (mot - est)", color="tab:red", linewidth=1)
-axes[11, 1].set_xlabel("time (s) (relative)")
 axes[11, 1].set_ylabel("avz error (rad/s)")
 axes[11, 1].legend(loc="best")
 axes[11, 1].grid(True)
 axes[11, 1].axhline(0, color='black', linestyle='--', linewidth=0.5)
+
+# Axis 12: Estimated parameters (fc_roll_offset_deg and fc_pitch_offset_deg)
+if "est_param_fc_roll_offset_deg" in df.columns and "est_param_fc_pitch_offset_deg" in df.columns:
+    axes[12, 0].plot(time_s, df["est_param_fc_roll_offset_deg"], label="fc_roll_offset_deg", color="tab:blue", linewidth=1)
+    axes[12, 0].plot(time_s, df["est_param_fc_pitch_offset_deg"], label="fc_pitch_offset_deg", color="tab:orange", linewidth=1)
+    axes[12, 0].set_xlabel("time (s) (relative)")
+    axes[12, 0].set_ylabel("offset (deg)")
+    axes[12, 0].legend(loc="best")
+    axes[12, 0].grid(True)
+    axes[12, 0].set_title("Estimated FC Offset Parameters")
+
+# Axis 12 right: Leave empty or show both on same plot
+axes[12, 1].axis('off')
 
 plt.tight_layout()
 
