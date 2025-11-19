@@ -46,8 +46,8 @@ class BetaflightInterfaceNode(Node):
         self.angle_int_limit = 200.0                    # anti-windup clamp on produced rate (deg/s equivalent)
 
         # --- FC mounting angle disturbance (simulates FC not perfectly level) ---
-        self.declare_parameter('fc_roll_offset_deg', 0.25)   # FC roll mounting error (deg)
-        self.declare_parameter('fc_pitch_offset_deg', -0.25)  # FC pitch mounting error (deg)
+        self.declare_parameter('fc_roll_offset_deg', 0.2)   # FC roll mounting error (deg)
+        self.declare_parameter('fc_pitch_offset_deg', 0.2)  # FC pitch mounting error (deg)
         self.fc_roll_offset_deg = float(self.get_parameter('fc_roll_offset_deg').value)
         self.fc_pitch_offset_deg = float(self.get_parameter('fc_pitch_offset_deg').value)
 
