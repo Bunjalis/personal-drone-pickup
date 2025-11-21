@@ -54,7 +54,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self, USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = circle_trajectory(DT)
+        self.traj, trajectory_name = xyz_sine_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(
             self.traj, pose_subsample=15, show_velocity=False, velocity_scale=0.3, color_by_time=True
@@ -129,7 +129,7 @@ class Controller(Node):
             1e-3, 1e-3, 1e-4,           # v
             1e-3, 1e-3, 1e-3,           # w
             # params (slower drift)
-            1e-3, 1e-5,                 # kT, dragZ
+            1e-4, 1e-5,                 # kT, dragZ
             1e-4, 1e-4                  # fc_roll_offset_deg, fc_pitch_offset_deg
         ]).astype(float)
 
@@ -323,7 +323,7 @@ class Controller(Node):
                 )
 
             init_mpc_state = estimated_state_with_control.copy()
-            relaxation_factor = 0.05
+            relaxation_factor = 0.015
             lbx = init_mpc_state - relaxation_factor * init_mpc_state
             ubx = init_mpc_state + relaxation_factor * init_mpc_state
             self.ocp.set(0, "lbx", lbx)
