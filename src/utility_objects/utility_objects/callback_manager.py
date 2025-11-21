@@ -30,13 +30,21 @@ class CallbackManager:
 
     def pose_callback(self, msg: MotionCaptureState):
         p, o, lv, av = msg.pose.position, msg.pose.orientation, msg.twist.linear, msg.twist.angular
-        arr = np.round(np.array([p.x, p.y, p.z, o.w, o.x, o.y, o.z, lv.x, lv.y, lv.z, av.x, av.y, av.z]), 3)
+        arr = np.round(np.array([
+            p.x, p.y, p.z,
+            o.w, o.x, o.y, o.z,
+            lv.x, lv.y, lv.z,
+            av.x, av.y, av.z
+        ]), 3)
 
         self.motion_capture_pose = arr
+
         if self.use_motion_capture:
             self.node.current_pose = self.motion_capture_pose
             self.node.last_pose_update_time = time.time()
 
+            if hasattr(self.node, "ukf_update_from_current_pose"):
+                self.node.ukf_update_from_current_pose()
 
     def handle_arming_service(self, request, response):
         if request.arm:

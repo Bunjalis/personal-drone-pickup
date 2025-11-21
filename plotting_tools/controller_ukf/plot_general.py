@@ -5,7 +5,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 
-csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/hover_20251119_172953/log.csv"
+csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/z_sin_20251121_133609/log.csv"
 
 # Read CSV
 df = pd.read_csv(csv_path)
@@ -79,9 +79,9 @@ time_s = df["timestamp"] - t0
 # Offset mot_pose_z by -0.1 m
 df["mot_pose_z"] = df["mot_pose_z"] - 0.1
 
-# Create figure with 13 rows and 2 columns (left: comparison, right: error)
-# 1: x position, 2: y position, 3: z position, 4: vx velocity, 5: vy velocity, 6: vz velocity, 7: roll, 8: pitch, 9: yaw, 10: avx, 11: avy, 12: avz, 13: estimated params
-fig, axes = plt.subplots(13, 2, sharex=True, figsize=(20, 22))
+# Create figure with 11 rows and 2 columns (left: comparison, right: error)
+# 1: x position, 2: y position, 3: z position, 4: vx velocity, 5: vy velocity, 6: vz velocity, 7: roll, 8: pitch, 9: yaw, 10: thrust constant, 11: drag coefficient
+fig, axes = plt.subplots(11, 2, sharex=True, figsize=(20, 19))
 
 # Axis 0: x position
 axes[0, 0].plot(time_s, df["mot_pose_x"], label="mot_pose_x", color="tab:blue", linewidth=1)
@@ -259,70 +259,35 @@ axes[8, 1].legend(loc="best")
 axes[8, 1].grid(True)
 axes[8, 1].axhline(0, color='black', linestyle='--', linewidth=0.5)
 
-# Axis 9: Angular velocity around x (roll rate)
+# Axis 9: Thrust constant estimation (kT)
+if "est_param_thrust_ratio" in df.columns:
+    axes[9, 0].plot(time_s, df["est_param_thrust_ratio"], label="kT (thrust ratio)", color="tab:blue", linewidth=1.5)
+    axes[9, 0].set_ylabel("kT")
+    axes[9, 0].legend(loc="best")
+    axes[9, 0].grid(True)
+    axes[9, 0].set_title("Estimated Thrust Constant")
 
-axes[9, 0].plot(time_s, df["mot_pose_avx"], label="mot_pose_avx", color="tab:blue", linewidth=1)
-axes[9, 0].plot(time_s, df["orb_pose_avx"], label="orb_pose_avx", color="tab:green", linewidth=1, linestyle=":")
-if has_ukf:
-    axes[9, 0].plot(time_s, df["ukf_pose_avx"], label="ukf_pose_avx", color="tab:red", linewidth=1, linestyle="-.")
-axes[9, 0].plot(time_s, df["est_pose_avx"], label="est_pose_avx", color="tab:purple", linewidth=1, linestyle="--")
-axes[9, 0].set_ylabel("avx (rad/s)")
-axes[9, 0].legend(loc="best")
-axes[9, 0].grid(True)
-
-# Axis 9 right: Angular velocity x error
-axes[9, 1].plot(time_s, df["mot_pose_avx"] - df["est_pose_avx"], label="avx error (mot - est)", color="tab:red", linewidth=1)
-axes[9, 1].set_ylabel("avx error (rad/s)")
-axes[9, 1].legend(loc="best")
-axes[9, 1].grid(True)
-axes[9, 1].axhline(0, color='black', linestyle='--', linewidth=0.5)
-
-# Axis 10: Angular velocity around y (pitch rate)
-axes[10, 0].plot(time_s, df["mot_pose_avy"], label="mot_pose_avy", color="tab:blue", linewidth=1)
-axes[10, 0].plot(time_s, df["orb_pose_avy"], label="orb_pose_avy", color="tab:green", linewidth=1, linestyle=":")
-if has_ukf:
-    axes[10, 0].plot(time_s, df["ukf_pose_avy"], label="ukf_pose_avy", color="tab:red", linewidth=1, linestyle="-.")
-axes[10, 0].plot(time_s, df["est_pose_avy"], label="est_pose_avy", color="tab:purple", linewidth=1, linestyle="--")
-axes[10, 0].set_ylabel("avy (rad/s)")
-axes[10, 0].legend(loc="best")
-axes[10, 0].grid(True)
-
-# Axis 10 right: Angular velocity y error
-axes[10, 1].plot(time_s, df["mot_pose_avy"] - df["est_pose_avy"], label="avy error (mot - est)", color="tab:red", linewidth=1)
-axes[10, 1].set_ylabel("avy error (rad/s)")
-axes[10, 1].legend(loc="best")
-axes[10, 1].grid(True)
-axes[10, 1].axhline(0, color='black', linestyle='--', linewidth=0.5)
-
-# Axis 11: Angular velocity around z (yaw rate)
-axes[11, 0].plot(time_s, df["mot_pose_avz"], label="mot_pose_avz", color="tab:blue", linewidth=1)
-axes[11, 0].plot(time_s, df["orb_pose_avz"], label="orb_pose_avz", color="tab:green", linewidth=1, linestyle=":")
-if has_ukf:
-    axes[11, 0].plot(time_s, df["ukf_pose_avz"], label="ukf_pose_avz", color="tab:red", linewidth=1, linestyle="-.")
-axes[11, 0].plot(time_s, df["est_pose_avz"], label="est_pose_avz", color="tab:brown", linewidth=1, linestyle="--")
-axes[11, 0].set_ylabel("avz (rad/s)")
-axes[11, 0].legend(loc="best")
-axes[11, 0].grid(True)
-
-# Axis 11 right: Angular velocity z error
-axes[11, 1].plot(time_s, df["mot_pose_avz"] - df["est_pose_avz"], label="avz error (mot - est)", color="tab:red", linewidth=1)
-axes[11, 1].set_ylabel("avz error (rad/s)")
-axes[11, 1].legend(loc="best")
-axes[11, 1].grid(True)
-axes[11, 1].axhline(0, color='black', linestyle='--', linewidth=0.5)
-
-# Axis 12: Estimated parameters (fc_roll_offset_deg and fc_pitch_offset_deg)
+# Axis 9 right: FC offset parameters (fc_roll and fc_pitch)
 if "est_param_fc_roll_offset_deg" in df.columns and "est_param_fc_pitch_offset_deg" in df.columns:
-    axes[12, 0].plot(time_s, df["est_param_fc_roll_offset_deg"], label="fc_roll_offset_deg", color="tab:blue", linewidth=1)
-    axes[12, 0].plot(time_s, df["est_param_fc_pitch_offset_deg"], label="fc_pitch_offset_deg", color="tab:orange", linewidth=1)
-    axes[12, 0].set_xlabel("time (s) (relative)")
-    axes[12, 0].set_ylabel("offset (deg)")
-    axes[12, 0].legend(loc="best")
-    axes[12, 0].grid(True)
-    axes[12, 0].set_title("Estimated FC Offset Parameters")
+    axes[9, 1].plot(time_s, df["est_param_fc_roll_offset_deg"], label="fc_roll_offset_deg", color="tab:blue", linewidth=1)
+    axes[9, 1].plot(time_s, df["est_param_fc_pitch_offset_deg"], label="fc_pitch_offset_deg", color="tab:orange", linewidth=1)
+    axes[9, 1].set_ylabel("offset (deg)")
+    axes[9, 1].legend(loc="best")
+    axes[9, 1].grid(True)
+    axes[9, 1].set_title("Estimated FC Offset Parameters")
 
-# Axis 12 right: Leave empty or show both on same plot
-axes[12, 1].axis('off')
+# Axis 10: Drag coefficient estimation
+if "est_param_drag_coeff_z" in df.columns:
+    axes[10, 0].plot(time_s, df["est_param_drag_coeff_z"], label="drag_coeff_z", color="tab:green", linewidth=1.5)
+    axes[10, 0].set_xlabel("time (s) (relative)")
+    axes[10, 0].set_ylabel("drag coefficient")
+    axes[10, 0].legend(loc="best")
+    axes[10, 0].grid(True)
+    axes[10, 0].set_title("Estimated Drag Coefficient")
+
+# Axis 10 right: Leave empty
+axes[10, 1].set_xlabel("time (s) (relative)")
+axes[10, 1].axis('off')
 
 plt.tight_layout()
 
