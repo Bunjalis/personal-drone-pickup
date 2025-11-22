@@ -47,7 +47,7 @@ class Controller(Node):
         ]
         self.data_logger = DataLogger(LOGGING_NAME, trajectory_name, log_headers)
 
-        self.M = 0.8  # CHANGE THIS TO ADJUST THRUST GAIN
+        self.M = 0.6  # CHANGE THIS TO ADJUST THRUST GAIN
         self.g = 9.81
         self.adaptive_throttle = 1
 
@@ -110,6 +110,9 @@ class Controller(Node):
   
             wz =  -0.5*(yawd-yaw) 
             u = [wx, wy, throttle, wz]
+
+
+            print(f"Control Inputs: wx: {wx:.3f}, wy: {wy:.3f}, throttle: {throttle:.3f}, wz: {wz:.3f}")
 
             # Activate gripper after 30 seconds
             if (self.step_counter <= 120 * 30):
