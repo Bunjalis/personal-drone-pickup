@@ -54,7 +54,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self, USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = xyz_sine_trajectory(DT)
+        self.traj, trajectory_name = circle_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(
             self.traj, pose_subsample=15, show_velocity=False, velocity_scale=0.3, color_by_time=True
@@ -99,7 +99,7 @@ class Controller(Node):
 
         # est_params order (4):
         # [kT, dragZ, fc_roll_offset_deg, fc_pitch_offset_deg]
-        self.est_params = np.array([22.0, 0.1, 0.0, 0.0], dtype=float)
+        self.est_params = np.array([26.0, 0.1, 0.0, 0.0], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 

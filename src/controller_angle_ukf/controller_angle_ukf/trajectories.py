@@ -319,13 +319,13 @@ def fence_trajectory(dt):
 def circle_trajectory(dt):
     take_off_traj, _ = takeoff_trajectory(dt)
 
-    # Transition from hover to circle start (3 seconds)
-    steps_transition = 5 * 30  # 3 seconds at 30 Hz
+    # Transition from hover to circle start (5 seconds)
+    steps_transition = 5 * 30  # 5 seconds at 30 Hz
     time_space_transition = np.linspace(0, steps_transition * dt, steps_transition)
     
     # Circle parameters
     radius = 1.0  # 1 meter
-    period = 10  # seconds per rotation
+    period = 20  # seconds per rotation
     omega = 2 * np.pi / period  # angular velocity (rad/s)
     
     # Get the final position from takeoff (should be 0, 0, 1.0)
@@ -338,18 +338,25 @@ def circle_trajectory(dt):
     y_traj_transition = np.linspace(takeoff_end_y, 0.0, steps_transition)     # Move to y=0
     z_traj_transition = np.linspace(takeoff_end_z, 1.0, steps_transition)     # Move to circle altitude
 
-    steps = 10 * 30  # 40 seconds at 30 Hz
+    # Hover at circle start for 3 seconds (45 steps at 30 Hz)
+    steps_hover = 45
+    time_space_hover = np.linspace(0, steps_hover * dt, steps_hover)
+    x_traj_hover = np.full_like(time_space_hover, radius)
+    y_traj_hover = np.zeros_like(time_space_hover)
+    z_traj_hover = np.full_like(time_space_hover, 1.0)
+
+    steps = 10 * 30  # 10 seconds at 30 Hz
     time_space = np.linspace(0, steps * dt, steps)
 
     x_traj = radius * np.cos(omega * time_space)
     y_traj = radius * np.sin(omega * time_space)
     z_traj = 1.0 * np.ones_like(time_space)  # constant altitude
 
-    # Combine transition and circle time spaces for trajectory calculations
-    time_space_combined = np.concatenate((time_space_transition, time_space))
-    x_traj_combined = np.concatenate((x_traj_transition, x_traj))
-    y_traj_combined = np.concatenate((y_traj_transition, y_traj))
-    z_traj_combined = np.concatenate((z_traj_transition, z_traj))
+    # Combine transition, hover, and circle time spaces for trajectory calculations
+    time_space_combined = np.concatenate((time_space_transition, time_space_hover, time_space))
+    x_traj_combined = np.concatenate((x_traj_transition, x_traj_hover, x_traj))
+    y_traj_combined = np.concatenate((y_traj_transition, y_traj_hover, y_traj))
+    z_traj_combined = np.concatenate((z_traj_transition, z_traj_hover, z_traj))
 
     roll_traj = np.zeros_like(time_space_combined)
     pitch_traj = np.zeros_like(time_space_combined)
