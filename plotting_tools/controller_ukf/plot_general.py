@@ -5,7 +5,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 
-csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/z_sin_20251121_160334/log.csv"
+csv_path = "/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/FreestyleXYZTracking/log.csv"
 
 # Read CSV
 df = pd.read_csv(csv_path)

@@ -22,11 +22,8 @@ from .trajectories import (
     z_sin_trajectory,
     xyz_sine_trajectory,
     circle_trajectory,
-    power_loop_trajectory,
-    figure8_zsine_trajectory,
+    foward_z_sin_trajectory,
     fast_xyz_sine_trajectory,
-    fence_trajectory,
-    power_loop_trajectory,
 )
 from utility_objects.visualization import TrajectoryVisualizer
 from utility_objects.data_logger import DataLogger
@@ -40,7 +37,7 @@ from std_msgs.msg import Float32MultiArray, Int32
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
 USE_MOTION_CAPTURE =  False     # Set to False to use ORB-SLAM data instead
-EST_DELAY_STATES = 3           # Number of states delay to estimate
+EST_DELAY_STATES = 3        # Number of states delay to estimate
 FREQUENCY_HZ = 15
 DT = 1.0 / FREQUENCY_HZ
 
@@ -99,7 +96,7 @@ class Controller(Node):
 
         # est_params order (4):
         # [kT, dragZ, fc_roll_offset_deg, fc_pitch_offset_deg]
-        self.est_params = np.array([26.0, 0.1, 0.0, 0.0], dtype=float)
+        self.est_params = np.array([25.0, 0.1, 0.0, 0.0], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -134,7 +131,7 @@ class Controller(Node):
         ]).astype(float)
 
         # Measurement: 10 (p(3), yaw(1), v(3), w(3))
-        self.R = np.diag([0.04] * 10).astype(float)
+        self.R = np.diag([0.05] * 10).astype(float)
 
         # Delay estimation
         self.delay_states = EST_DELAY_STATES
@@ -241,6 +238,7 @@ class Controller(Node):
             # ---- Delay-compensated state roll-forward using sim_integrator ----
             # Hybrid quaternion: Use UKF's pitch/roll + measured yaw
             estimated_state = copy.deepcopy(self.current_pose[:13])
+            estimated_state[0:2] = self.x_est[0:2]    # start with UKF quaternion
             estimated_state[3:7] = self.x_est[3:7]    # start with UKF quaternion
             estimated_state[8:10] = self.x_est[8:10]  # start with UKF velocity
 
@@ -323,7 +321,7 @@ class Controller(Node):
                 )
 
             init_mpc_state = estimated_state_with_control.copy()
-            relaxation_factor = 0.015
+            relaxation_factor = 0.025
             lbx = init_mpc_state - relaxation_factor * init_mpc_state
             ubx = init_mpc_state + relaxation_factor * init_mpc_state
             self.ocp.set(0, "lbx", lbx)
