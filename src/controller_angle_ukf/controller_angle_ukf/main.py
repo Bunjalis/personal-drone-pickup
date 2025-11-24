@@ -96,7 +96,7 @@ class Controller(Node):
 
         # est_params order (4):
         # [kT, dragZ, fc_roll_offset_deg, fc_pitch_offset_deg]
-        self.est_params = np.array([25.0, 0.1, 0.0, 0.0], dtype=float)
+        self.est_params = np.array([27.0, 0.1, 0.0, 0.0], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -541,19 +541,19 @@ class Controller(Node):
 
         # -------- Parameter clamping (4 params) --------
         # kT
-        self.x_est[13] = np.clip(self.x_est[13], 18.0, 60.0)
+        #self.x_est[13] = np.clip(self.x_est[13], 18.0, 60.0)
         # dragZ
-        self.x_est[14] = np.clip(self.x_est[14], 0.01, 0.5)
+        #self.x_est[14] = np.clip(self.x_est[14], 0.01, 0.5)
         # fc_roll_offset_deg (index 15)
-        self.x_est[15] = np.clip(self.x_est[15], -6.0, 6.0)
+        #self.x_est[15] = np.clip(self.x_est[15], -6.0, 6.0)
         # fc_pitch_offset_deg (index 16)
-        self.x_est[16] = np.clip(self.x_est[16], -6.0, 6.0)
+        #self.x_est[16] = np.clip(self.x_est[16], -6.0, 6.0)
 
         # Update estimated parameters vector (4)
-        self.est_params = np.array([
-            self.x_est[13], self.x_est[14],
-            self.x_est[15], self.x_est[16]
-        ], dtype=float)
+        #self.est_params = np.array([
+        #    self.x_est[13], self.x_est[14],
+        #    self.x_est[15], self.x_est[16]
+        #], dtype=float)
 
         # Optional debug
         # self.get_logger().info(f"UKF update: est_params = {self.est_params}")
