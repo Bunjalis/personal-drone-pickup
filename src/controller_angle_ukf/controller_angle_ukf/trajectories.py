@@ -49,24 +49,29 @@ def takeoff_trajectory(dt):
     
 
 def land_trajectory(dt, init_pose):
-    steps_move_back = int(5 / dt)  # 3 seconds of move back
-    steps_descend = int(5 / dt)  # 3 seconds of descend
+    steps_move_back = int(5 / dt)  # 5 seconds of move back
+    steps_descend = int(5 / dt)  # 5 seconds of descend
+    steps_ground = int(3 / dt)  # 3 seconds on ground
     time_space_move_back = np.linspace(0, steps_move_back * dt, steps_move_back)
     time_space_descend = np.linspace(0, steps_descend * dt, steps_descend)
+    time_space_ground = np.linspace(0, steps_ground * dt, steps_ground)
 
-    time_space_total = np.concatenate((time_space_move_back, time_space_descend))
+    time_space_total = np.concatenate((time_space_move_back, time_space_descend, time_space_ground))
 
-    x_traj_move_back = np.linspace(init_pose[0], 0, steps_move_back)  # Move back 1 meter
-    x_traj_descend = np.linspace(0, 0, steps_descend)  # Move back 1 meter
-    x_traj = np.concatenate((x_traj_move_back, x_traj_descend))
+    x_traj_move_back = np.linspace(init_pose[0], 0, steps_move_back)
+    x_traj_descend = np.linspace(0, 0, steps_descend)
+    x_traj_ground = np.zeros_like(time_space_ground)
+    x_traj = np.concatenate((x_traj_move_back, x_traj_descend, x_traj_ground))
 
-    y_traj_move_back = np.linspace(init_pose[1], 0, steps_move_back)  # Move back 1 meter
-    y_traj_descend = np.linspace(0, 0, steps_descend)  # Move back 1 meter
-    y_traj = np.concatenate((y_traj_move_back, y_traj_descend))
+    y_traj_move_back = np.linspace(init_pose[1], 0, steps_move_back)
+    y_traj_descend = np.linspace(0, 0, steps_descend)
+    y_traj_ground = np.zeros_like(time_space_ground)
+    y_traj = np.concatenate((y_traj_move_back, y_traj_descend, y_traj_ground))
 
-    z_traj_move_back = np.linspace(init_pose[2], 1.0, steps_move_back)  # Move back 1 meter
-    z_traj_descend  = np.linspace(1.0, 0.0, steps_descend)  # Move back 1 meter
-    z_traj = np.concatenate((z_traj_move_back, z_traj_descend))
+    z_traj_move_back = np.linspace(init_pose[2], 1.0, steps_move_back)
+    z_traj_descend  = np.linspace(1.0, 0.0, steps_descend)
+    z_traj_ground = np.zeros_like(time_space_ground)
+    z_traj = np.concatenate((z_traj_move_back, z_traj_descend, z_traj_ground))
 
     roll_traj = np.zeros_like(time_space_total)
     pitch_traj = np.zeros_like(time_space_total)
@@ -285,7 +290,7 @@ def foward_z_sin_trajectory(dt):
     y_traj_land = np.linspace(motion_traj[1, -1], 0.0, steps_land)
     z_traj_land = np.linspace(motion_traj[2, -1], 0.0, steps_land)
     
-    roll_traj_land = np.zeros_like(time_space_land)
+    roll_traj_land = np.zeros_like(time_space_land) 
     pitch_traj_land = np.zeros_like(time_space_land)
     yaw_traj_land = np.zeros_like(time_space_land)
     rpy_traj_land = np.vstack((roll_traj_land, pitch_traj_land, yaw_traj_land)).T
@@ -322,14 +327,14 @@ def xyz_sine_trajectory(dt):
     time_space_hover_start = np.linspace(0, steps_hover_start * dt, steps_hover_start)
     x_traj_hover_start = np.zeros_like(time_space_hover_start)
     y_traj_hover_start = np.zeros_like(time_space_hover_start)
-    z_traj_hover_start = np.ones_like(time_space_hover_start) * 1.0
+    z_traj_hover_start = np.ones_like(time_space_hover_start) * 0.75
 
     # 40 seconds of sine motion
     steps = int(40 / dt)
     time_space = np.linspace(0, steps * dt, steps)
     x_traj_sine = 0.0 + 1.0 * np.sin(0.5 * np.pi * time_space / 5.0)
     y_traj_sine = 0.0 + 1.0 * np.sin(0.25 * np.pi * time_space / 5.0)
-    z_traj_sine = 1.0 + 0.5 * np.sin(0.5 * np.pi * time_space / 5.0)
+    z_traj_sine = 0.75 + 0.25 * np.sin(0.25 * np.pi * time_space / 5.0)
 
     # 5 second hover after sine motion
     steps_hover_end = int(5 / dt)

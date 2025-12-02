@@ -51,7 +51,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self, USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = circle_trajectory(DT)
+        self.traj, trajectory_name = z_sin_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(
             self.traj, pose_subsample=15, show_velocity=False, velocity_scale=0.3, color_by_time=True
@@ -116,7 +116,7 @@ class Controller(Node):
             0.1, 0.1, 0.1, 0.1,         # quaternion
             0.1, 0.1, 0.1,              # velocity
             0.1, 0.1, 0.1,              # angular velocity
-            0.3,                        # kT
+            0.2,                        # kT
             0.025, 0.025                  # fc_roll_offset_deg, fc_pitch_offset_deg
         ]).astype(float)
 
@@ -562,13 +562,13 @@ class Controller(Node):
         # fc_pitch_offset_deg (index 15)
         self.x_est[15] = np.clip(self.x_est[15], -6.0, 6.0)
 
-        # Update estimated parameters vector (3)
-        #self.est_params = np.array([
-        #    self.x_est[13],
-        #    self.x_est[14], self.x_est[15]
-        #], dtype=float)
+        '''
+        self.est_params = np.array([
+            self.x_est[13],
+            self.x_est[14], self.x_est[15]
+        ], dtype=float)
 
-
+        '''
         self.est_params = np.array([
             self.x_est[13],
             0.0, 0.0
