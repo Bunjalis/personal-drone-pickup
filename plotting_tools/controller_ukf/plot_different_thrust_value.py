@@ -17,10 +17,10 @@ colors = ['#e97d00', '#008e00', '#0049bd', '#911515', '#000000', '#97c6d1', '#b6
 
 # Define the log file paths
 log_files = [
-    '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/CinewhoopFoward15/log.csv',
-    '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/CinewhoopFoward20/log.csv',
-    '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/CinewhoopFoward252/log.csv',
-    '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/CinewhoopFoward302/log.csv',
+    '/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/forward_z_sin_20251202_123653/log.csv',
+    '/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/forward_z_sin_20251202_123529/log.csv',
+    '/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/forward_z_sin_20251202_123359/log.csv',
+    '/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/forward_z_sin_20251202_123233/log.csv',
 ]
 
 # Labels for the legend
@@ -47,7 +47,7 @@ for idx, (log_file, label) in enumerate(zip(log_files, labels)):
         time = df['timestamp'] - df['timestamp'].iloc[0]
         
         # Filter data to first 48 seconds
-        mask = time <= 37
+        mask = time <= 60
         time = time[mask]
         
         # Extract data
@@ -81,7 +81,7 @@ desired_line = Line2D([0], [0], color='#000000', linewidth=LINE_WIDTH, linestyle
 axes[0].set_ylabel('Altitude (m)', fontsize=AXIS_LABEL_SIZE)
 axes[0].grid(True, alpha=GRID_ALPHA)
 axes[0].set_title('(a) Altitude Tracking Performance', fontsize=SUBPLOT_TITLE_SIZE, fontweight='bold')
-axes[0].set_xlim(0, 37)
+axes[0].set_xlim(0, 60)
 axes[0].set_xticks(np.arange(0, 40, 10))
 axes[0].tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
 
@@ -90,7 +90,7 @@ axes[1].set_ylabel(r'Thrust Constant $k_t$', fontsize=AXIS_LABEL_SIZE)
 axes[1].set_xlabel('Time (s)', fontsize=AXIS_LABEL_SIZE)
 axes[1].grid(True, alpha=GRID_ALPHA)
 axes[1].set_title(r'(b) Estimated Thrust Constant $k_t$', fontsize=SUBPLOT_TITLE_SIZE, fontweight='bold')
-axes[1].set_xlim(0, 37)
+axes[1].set_xlim(0, 60)
 axes[1].set_xticks(np.arange(0, 40, 10))
 axes[1].tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
 

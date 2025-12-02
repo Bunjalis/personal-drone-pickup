@@ -49,8 +49,8 @@ def takeoff_trajectory(dt):
     
 
 def land_trajectory(dt, init_pose):
-    steps_move_back = int(3 / dt)  # 3 seconds of move back
-    steps_descend = int(3 / dt)  # 3 seconds of descend
+    steps_move_back = int(5 / dt)  # 3 seconds of move back
+    steps_descend = int(5 / dt)  # 3 seconds of descend
     time_space_move_back = np.linspace(0, steps_move_back * dt, steps_move_back)
     time_space_descend = np.linspace(0, steps_descend * dt, steps_descend)
 
@@ -65,7 +65,7 @@ def land_trajectory(dt, init_pose):
     y_traj = np.concatenate((y_traj_move_back, y_traj_descend))
 
     z_traj_move_back = np.linspace(init_pose[2], 1.0, steps_move_back)  # Move back 1 meter
-    z_traj_descend  = np.linspace(1.0, 0.1, steps_descend)  # Move back 1 meter
+    z_traj_descend  = np.linspace(1.0, 0.0, steps_descend)  # Move back 1 meter
     z_traj = np.concatenate((z_traj_move_back, z_traj_descend))
 
     roll_traj = np.zeros_like(time_space_total)
@@ -283,7 +283,7 @@ def foward_z_sin_trajectory(dt):
     time_space_land = np.linspace(0, steps_land * dt, steps_land)
     x_traj_land = np.linspace(motion_traj[0, -1], 1.0, steps_land)
     y_traj_land = np.linspace(motion_traj[1, -1], 0.0, steps_land)
-    z_traj_land = np.linspace(motion_traj[2, -1], 0.1, steps_land)
+    z_traj_land = np.linspace(motion_traj[2, -1], 0.0, steps_land)
     
     roll_traj_land = np.zeros_like(time_space_land)
     pitch_traj_land = np.zeros_like(time_space_land)
@@ -425,8 +425,8 @@ def circle_trajectory(dt):
     
     # Circle parameters
     radius = 1.0  # 1 meter
-    period = 20  # seconds per rotation
-    num_revolutions = 3  # number of full circles
+    period = 30  # seconds per rotation
+    num_revolutions = 2  # number of full circles
     omega = 2 * np.pi / period  # angular velocity (rad/s)
     
     # Get the final position from takeoff (should be 0, 0, 1.0)
@@ -437,14 +437,14 @@ def circle_trajectory(dt):
     # Transition trajectory from takeoff end to circle start
     x_traj_transition = np.linspace(takeoff_end_x, radius, steps_transition)  # Move to circle start
     y_traj_transition = np.linspace(takeoff_end_y, 0.0, steps_transition)     # Move to y=0
-    z_traj_transition = np.linspace(takeoff_end_z, 1.0, steps_transition)     # Move to circle altitude
+    z_traj_transition = np.linspace(takeoff_end_z, 0.75, steps_transition)     # Move to circle altitude
 
     # Hover at circle start for 3 seconds
     steps_hover = int(3 / dt)
     time_space_hover = np.linspace(0, steps_hover * dt, steps_hover)
     x_traj_hover = np.full_like(time_space_hover, radius)
     y_traj_hover = np.zeros_like(time_space_hover)
-    z_traj_hover = np.full_like(time_space_hover, 1.0)
+    z_traj_hover = np.full_like(time_space_hover, 0.75)
 
     # Three full revolutions, 10 seconds each = 30 seconds total
     steps = int(period * num_revolutions / dt)  # 30 seconds of circle motion
@@ -452,7 +452,7 @@ def circle_trajectory(dt):
 
     x_traj = radius * np.cos(omega * time_space)
     y_traj = radius * np.sin(omega * time_space)
-    z_traj = 1.0 * np.ones_like(time_space)  # constant altitude
+    z_traj = 0.75 * np.ones_like(time_space)  # constant altitude
 
     # Combine transition, hover, and circle time spaces for trajectory calculations
     time_space_combined = np.concatenate((time_space_transition, time_space_hover, time_space))

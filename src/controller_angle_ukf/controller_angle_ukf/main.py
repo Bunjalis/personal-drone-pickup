@@ -37,7 +37,7 @@ from std_msgs.msg import Float32MultiArray, Int32
 
 POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
 USE_MOTION_CAPTURE =  False     # Set to False to use ORB-SLAM data instead
-EST_DELAY_STATES = 3        # Number of states delay to estimate
+EST_DELAY_STATES = 0        # Number of states delay to estimate
 FREQUENCY_HZ = 15
 DT = 1.0 / FREQUENCY_HZ
 
@@ -51,7 +51,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self, USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = foward_z_sin_trajectory(DT)
+        self.traj, trajectory_name = circle_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(
             self.traj, pose_subsample=15, show_velocity=False, velocity_scale=0.3, color_by_time=True
@@ -91,13 +91,13 @@ class Controller(Node):
         self.centre_rate_deg = 100.0   # Fixed BF rates curve params (for yaw)
         self.max_rate_deg = 100.0
         self.rate_expo = 0.5
-        self.tau_angle = 0.08          # Fixed angle loop time constant
+        self.tau_angle = 0.1          # Fixed angle loop time constant
         self.tau_rate = 0.08           # Fixed yaw rate loop time constant
         self.drag_coeff_z = 0.0        # Fixed drag coefficient (disabled)
 
         # est_params order (3):
         # [kT, fc_roll_offset_deg, fc_pitch_offset_deg]
-        self.est_params = np.array([10.0, 0.0, 0.0], dtype=float)
+        self.est_params = np.array([24.0, 0.0, 0.0], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -116,8 +116,8 @@ class Controller(Node):
             0.1, 0.1, 0.1, 0.1,         # quaternion
             0.1, 0.1, 0.1,              # velocity
             0.1, 0.1, 0.1,              # angular velocity
-            0.1,                        # kT
-            0.05, 0.05                  # fc_roll_offset_deg, fc_pitch_offset_deg
+            0.3,                        # kT
+            0.025, 0.025                  # fc_roll_offset_deg, fc_pitch_offset_deg
         ]).astype(float)
 
         self.Q = np.diag([
@@ -127,7 +127,7 @@ class Controller(Node):
             1e-3, 1e-3, 1e-4,           # v
             1e-3, 1e-3, 1e-3,           # w
             # params (slower drift)
-            1e-4,                       # kT
+            1e-3,                       # kT
             1e-4, 1e-4                  # fc_roll_offset_deg, fc_pitch_offset_deg
         ]).astype(float)
 
@@ -239,10 +239,10 @@ class Controller(Node):
 
             # ---- Delay-compensated state roll-forward using sim_integrator ----
             # Hybrid quaternion: Use UKF's pitch/roll + measured yaw
-            estimated_state = copy.deepcopy(self.current_pose[:13])
-            estimated_state[0:2] = self.x_est[0:2]    # start with UKF quaternion
-            estimated_state[3:7] = self.x_est[3:7]    # start with UKF quaternion
-            estimated_state[8:10] = self.x_est[8:10]  # start with UKF velocity
+            estimated_state = copy.deepcopy(self.x_est[:13])
+            #estimated_state[0:2] = self.x_est[0:2]    # start with UKF quaternion
+            #estimated_state[3:7] = self.x_est[3:7]    # start with UKF quaternion
+            #estimated_state[8:10] = self.x_est[8:10]  # start with UKF velocity
 
             if len(self.control_history) <= 0 or self.delay_states == 0:
                 delayed_control_history = []
@@ -376,8 +376,11 @@ class Controller(Node):
 
             # -------- UKF prediction (every control loop) --------
             if self.takeoff_requested and len(self.control_history) > self.delay_states:
-                old_u = np.array(self.control_history[-self.delay_states][0:4])
-                old_u_rate = np.array(self.control_history[-self.delay_states][4:8])
+                # Use a safe index: if delay_states == 0, take the most recent control (-1),
+                # otherwise take the delayed entry using a negative index.
+                idx = -self.delay_states if self.delay_states > 0 else -1
+                old_u = np.array(self.control_history[idx][0:4])
+                old_u_rate = np.array(self.control_history[idx][4:8])
                 self.ukf_predict(old_u, old_u_rate)
 
             print("Estimated params:", self.est_params)
@@ -560,9 +563,15 @@ class Controller(Node):
         self.x_est[15] = np.clip(self.x_est[15], -6.0, 6.0)
 
         # Update estimated parameters vector (3)
+        #self.est_params = np.array([
+        #    self.x_est[13],
+        #    self.x_est[14], self.x_est[15]
+        #], dtype=float)
+
+
         self.est_params = np.array([
             self.x_est[13],
-            self.x_est[14], self.x_est[15]
+            0.0, 0.0
         ], dtype=float)
 
         # Optional debug
