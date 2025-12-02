@@ -119,7 +119,7 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     # fc_roll_offset_deg, fc_pitch_offset_deg, q_ref(4)
     ocp.parameter_values = np.array([
         38.0,   # kT
-        0.5,    # drag_coeff_z
+        0.0,    # drag_coeff_z (fixed, disabled)
         0.07,   # tau_rate
         100.0,  # centre_rate_deg (yaw BF curve)
         100.0,  # max_rate_deg (yaw BF curve)
@@ -168,7 +168,7 @@ def generate_ocp_controller(dt, N_horizon, skip_steps, dynamics=None):
     sim.solver_options.T = dt
     # same parameter vector as ocp.parameter_values but with potentially different taus for quick sim testing
     sim.parameter_values = np.array([
-        38.0, 0.5, 0.12, 100.0, 100.0, 0.5, 55.0, 0.15, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0
+        38.0, 0.0, 0.12, 100.0, 100.0, 0.5, 55.0, 0.15, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0
     ])
     sim_solver = AcadosSimSolver(sim)
 

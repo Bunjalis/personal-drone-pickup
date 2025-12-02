@@ -205,8 +205,8 @@ def foward_z_sin_trajectory(dt):
     5. Lands at (1, 0, 0.1)
     """
     # Custom takeoff from (-1, 0, 0) to (-1, 0, 1)
-    steps_takeoff = int(4 / dt)  # 4 seconds of takeoff
-    steps_hover_start = int(5 / dt)  # 5 seconds of hover at start
+    steps_takeoff = int(5 / dt)  # 4 seconds of takeoff
+    steps_hover_start = int(0 / dt)  # 5 seconds of hover at start
     
     # Takeoff phase from (-1, 0, 0) to (-1, 0, 1)
     time_space_takeoff = np.linspace(0, steps_takeoff * dt, steps_takeoff)
@@ -219,14 +219,17 @@ def foward_z_sin_trajectory(dt):
     x_traj_hover_start = np.full_like(time_space_hover_start, -1.0)
     y_traj_hover_start = np.zeros_like(time_space_hover_start)
     z_traj_hover_start = np.ones_like(time_space_hover_start) * 1.0
+
+
+    trajectory_duration = 40 #seconds
     
     # Phase 2: Forward motion with Z-sine oscillations (60 seconds, 3.5 oscillations)
-    steps_motion = int(40 / dt)  # 60 seconds of forward motion with z-sine
+    steps_motion = int(trajectory_duration / dt)  # 60 seconds of forward motion with z-sine
     time_space_motion = np.linspace(0, steps_motion * dt, steps_motion)
     
     # 3.5 oscillations over 60 seconds (ends on downward phase)
-    num_oscillations = 2.5
-    frequency = num_oscillations / 40.0  # Hz
+    num_oscillations = 1.0
+    frequency = num_oscillations / trajectory_duration  # Hz
     phase = 2 * np.pi * frequency * time_space_motion
     
     # Move from x=-1 to x=1 linearly, y stays at 0

@@ -199,7 +199,7 @@ class QuadDynamics:
         a_thrust = cs.vertcat(0.0, 0.0, self.thrust_ratio * self.u[2])
         drag_force = cs.vertcat(0.0, 0.0, -self.drag_coeff_z * self.v[2])
         g_vec = cs.vertcat(0.0, 0.0, self.g)
-        return self.v_dot_q(a_thrust, self.q) - g_vec + drag_force
+        return self.v_dot_q(a_thrust, self.q) - g_vec #+ drag_force
 
     def w_dynamics(self):
         """
