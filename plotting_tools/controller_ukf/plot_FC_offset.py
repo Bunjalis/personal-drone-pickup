@@ -16,7 +16,11 @@ GRID_ALPHA = 0.3
 colors = ['#e97d00', '#008e00', '#0049bd', '#911515', '#000000', '#97c6d1', '#b697ff']
 
 # Define the log file path
-log_file = '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/CinewhoopCircle1/log.csv'
+log_file = '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/Cinewhoop/z_sin_xy_adapt_4/log.csv'
+log_file = '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/Cinewhoop/z_sin_no_xy_adapt_5/log.csv'
+
+log_file = '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/Cinewhoop/xyz_xy_adapt_4/log.csv'
+#log_file = '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/Cinewhoop/xyz_no_xy_adapt_3/log.csv'
 #log_file = '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/CinewhoopXYZ/log.csv'
 
 
@@ -38,23 +42,19 @@ try:
     # Calculate time from timestamp
     time = df['timestamp'] - df['timestamp'].iloc[0]
     
-    # Filter data to first 40 seconds
-    mask = time <= 36
-    time = time[mask]
-    
     # Extract data for X and Y position
-    x_position = df['ukf_pose_x'][mask]
-    y_position = df['ukf_pose_y'][mask]
-    x_desired = df['traj_x_ref'][mask]
-    y_desired = df['traj_y_ref'][mask]
+    x_position = df['ukf_pose_x']
+    y_position = df['ukf_pose_y']
+    x_desired = df['traj_x_ref']
+    y_desired = df['traj_y_ref']
     
     # Calculate errors
     x_error = x_position - x_desired
     y_error = y_position - y_desired
     
     # Extract roll and pitch offset estimates
-    roll_offset = df['est_param_fc_roll_offset_deg'][mask]
-    pitch_offset = df['est_param_fc_pitch_offset_deg'][mask]
+    roll_offset = df['est_param_fc_roll_offset_deg']
+    pitch_offset = df['est_param_fc_pitch_offset_deg']
     
     # Plot 0: X and Y positions (actual and desired)
     line_x_actual, = axes[0].plot(time, x_position, color=colors[0], linewidth=LINE_WIDTH, label='X Position')
@@ -86,8 +86,6 @@ axes[0].set_ylabel('Position (m)', fontsize=AXIS_LABEL_SIZE)
 axes[0].set_xlabel('Time (s)', fontsize=AXIS_LABEL_SIZE)
 axes[0].grid(True, alpha=GRID_ALPHA)
 axes[0].set_title('(a) X-Y Position Tracking Performance', fontsize=SUBPLOT_TITLE_SIZE, fontweight='bold')
-axes[0].set_xlim(0, 36)
-axes[0].set_xticks(np.arange(0, 40, 10))
 axes[0].tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
 
 # Configure axis 1: Offset Estimates
@@ -95,8 +93,6 @@ axes[1].set_ylabel('Offset (deg)', fontsize=AXIS_LABEL_SIZE)
 axes[1].set_xlabel('Time (s)', fontsize=AXIS_LABEL_SIZE)
 axes[1].grid(True, alpha=GRID_ALPHA)
 axes[1].set_title('(b) Estimated Roll and Pitch Offsets', fontsize=SUBPLOT_TITLE_SIZE, fontweight='bold')
-axes[1].set_xlim(0, 36)
-axes[1].set_xticks(np.arange(0, 40, 10))
 axes[1].tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
 axes[1].axhline(y=0, color='k', linestyle='-', linewidth=0.5, alpha=0.5)
 
