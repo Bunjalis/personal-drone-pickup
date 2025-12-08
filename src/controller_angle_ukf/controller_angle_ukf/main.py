@@ -35,11 +35,23 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from std_msgs.msg import Float32MultiArray, Int32
 
 
-POSE_TIMEOUT_THRESHOLD = 0.25  # seconds
-USE_MOTION_CAPTURE =  False     # Set to False to use ORB-SLAM data instead
-EST_DELAY_STATES = 0        # Number of states delay to estimate
+
+
+USE_MOTION_CAPTURE =  False 
+USE_FC_OFFSET_ESTIMATION = True
+USE_DELAY_COMPENSATION = True
+
+
+POSE_TIMEOUT_THRESHOLD = 0.25
 FREQUENCY_HZ = 15
 DT = 1.0 / FREQUENCY_HZ
+
+
+
+if USE_DELAY_COMPENSATION:
+    EST_DELAY_STATES = 3 
+else:
+    EST_DELAY_STATES = 0
 
 LOGGING_NAME = 'controller_angle_ukf'
 
@@ -88,12 +100,12 @@ class Controller(Node):
         # ---------------------------
         # Fixed constants
         self.angle_max_deg = 55.0
-        self.centre_rate_deg = 100.0   # Fixed BF rates curve params (for yaw)
+        self.centre_rate_deg = 100.0    # Fixed BF rates curve params (for yaw)
         self.max_rate_deg = 100.0
         self.rate_expo = 0.5
-        self.tau_angle = 0.1          # Fixed angle loop time constant
-        self.tau_rate = 0.08           # Fixed yaw rate loop time constant
-        self.drag_coeff_z = 0.0        # Fixed drag coefficient (disabled)
+        self.tau_angle = 0.1            # Fixed angle loop time constant
+        self.tau_rate = 0.1             # Fixed yaw rate loop time constant
+        self.drag_coeff_z = 0.0         # Fixed drag coefficient (disabled)
 
         # est_params order (3):
         # [kT, fc_roll_offset_deg, fc_pitch_offset_deg]
@@ -237,58 +249,45 @@ class Controller(Node):
                 self.ocp, self.traj, self.N, self.step_counter, self.skip_steps, full_params
             )
 
+
+
+
             # ---- Delay-compensated state roll-forward using sim_integrator ----
             # Hybrid quaternion: Use UKF's pitch/roll + measured yaw
             estimated_state = copy.deepcopy(self.x_est[:13])
-            #estimated_state[0:2] = self.x_est[0:2]    # start with UKF quaternion
-            #estimated_state[3:7] = self.x_est[3:7]    # start with UKF quaternion
-            #estimated_state[8:10] = self.x_est[8:10]  # start with UKF velocity
 
-            if len(self.control_history) <= 0 or self.delay_states == 0:
-                delayed_control_history = []
-            else:
-                delayed_control_history = self.control_history[-self.delay_states:]
 
-            for i, val in enumerate(delayed_control_history):
-                # integrator state = [p(3), q(4), v(3), w(3), u(4)]
-                self.sim_integrator.set(
-                    "x", np.concatenate((estimated_state, np.array(val[0:4]).flatten()))
-                )
-                self.sim_integrator.set("u", np.array(val[4:8]))
-                # params = 10 dyn + 4 qref (qref unused in dynamics)
-                full_params = np.concatenate([
-                    [self.est_params[0]],  # kT
-                    [self.drag_coeff_z],   # fixed dragZ (0.0)
-                    [self.tau_rate],       # fixed tau_rate
-                    [self.centre_rate_deg, self.max_rate_deg, self.rate_expo],
-                    [self.angle_max_deg],
-                    [self.tau_angle],
-                    self.est_params[1:3]   # fc_roll_offset, fc_pitch_offset
-                ])
-                sim_p = np.concatenate([full_params, np.array([1.0, 0.0, 0.0, 0.0])])
-                self.sim_integrator.set("p", sim_p)
-                status_sim = self.sim_integrator.solve()
-                if status_sim != 0:
-                    raise Exception(f"Simulation integrator failed with status {status_sim}.")
-                x_next = self.sim_integrator.get("x")
-                estimated_state = x_next[:13]
+            if USE_DELAY_COMPENSATION:
+                delay_compensated_state = copy.deepcopy(self.x_est[:13])
+                if len(self.control_history) <= 0 or self.delay_states == 0:
+                    delayed_control_history = []
+                else:
+                    delayed_control_history = self.control_history[-self.delay_states:]
+
+                for i, val in enumerate(delayed_control_history):
+                    # integrator state = [p(3), q(4), v(3), w(3), u(4)]
+                    self.sim_integrator.set(
+                        "x", np.concatenate((delay_compensated_state, np.array(val[0:4]).flatten()))
+                    )
+                    self.sim_integrator.set("u", np.array(val[4:8]))
+                    full_params = np.concatenate([ [self.est_params[0]], [self.drag_coeff_z], [self.tau_rate], [self.centre_rate_deg, self.max_rate_deg, self.rate_expo], [self.angle_max_deg], [self.tau_angle], self.est_params[1:3] ])
+                    sim_p = np.concatenate([full_params, np.array([1.0, 0.0, 0.0, 0.0])])
+                    self.sim_integrator.set("p", sim_p)
+                    status_sim = self.sim_integrator.solve()
+                    if status_sim != 0:
+                        raise Exception(f"Simulation integrator failed with status {status_sim}.")
+                    x_next = self.sim_integrator.get("x")
+                    delay_compensated_state = x_next[:13]
+                estimated_state[7:10] = delay_compensated_state[7:10]
 
             # Extract yaw from estimated_state (measured yaw)
             qw_meas, qx_meas, qy_meas, qz_meas = estimated_state[3:7]
-            yaw_measured = np.arctan2(
-                2 * (qw_meas * qz_meas + qx_meas * qy_meas),
-                1 - 2 * (qy_meas ** 2 + qz_meas ** 2)
-            )
+            yaw_measured = np.arctan2( 2 * (qw_meas * qz_meas + qx_meas * qy_meas), 1 - 2 * (qy_meas ** 2 + qz_meas ** 2) )
 
             # Extract pitch/roll from UKF estimate (model-based)
             qw_ukf, qx_ukf, qy_ukf, qz_ukf = self.x_est[3:7]
-            roll_ukf = np.arctan2(
-                2 * (qw_ukf * qx_ukf + qy_ukf * qz_ukf),
-                1 - 2 * (qx_ukf ** 2 + qy_ukf ** 2)
-            )
-            pitch_ukf = np.arcsin(
-                np.clip(2 * (qw_ukf * qy_ukf - qz_ukf * qx_ukf), -1.0, 1.0)
-            )
+            roll_ukf = np.arctan2( 2 * (qw_ukf * qx_ukf + qy_ukf * qz_ukf), 1 - 2 * (qx_ukf ** 2 + qy_ukf ** 2) )
+            pitch_ukf = np.arcsin( np.clip(2 * (qw_ukf * qy_ukf - qz_ukf * qx_ukf), -1.0, 1.0) )
 
             # Reconstruct quaternion from UKF's roll/pitch + measured yaw
             cy = np.cos(yaw_measured * 0.5)
@@ -557,25 +556,14 @@ class Controller(Node):
         # -------- Parameter clamping (3 params) --------
         # kT
         self.x_est[13] = np.clip(self.x_est[13], 18.0, 60.0)
-        # fc_roll_offset_deg (index 14)
         self.x_est[14] = np.clip(self.x_est[14], -6.0, 6.0)
-        # fc_pitch_offset_deg (index 15)
         self.x_est[15] = np.clip(self.x_est[15], -6.0, 6.0)
 
-        '''
-        self.est_params = np.array([
-            self.x_est[13],
-            self.x_est[14], self.x_est[15]
-        ], dtype=float)
+        if USE_FC_OFFSET_ESTIMATION:
+            self.est_params = np.array([self.x_est[13], self.x_est[14], self.x_est[15]] , dtype=float)
+        else:
+            self.est_params = np.array([ self.x_est[13], 0.0, 0.0 ], dtype=float)
 
-        '''
-        self.est_params = np.array([
-            self.x_est[13],
-            0.0, 0.0
-        ], dtype=float)
-
-        # Optional debug
-        # self.get_logger().info(f"UKF update: est_params = {self.est_params}")
 
     # --- UKF Functions ---
     def fx(self, x, u, u_rate):
