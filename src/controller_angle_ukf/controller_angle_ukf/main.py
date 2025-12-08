@@ -35,8 +35,6 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from std_msgs.msg import Float32MultiArray, Int32
 
 
-
-
 USE_MOTION_CAPTURE =  False 
 USE_FC_OFFSET_ESTIMATION = True
 USE_DELAY_COMPENSATION = True
@@ -95,12 +93,9 @@ class Controller(Node):
             MotionCaptureState, '/orb_slam_state', self.orb_slam_state_callback, 10
         )
 
-        # ---------------------------
-        # UKF settings (Partial measurement with yaw only)
-        # ---------------------------
-        # Fixed constants
+
         self.angle_max_deg = 55.0
-        self.centre_rate_deg = 100.0    # Fixed BF rates curve params (for yaw)
+        self.centre_rate_deg = 100.0 
         self.max_rate_deg = 100.0
         self.rate_expo = 0.5
         self.tau_angle = 0.1            # Fixed angle loop time constant
@@ -323,13 +318,26 @@ class Controller(Node):
                 )
 
             init_mpc_state = estimated_state_with_control.copy()
-            relaxation_factor = 0.025
-            lbx = init_mpc_state - relaxation_factor * init_mpc_state
-            ubx = init_mpc_state + relaxation_factor * init_mpc_state
+            tolerances = np.array([
+                0.02, 0.02, 0.02,           # position (m)
+                0.02, 0.02, 0.02, 0.02,     # quaternion
+                0.1, 0.1, 0.1,              # velocity (m/s)
+                0.1, 0.1, 0.1,              # angular velocity (rad/s)
+                0.0, 0.0, 0.0, 0.0          # control inputs
+            ])
+            lbx = init_mpc_state - tolerances
+            ubx = init_mpc_state + tolerances
+            
+            quat_lb_norm = np.linalg.norm(lbx[3:7])
+            quat_ub_norm = np.linalg.norm(ubx[3:7])
+            if quat_lb_norm > 0:
+                lbx[3:7] = lbx[3:7] / quat_lb_norm
+            if quat_ub_norm > 0:
+                ubx[3:7] = ubx[3:7] / quat_ub_norm
+            
             self.ocp.set(0, "lbx", lbx)
             self.ocp.set(0, "ubx", ubx)
 
-            # Warm start
             if self.first_solve:
                 set_initial_guess(self.ocp, self.N)
                 self.first_solve = False
