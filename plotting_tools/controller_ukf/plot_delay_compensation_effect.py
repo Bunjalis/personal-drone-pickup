@@ -16,8 +16,8 @@ GRID_ALPHA = 0.3
 colors = ['#e97d00', '#008e00', '#0049bd', '#911515', '#000000', '#97c6d1', '#b697ff']
 
 # Define the log file paths
-log_file_with_comp = '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/Cinewhoop/xyz_xy_adapt_3/log.csv'
-log_file_without_comp = '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/Cinewhoop/xyz_no_xy_adapt_3/log.csv'
+log_file_with_comp = '/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/32_with_delay_comp/log.csv'
+log_file_without_comp = '/home/mitchell/Documents/PhD/drone_cage_control/logs/controller_angle_ukf/32_without_delay_comp/log.csv'
 
 
 

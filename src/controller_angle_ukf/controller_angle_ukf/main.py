@@ -37,7 +37,7 @@ from std_msgs.msg import Float32MultiArray, Int32
 
 USE_MOTION_CAPTURE =  False 
 USE_FC_OFFSET_ESTIMATION = True
-USE_DELAY_COMPENSATION = True
+USE_DELAY_COMPENSATION = False
 
 
 POSE_TIMEOUT_THRESHOLD = 0.25
@@ -61,7 +61,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self, USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = z_sin_trajectory(DT)
+        self.traj, trajectory_name = xyz_sine_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(
             self.traj, pose_subsample=15, show_velocity=False, velocity_scale=0.3, color_by_time=True
@@ -98,13 +98,13 @@ class Controller(Node):
         self.centre_rate_deg = 100.0 
         self.max_rate_deg = 100.0
         self.rate_expo = 0.5
-        self.tau_angle = 0.1            # Fixed angle loop time constant
-        self.tau_rate = 0.1             # Fixed yaw rate loop time constant
+        self.tau_angle = 0.08            # Fixed angle loop time constant
+        self.tau_rate = 0.08             # Fixed yaw rate loop time constant
         self.drag_coeff_z = 0.0         # Fixed drag coefficient (disabled)
 
         # est_params order (3):
         # [kT, fc_roll_offset_deg, fc_pitch_offset_deg]
-        self.est_params = np.array([24.0, 0.0, 0.0], dtype=float)
+        self.est_params = np.array([28.0, 0.0, 0.0], dtype=float)
 
         self.alpha, self.beta, self.kappa = 0.1, 2, 0
 
@@ -123,8 +123,8 @@ class Controller(Node):
             0.1, 0.1, 0.1, 0.1,         # quaternion
             0.1, 0.1, 0.1,              # velocity
             0.1, 0.1, 0.1,              # angular velocity
-            0.2,                        # kT
-            0.025, 0.025                  # fc_roll_offset_deg, fc_pitch_offset_deg
+            0.1,                        # kT
+            0.02, 0.02                  # fc_roll_offset_deg, fc_pitch_offset_deg
         ]).astype(float)
 
         self.Q = np.diag([
@@ -134,7 +134,7 @@ class Controller(Node):
             1e-3, 1e-3, 1e-4,           # v
             1e-3, 1e-3, 1e-3,           # w
             # params (slower drift)
-            1e-3,                       # kT
+            1e-4,                       # kT
             1e-4, 1e-4                  # fc_roll_offset_deg, fc_pitch_offset_deg
         ]).astype(float)
 
@@ -304,7 +304,8 @@ class Controller(Node):
                 [hybrid_qw, hybrid_qx, hybrid_qy, hybrid_qz]
             ) / quat_norm
 
-            # Tight initial-state box (softened)
+
+            
             if len(self.control_history) == 0:
                 self.get_logger().warn(
                     "Control history is empty - cannot set state bounds accurately"
@@ -318,11 +319,27 @@ class Controller(Node):
                 )
 
             init_mpc_state = estimated_state_with_control.copy()
+            relaxation_factor = 0.025
+            
+            # Apply relaxation only to linear velocity (indices 7-9) and angular velocity (indices 10-12)
+            lbx = init_mpc_state.copy()
+            ubx = init_mpc_state.copy()
+            
+            # Linear velocity
+            lbx[7:10] = init_mpc_state[7:10] - relaxation_factor * np.abs(init_mpc_state[7:10])
+            ubx[7:10] = init_mpc_state[7:10] + relaxation_factor * np.abs(init_mpc_state[7:10])
+            
+            # Angular velocity
+            lbx[10:13] = init_mpc_state[10:13] - relaxation_factor * np.abs(init_mpc_state[10:13])
+            ubx[10:13] = init_mpc_state[10:13] + relaxation_factor * np.abs(init_mpc_state[10:13])
+
+            '''
+            init_mpc_state = estimated_state_with_control.copy()
             tolerances = np.array([
-                0.02, 0.02, 0.02,           # position (m)
-                0.02, 0.02, 0.02, 0.02,     # quaternion
-                0.1, 0.1, 0.1,              # velocity (m/s)
-                0.1, 0.1, 0.1,              # angular velocity (rad/s)
+                0.05, 0.05, 0.05,           # position (m)
+                0.05, 0.05, 0.05, 0.05,     # quaternion
+                0.25, 0.25, 0.25,              # velocity (m/s)
+                0.25, 0.25, 0.25,              # angular velocity (rad/s)
                 0.0, 0.0, 0.0, 0.0          # control inputs
             ])
             lbx = init_mpc_state - tolerances
@@ -333,7 +350,11 @@ class Controller(Node):
             if quat_lb_norm > 0:
                 lbx[3:7] = lbx[3:7] / quat_lb_norm
             if quat_ub_norm > 0:
-                ubx[3:7] = ubx[3:7] / quat_ub_norm
+                ubx[3:7] = ubx[3:7] / quat_ub_norm'''
+            
+
+
+
             
             self.ocp.set(0, "lbx", lbx)
             self.ocp.set(0, "ubx", ubx)
