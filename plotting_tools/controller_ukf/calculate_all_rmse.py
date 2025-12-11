@@ -218,7 +218,7 @@ def process_all_logs(base_folder):
 
 if __name__ == "__main__":
     # Define the base folder containing experiment logs
-    cinewhoop_folder = '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/Cinewhoop'
+    cinewhoop_folder = '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/TinyTrainer'
     
     # Process all logs
     process_all_logs(cinewhoop_folder)

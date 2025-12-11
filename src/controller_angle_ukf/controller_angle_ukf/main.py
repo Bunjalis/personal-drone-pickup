@@ -333,28 +333,6 @@ class Controller(Node):
             lbx[10:13] = init_mpc_state[10:13] - relaxation_factor * np.abs(init_mpc_state[10:13])
             ubx[10:13] = init_mpc_state[10:13] + relaxation_factor * np.abs(init_mpc_state[10:13])
 
-            '''
-            init_mpc_state = estimated_state_with_control.copy()
-            tolerances = np.array([
-                0.05, 0.05, 0.05,           # position (m)
-                0.05, 0.05, 0.05, 0.05,     # quaternion
-                0.25, 0.25, 0.25,              # velocity (m/s)
-                0.25, 0.25, 0.25,              # angular velocity (rad/s)
-                0.0, 0.0, 0.0, 0.0          # control inputs
-            ])
-            lbx = init_mpc_state - tolerances
-            ubx = init_mpc_state + tolerances
-            
-            quat_lb_norm = np.linalg.norm(lbx[3:7])
-            quat_ub_norm = np.linalg.norm(ubx[3:7])
-            if quat_lb_norm > 0:
-                lbx[3:7] = lbx[3:7] / quat_lb_norm
-            if quat_ub_norm > 0:
-                ubx[3:7] = ubx[3:7] / quat_ub_norm'''
-            
-
-
-
             
             self.ocp.set(0, "lbx", lbx)
             self.ocp.set(0, "ubx", ubx)
