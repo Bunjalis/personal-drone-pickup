@@ -18,22 +18,22 @@ GRID_ALPHA = 0.3
 colors = ['#e97d00', '#008e00', '#0049bd', '#911515', '#000000', '#97c6d1', '#b697ff']
 
 
+'''
 
 
-
-''' ZSIN
-DURATION = 60 
+DURATION = 30 
 OUTPUT_PREFIX = 'ukf_z_sin' 
 log_files = [
     '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/Cinewhoop/z_sin_video/log.csv',
     '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/Freestyle/z_sin_2/log.csv',
     '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/TinyWhoop/z_sin_2/log.csv',
     '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/TinyTrainer/z_sin_2/log.csv',
-]'''
-
+]
 
 '''
-DURATION = -1
+
+
+DURATION = 70
 OUTPUT_PREFIX = 'ukf_circle' 
 log_files = [
     '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/Cinewhoop/circle_video/log.csv',
@@ -54,7 +54,7 @@ log_files = [
     '/home/mitchell/Documents/PhD/drone_cage_control/logs/ExperimentDataSets/TinyTrainer/xyz_sine_2/log.csv',
 ]
 
-
+'''
 
 
 
@@ -167,7 +167,7 @@ legend_height_inches = LEGEND_HEIGHT / DPI
 # Scale text sizes for the wide aspect ratio
 ANIM_AXIS_LABEL_SIZE = 24
 ANIM_TICK_LABEL_SIZE = 22
-ANIM_TITLE_SIZE = 26
+ANIM_TITLE_SIZE = 24
 ANIM_LEGEND_SIZE = 32
 ANIM_LINE_WIDTH = 2.5
 
@@ -176,7 +176,7 @@ print(f"Legend video dimensions: {VIDEO_WIDTH} x {LEGEND_HEIGHT} pixels at {DPI}
 
 # Create figure for plots (no legend)
 fig_anim, axes_anim = plt.subplots(1, 2, figsize=(plot_width_inches, plot_height_inches), dpi=DPI)
-fig_anim.subplots_adjust(left=0.05, right=0.98, top=0.92, bottom=0.12, wspace=0.15)
+fig_anim.subplots_adjust(left=0.05, right=0.98, top=0.88, bottom=0.12, wspace=0.15)
 
 # Store all data for animation
 all_data = []
@@ -260,7 +260,7 @@ for idx, data in enumerate(all_data):
 axes_anim[0].set_ylabel('3D Position Error (m)', fontsize=ANIM_AXIS_LABEL_SIZE)
 axes_anim[0].set_xlabel('Time (s)', fontsize=ANIM_AXIS_LABEL_SIZE)
 axes_anim[0].grid(True, alpha=GRID_ALPHA)
-axes_anim[0].set_title('3D Position Tracking Error', fontsize=ANIM_TITLE_SIZE, fontweight='bold', pad=10)
+axes_anim[0].set_title('3D Position Tracking Error', fontsize=ANIM_TITLE_SIZE, fontweight='bold', pad=15)
 axes_anim[0].set_xlim(0, max_time)
 axes_anim[0].set_xticks(np.arange(0, max_time + 10, 10))
 axes_anim[0].tick_params(axis='both', which='major', labelsize=ANIM_TICK_LABEL_SIZE)
@@ -270,10 +270,10 @@ error_min, error_max = 0, all_errors.max()
 error_margin = error_max * 0.1
 axes_anim[0].set_ylim(error_min, error_max + error_margin)
 
-axes_anim[1].set_ylabel(r'Thrust Constant $k_t$', fontsize=ANIM_AXIS_LABEL_SIZE)
+axes_anim[1].set_ylabel(r'Throttle Gain $\hat{k}_t$', fontsize=ANIM_AXIS_LABEL_SIZE)
 axes_anim[1].set_xlabel('Time (s)', fontsize=ANIM_AXIS_LABEL_SIZE)
 axes_anim[1].grid(True, alpha=GRID_ALPHA)
-axes_anim[1].set_title(r'Estimated Thrust Constant $k_t$', fontsize=ANIM_TITLE_SIZE, fontweight='bold', pad=10)
+axes_anim[1].set_title(r'Estimated Throttle Gain $\hat{k}_t$', fontsize=ANIM_TITLE_SIZE, fontweight='bold', pad=15)
 axes_anim[1].set_xlim(0, max_time)
 axes_anim[1].set_xticks(np.arange(0, max_time + 10, 10))
 axes_anim[1].tick_params(axis='both', which='major', labelsize=ANIM_TICK_LABEL_SIZE)

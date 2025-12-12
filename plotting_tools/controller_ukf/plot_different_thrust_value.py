@@ -87,10 +87,10 @@ axes[0].set_xticks(np.arange(0, 50, 10))
 axes[0].tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
 
 # Configure axis 1: Thrust Estimate
-axes[1].set_ylabel(r'Thrust Constant $k_t$', fontsize=AXIS_LABEL_SIZE)
+axes[1].set_ylabel(r'Throttle Gain $\hat{k}_t$', fontsize=AXIS_LABEL_SIZE)
 axes[1].set_xlabel('Time (s)', fontsize=AXIS_LABEL_SIZE)
 axes[1].grid(True, alpha=GRID_ALPHA)
-axes[1].set_title(r'(b) Estimated Thrust Constant $k_t$', fontsize=SUBPLOT_TITLE_SIZE, fontweight='bold')
+axes[1].set_title(r'(b) Estimated Throttle Gain $\hat{k}_t$', fontsize=SUBPLOT_TITLE_SIZE, fontweight='bold')
 axes[1].set_xlim(0, 45)
 axes[1].set_xticks(np.arange(0, 50, 10))
 axes[1].tick_params(axis='both', which='major', labelsize=TICK_LABEL_SIZE)
@@ -118,8 +118,8 @@ fig.tight_layout()
 # Save figures as PDFs
 import os
 script_dir = os.path.dirname(os.path.abspath(__file__))
-fig.savefig(os.path.join(script_dir, 'thrust_constant_comparison.pdf'), format='pdf', bbox_inches='tight')
-fig_legend.savefig(os.path.join(script_dir, 'thrust_constant_comparison_legend.pdf'), format='pdf', bbox_inches='tight')
+fig.savefig(os.path.join(script_dir, 'throttle_gain_comparison.pdf'), format='pdf', bbox_inches='tight')
+fig_legend.savefig(os.path.join(script_dir, 'throttle_gain_comparison_legend.pdf'), format='pdf', bbox_inches='tight')
 print(f"Saved figures to {script_dir}")
 
 # Show both figures
@@ -146,7 +146,7 @@ legend_height_inches = LEGEND_HEIGHT / DPI
 # Scale text sizes for the wide aspect ratio
 ANIM_AXIS_LABEL_SIZE = 24
 ANIM_TICK_LABEL_SIZE = 22
-ANIM_TITLE_SIZE = 26
+ANIM_TITLE_SIZE = 24
 ANIM_LEGEND_SIZE = 32  # Reduced from 40 to create buffer space
 ANIM_LINE_WIDTH = 2.5
 
@@ -155,7 +155,7 @@ print(f"Legend video dimensions: {VIDEO_WIDTH} x {LEGEND_HEIGHT} pixels at {DPI}
 
 # Create figure for plots (no legend)
 fig_anim, axes_anim = plt.subplots(1, 2, figsize=(plot_width_inches, plot_height_inches), dpi=DPI)
-fig_anim.subplots_adjust(left=0.05, right=0.98, top=0.92, bottom=0.12, wspace=0.15)
+fig_anim.subplots_adjust(left=0.05, right=0.98, top=0.88, bottom=0.12, wspace=0.15)
 
 # Store all data for animation
 all_data = []
@@ -204,7 +204,7 @@ for idx, data in enumerate(all_data):
 axes_anim[0].set_ylabel('Altitude (m)', fontsize=ANIM_AXIS_LABEL_SIZE)
 axes_anim[0].set_xlabel('Time (s)', fontsize=ANIM_AXIS_LABEL_SIZE)
 axes_anim[0].grid(True, alpha=GRID_ALPHA)
-axes_anim[0].set_title('Altitude Tracking Performance', fontsize=ANIM_TITLE_SIZE, fontweight='bold', pad=10)
+axes_anim[0].set_title('Altitude Tracking Performance', fontsize=ANIM_TITLE_SIZE, fontweight='bold', pad=15)
 axes_anim[0].set_xlim(0, 45)
 # Determine y-limits from data
 all_z = np.concatenate([data['z_position'] for data in all_data] + [data['z_desired'] for data in all_data])
@@ -214,10 +214,10 @@ axes_anim[0].set_ylim(z_min - z_margin, z_max + z_margin)
 axes_anim[0].set_xticks(np.arange(0, 50, 10))
 axes_anim[0].tick_params(axis='both', which='major', labelsize=ANIM_TICK_LABEL_SIZE)
 
-axes_anim[1].set_ylabel(r'Thrust Constant $k_t$', fontsize=ANIM_AXIS_LABEL_SIZE)
+axes_anim[1].set_ylabel(r'Throttle Gain $\hat{k}_t$', fontsize=ANIM_AXIS_LABEL_SIZE)
 axes_anim[1].set_xlabel('Time (s)', fontsize=ANIM_AXIS_LABEL_SIZE)
 axes_anim[1].grid(True, alpha=GRID_ALPHA)
-axes_anim[1].set_title(r'Estimated Thrust Constant $k_t$', fontsize=ANIM_TITLE_SIZE, fontweight='bold', pad=10)
+axes_anim[1].set_title(r'Estimated Throttle Gain $\hat{k}_t$', fontsize=ANIM_TITLE_SIZE, fontweight='bold', pad=15)
 axes_anim[1].set_xlim(0, 45)
 # Determine y-limits from data
 all_thrust = np.concatenate([data['thrust_estimate'] for data in all_data])
@@ -248,7 +248,7 @@ def update(frame):
 anim = FuncAnimation(fig_anim, update, frames=total_frames, interval=1000/FPS, blit=True)
 
 # Save plot animation as MP4
-plot_output_path = os.path.join(script_dir, 'thrust_constant_plots.mp4')
+plot_output_path = os.path.join(script_dir, 'throttle_gain_plots.mp4')
 writer = FFMpegWriter(fps=FPS, metadata=dict(artist='Matplotlib'), bitrate=5000)
 
 print(f"Saving plot animation to {plot_output_path}...")
@@ -287,7 +287,7 @@ legend = fig_legend_anim.legend(legend_handles, legend_labels_list,
                                 fontsize=ANIM_LEGEND_SIZE)
 
 # Save legend as static video (all frames identical)
-legend_output_path = os.path.join(script_dir, 'thrust_constant_legend.mp4')
+legend_output_path = os.path.join(script_dir, 'throttle_gain_legend.mp4')
 print(f"Saving legend video to {legend_output_path}...")
 
 # Create a simple animation that keeps the legend static
@@ -335,7 +335,7 @@ print("Individual legend labels saved!")
 
 print("Stitching videos together...")
 
-final_output_path = os.path.join(script_dir, 'thrust_constant_animation.mp4')
+final_output_path = os.path.join(script_dir, 'throttle_gain_animation.mp4')
 
 # Use ffmpeg to stack videos vertically (plots on top, legend on bottom)
 import subprocess
