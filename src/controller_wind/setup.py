@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'controller_wind_rl'
+package_name = 'controller_wind'
 
 setup(
     name=package_name,
@@ -15,11 +15,11 @@ setup(
     zip_safe=True,
     maintainer='mitchell',
     maintainer_email='mitch.torok@gmail.com',
-    description='Basic RL drone control',
+    description='Basic MPC drone control',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
-            'main = controller_wind_rl.main:main'
+            'main = controller_wind.main:main'
         ],
     },
 )
