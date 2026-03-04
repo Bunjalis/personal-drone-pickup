@@ -798,7 +798,96 @@ def u_pickup_trajectory(dt):
     traj = np.concatenate((take_off_traj ,wait_start_traj, hover_traj, wait_end_traj, land_traj), axis=1)
     return traj, "u_pickup"
 
+def cutoff_pickup_trajectory(dt):
 
+    takeoff_x, takeoff_y = 0.0, 1.5
+    landing_x, landing_y = 0.0, -1.5
+    pickup_x, pickup_y = 0.0, 0.0
+    
+    wait_time = 10
+
+    # use these to figure out when rotor cut off should be using s = ut + 0.5at^2, t = sqrt(2s/a), then s = vt
+    pickup_speed = 1
+    peak_height = 1.2
+    pickup_height = 0.0
+
+    # time to drop from peak height to pickup height
+    time_drop = np.sqrt((2*(peak_height - pickup_height)) / 9.8)
+
+    # the y location the drop should begin
+    begin_drop = (pickup_speed * time_drop) - pickup_y
+
+    steps_approach = int(30 * ((takeoff_y - begin_drop) / pickup_speed))
+    steps_drop = int(30 * time_drop)
+    steps_up = steps_drop
+
+
+    # takeoff
+    take_off_traj = takeoff_helper(dt, takeoff_x, takeoff_y, peak_height)
+
+    # hover before starting
+    wait_start_traj = hover_helper(dt, takeoff_x, takeoff_y, peak_height, wait_time)
+
+    # approach
+    x1 = np.linspace(takeoff_x, pickup_x, steps_approach)
+    y1 = np.linspace(takeoff_y, begin_drop, steps_approach)
+    z1 = np.full(steps_approach, peak_height)
+
+    # drop and grab
+    # multiplying steps_per_segment so speed roughly scales with pickup_length
+    t = np.linspace(0, 1, steps_drop)
+    x2 = np.full(steps_drop, pickup_x) 
+    y2 = np.linspace(begin_drop, pickup_y , steps_drop)
+    real_t = t * time_drop
+    z2 = peak_height - pickup_height - 0.5 * 9.81 * (real_t**2)
+
+    # up
+    x3 = np.linspace(pickup_x, landing_x, steps_up)
+    y3 = np.linspace(pickup_y , landing_y, steps_up)
+    z3 = np.linspace(pickup_height, peak_height, steps_up)
+
+    # Combine segments
+    x_traj = np.concatenate((x1, x2, x3))
+    y_traj = np.concatenate((y1, y2, y3))
+    z_traj = np.concatenate((z1, z2, z3))
+
+    # Yaw: face along trajectory (optional: along Y)
+    dx = np.gradient(x_traj)
+    dy = np.gradient(y_traj)
+    yaw_traj = np.arctan2(dy, dx)
+
+    roll_traj = np.zeros_like(yaw_traj)
+    pitch_traj = np.zeros_like(yaw_traj)
+    rpy_traj = np.vstack((roll_traj, pitch_traj, yaw_traj)).T
+    quaternions = R.from_euler('xyz', rpy_traj).as_quat()
+    qx_traj = quaternions[:,0]
+    qy_traj = quaternions[:,1]
+    qz_traj = quaternions[:,2]
+    qw_traj = quaternions[:,3]
+    vx_traj = np.gradient(x_traj, dt)
+    vy_traj = np.gradient(y_traj, dt)
+    vz_traj = np.gradient(z_traj, dt)
+    ax_traj = np.zeros_like(vx_traj)
+    ay_traj = np.zeros_like(vy_traj)
+    az_traj = np.zeros_like(vz_traj)
+    u1 = np.zeros_like(vx_traj)
+    u2 = np.zeros_like(vx_traj)
+    u3 = np.zeros_like(vx_traj)
+    u4 = np.zeros_like(vx_traj)
+
+    # m shape
+    hover_traj = np.array([x_traj, y_traj, z_traj, qw_traj, qx_traj, qy_traj, qz_traj,
+                vx_traj, vy_traj, vz_traj, ax_traj, ay_traj, az_traj, u1, u2, u3, u4])
+
+    # hover after completing
+    wait_end_traj = hover_helper(dt, landing_x, landing_y, peak_height, 5)
+    
+    # land
+    land_traj = land_helper(dt, hover_traj[:, -1], landing_x, landing_y)
+    #zeros = np.tile(land_traj[:, -1:], (1, 30))
+
+    traj = np.concatenate((take_off_traj ,wait_start_traj, hover_traj, wait_end_traj, land_traj), axis=1)
+    return traj, "cutoff_pickup"
 
 def takeoff_helper(dt, takeoff_x=0.0, takeoff_y=0.0, takeoff_z=1.0):
 

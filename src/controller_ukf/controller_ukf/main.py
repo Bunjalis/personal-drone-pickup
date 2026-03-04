@@ -11,7 +11,11 @@ from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution, set_trajectory_reference_aligned, update_ocp_parameters
-from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, power_loop_trajectory, figure8_zsine_trajectory, fast_xyz_sine_trajectory, fence_trajectory, power_loop_trajectory, m_pickup_trajectory
+from .trajectories import (
+    hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, power_loop_trajectory, 
+    figure8_zsine_trajectory, fast_xyz_sine_trajectory, fence_trajectory, power_loop_trajectory, m_pickup_trajectory, u_pickup_trajectory,
+    cutoff_pickup_trajectory
+)
 from utility_objects.visualization import TrajectoryVisualizer
 from utility_objects.data_logger import DataLogger
 from utility_objects.callback_manager import CallbackManager
@@ -36,7 +40,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self,USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = m_pickup_trajectory(DT)
+        self.traj, trajectory_name = u_pickup_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
 
@@ -48,6 +52,11 @@ class Controller(Node):
         self.takeoff_requested = False
         self.shutdown_requested = False
 
+        # This will be useful later
+        self.target = [0,0,0]
+
+        # Boolean storing state of gripper, false = open
+        self.gripping = False
 
         # MPC settings
         self.N = 20
@@ -184,15 +193,13 @@ class Controller(Node):
             else:
                 estimated_state_with_control = np.concatenate((estimated_state, np.array(self.control_history[-1][0:4]))) 
 
-
             
             relaxation_factor = 0.01 # 0.25 for orb slam 
             relaxed_lbx = estimated_state_with_control * (1 - relaxation_factor)
             relaxed_ubx = estimated_state_with_control * (1 + relaxation_factor)
             self.ocp.set(0, "lbx", relaxed_lbx)
             self.ocp.set(0, "ubx", relaxed_ubx)
-
-            
+    
 
             ### MPC WARM START
             if self.first_solve:
@@ -224,13 +231,26 @@ class Controller(Node):
             ### SEND COMMANDS
             # Only execute trajectory if takeoff has been requested
             if self.takeoff_requested:
+                if (self.step_counter <= 30):
+                    msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3), channel_6=-1.0)
+                    print("NO GRIP AT START")
+                elif self.in_range(self.target):
+                    msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3), channel_6=0.0)
+                    self.gripping = True
+                    print("GRIP IN RANGE")
+                elif self.gripping:
+                    msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3), channel_6=0.0)
+                    print("GRIP OUT RANGE")
+                elif self.gripping == False:
+                    msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3), channel_6=-1.0)
+                    print("NO GRIP OUT OF RANGE")
 
                 #u = x[-4:]
                 #u_rate = self.ocp.get(0, "u")
 
                 msg = ELRSCommand(armed=True, channel_0=round(u[0], 3), channel_1=round(u[1], 3), channel_2=round((u[2]*2)-1, 3), channel_3=round(u[3], 3))
-                print(f"r: {round(u[0], 3)}, p: {round(u[1], 3)}, t: {round((u[2]), 3)}, y: {round(u[3], 3)}")
-                print(f"EST. params - TR: {round(self.est_params[0],2)}, DC z: {round(self.est_params[1],3)}, Tau: {round(self.est_params[2],3)}, Centre deg: {round(self.est_params[3],1)}, Max deg: {round(self.est_params[4],1)}, expo: {round(self.est_params[5],3)}")
+                # print(f"r: {round(u[0], 3)}, p: {round(u[1], 3)}, t: {round((u[2]), 3)}, y: {round(u[3], 3)}")
+                # print(f"EST. params - TR: {round(self.est_params[0],2)}, DC z: {round(self.est_params[1],3)}, Tau: {round(self.est_params[2],3)}, Centre deg: {round(self.est_params[3],1)}, Max deg: {round(self.est_params[4],1)}, expo: {round(self.est_params[5],3)}")
             else:
 
                 #u = [0,0,0,0]
@@ -359,7 +379,7 @@ class Controller(Node):
 
             saved_data = time.time()
 
-            print(f"time taken to log {round(saved_data - end_ukf_time, 4)} seconds")
+            # print(f"time taken to log {round(saved_data - end_ukf_time, 4)} seconds")
 
         else:
             msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
@@ -439,6 +459,14 @@ class Controller(Node):
         msg = ELRSCommand(armed=False, channel_0=0.0, channel_1=0.0, channel_2=-1.0, channel_3=0.0)
         self.cb.cmd_publisher_.publish(msg)
         self.data_logger.close()
+
+    def in_range(self, target):
+        distance = np.linalg.norm(self.current_pose[:3] - target[:3])
+        if distance < 0.3:
+            print(distance)
+            return True
+        else:
+            return False
 
 
 def main(args=None): 
