@@ -11,7 +11,7 @@ from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution, set_trajectory_reference_aligned, update_ocp_parameters
-from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, power_loop_trajectory, figure8_zsine_trajectory, fast_xyz_sine_trajectory, fence_trajectory,power_loop_trajectory
+from .trajectories import hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, power_loop_trajectory, figure8_zsine_trajectory, fast_xyz_sine_trajectory, fence_trajectory, power_loop_trajectory, m_pickup_trajectory
 from utility_objects.visualization import TrajectoryVisualizer
 from utility_objects.data_logger import DataLogger
 from utility_objects.callback_manager import CallbackManager
@@ -36,7 +36,7 @@ class Controller(Node):
         # General Settings
         self.cb = CallbackManager(self,USE_MOTION_CAPTURE)
 
-        self.traj, trajectory_name = circle_trajectory(DT)
+        self.traj, trajectory_name = m_pickup_trajectory(DT)
         self.trajectory_visualizer = TrajectoryVisualizer(self, frame_id="map")
         self.trajectory_visualizer.publish_all_visualizations(self.traj,  pose_subsample=15, show_velocity=False,  velocity_scale=0.3, color_by_time=True )
 
