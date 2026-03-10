@@ -11,11 +11,7 @@ from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 import time
 from .acados import generate_ocp_controller, set_initial_guess, warm_start_from_previous_solution, set_trajectory_reference_aligned, update_ocp_parameters
-from .trajectories import (
-    hover_trajectory, z_sin_trajectory, xyz_sine_trajectory, circle_trajectory, power_loop_trajectory, 
-    figure8_zsine_trajectory, fast_xyz_sine_trajectory, fence_trajectory, power_loop_trajectory, m_pickup_trajectory, u_pickup_trajectory,
-    cutoff_pickup_trajectory
-)
+from .trajectories import m_pickup_trajectory, u_pickup_trajectory, cutoff_pickup_trajectory
 from utility_objects.visualization import TrajectoryVisualizer
 from utility_objects.data_logger import DataLogger
 from utility_objects.callback_manager import CallbackManager
