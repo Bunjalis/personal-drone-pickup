@@ -4,7 +4,7 @@ Autonomous drone flight using Model Predictive Control (MPC) and an
 Unscented Kalman Filter (UKF) for state estimation, built in ROS2/Python.
 Additionally a Sliding Mode Controller (SMC) for preliminary testing.
 
-## Demo
+## Demo (Click to play video)
 [![Demo Video](thumbnail.png)](https://youtu.be/yzrE1-uDawg)
 
 ## My Contributions
